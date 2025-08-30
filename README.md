@@ -16,3 +16,26 @@ Only supports for the Development Kit officially provided by TI
 * [TI Forum mentioning the duf And more](https://forum.beagleboard.org/t/pocketbeagle-2-boot-with-snagboot/41236)
 * [TI K3 U-boot Denx' Documentation](https://docs.u-boot.org/en/latest/board/ti/k3.html)
 
+
+# Useless yet interesting resources
+
+## Baremetal
+
+[Resources from TI to do RTOS/NORTOS](
+https://software-dl.ti.com/mcu-plus-sdk/esd/AM62X/11_01_00_16/exports/docs/api_guide_am62x/index.html)
+
+## Machine learning
+
+[Different solution only valid for GPU/specialized hw accel) based SOPC the AM625x](https://software-dl.ti.com/processor-sdk-linux/esd/AM62X/latest/exports/docs/linux/Foundational_Components_Machine_Learning.html)
+[GStreamer doing some funnly stuffs](https://software-dl.ti.com/processor-sdk-linux/esd/AM62X/latest/exports/docs/linux/Foundational_Components/Machine_Learning/tflite.html#example-applications)
+
+## Virtualization
+
+
+### The Jailhouse hypervisor
+
+The Jailhouse partitions a system and allows a system to run barelmetal
+application beside a linux OS more details:
+ 
+* [Jailhouse from TI and the AM62x perspective](https://software-dl.ti.com/processor-sdk-linux/esd/AM62X/latest/exports/docs/linux/Foundational_Components/Hypervisor/Jailhouse.html#enabling-hypervisor-on-part-family-device-names-platform)
+* [JailHouse Hypervisor](https://github.com/siemens/jailhouse)
