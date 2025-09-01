@@ -6,7 +6,7 @@
 	images {
 		kernel-1 {
 			description = "Linux kernel";
-			data = /incbin/("linux/arch/arm64/boot/Image.gz");
+			data = /incbin/("../linux/arch/arm64/boot/Image.gz");
 			type = "kernel";
 			arch = "arm64";
 			os = "linux";
@@ -20,7 +20,7 @@
 
 		fdt-ti_k3-pocketbeagle2.dtb {
 			description = "Flattened Device Tree blob";
-			data = /incbin/("u-boot-pb/out/a53/dts/upstream/src/arm64/ti/k3-am6232-pocketbeagle2.dtb");
+			data = /incbin/("../linux/arch/arm64/boot/dts/ti/k3-am62-pocketbeagle2.dtb");
 			type = "flat_dt";
 			arch = "arm64";
 			compression = "none";
@@ -43,5 +43,5 @@
 	};
 };
 
-//			data = /incbin/("linux/arch/arm64/boot/dts/ti/k3-am62-pocketbeagle2.dtb");
+//			data = /incbin/("");
 //			data = /incbin/("u-boot-pb/out/a53/dts/upstream/src/arm64/ti/k3-am6232-pocketbeagle2.dtb");
