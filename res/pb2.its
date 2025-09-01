@@ -1,0 +1,47 @@
+/dts-v1/;
+
+/ {
+	description = "U-Boot fitImage for pocketbeagle2";
+	#address-cells = <1>;
+	images {
+		kernel-1 {
+			description = "Linux kernel";
+			data = /incbin/("linux/arch/arm64/boot/Image.gz");
+			type = "kernel";
+			arch = "arm64";
+			os = "linux";
+			compression = "gzip";
+			load = <0x81000000>;
+			entry = <0x81000000>;
+			hash-1 {
+				algo = "sha512";
+			};
+		};
+
+		fdt-ti_k3-pocketbeagle2.dtb {
+			description = "Flattened Device Tree blob";
+			data = /incbin/("u-boot-pb/out/a53/dts/upstream/src/arm64/ti/k3-am6232-pocketbeagle2.dtb");
+			type = "flat_dt";
+			arch = "arm64";
+			compression = "none";
+			load = <0x83000000>;
+			hash-1 {
+				algo = "sha512";
+			};
+		};
+	};
+	configurations {
+		default = "conf-system-top.dtb";
+		conf-system-top.dtb {
+			description = "Linux  kernel, FDT blob, ramdisk";
+			kernel = "kernel-1";
+			fdt = "fdt-ti_k3-pocketbeagle2.dtb";
+			hash {
+				algo = "sha512";
+			};
+		};
+	};
+};
+
+//			data = /incbin/("linux/arch/arm64/boot/dts/ti/k3-am62-pocketbeagle2.dtb");
+//			data = /incbin/("u-boot-pb/out/a53/dts/upstream/src/arm64/ti/k3-am6232-pocketbeagle2.dtb");

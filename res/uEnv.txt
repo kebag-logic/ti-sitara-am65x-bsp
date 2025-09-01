@@ -1,0 +1,2 @@
+bootargs=console=ttyS3,115200n8 earlycon=ns16550a,mmio32,0x02860000 root=/dev/mmcblk1p2 ro rootfstype=ext4 rootwait net.ifnames=0
+bootcmd=fatload mmc 1:1 0x88000000 fitimage; bootm 0x88000000
