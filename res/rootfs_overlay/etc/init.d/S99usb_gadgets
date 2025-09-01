@@ -1,0 +1,14 @@
+#!/bin/bash
+
+case "$1" in
+start) 
+	/root/setup_gadgets.sh
+	exit 0
+stop) 
+	/root/remove_usb.sh
+	exit 0
+ *) 
+	echo "ERR: Invalid command"
+esac
+
+exit 255
