@@ -15,25 +15,27 @@ echo 0x01 > /sys/kernel/config/usb_gadget/g/bDeviceProtocol # USB 3.0
 mkdir -p  /sys/kernel/config/usb_gadget/g/strings/0x409
 echo "00.00.01" > /sys/kernel/config/usb_gadget/g/strings/0x409/serialnumber
 echo "" > /sys/kernel/config/usb_gadget/g/strings/0x409/manufacturer
-echo "Bosphorus Bridge" > /sys/kernel/config/usb_gadget/g/strings/0x409/product
+echo "Bosphorus" > /sys/kernel/config/usb_gadget/g/strings/0x409/product
 
-# audio
+# Audio
 mkdir -p /sys/kernel/config/usb_gadget/g/functions/uac2.usb0
 
-# Consumer / Capture
+## Consumer / Capture
 echo 0xff > /sys/kernel/config/usb_gadget/g/functions/uac2.usb0/c_chmask
 echo 96000 > /sys/kernel/config/usb_gadget/g/functions/uac2.usb0/c_srate
 echo 3 > /sys/kernel/config/usb_gadget/g/functions/uac2.usb0/c_ssize
 
-# Producer / Playback
+## Producer / Playback
 echo 0xff > /sys/kernel/config/usb_gadget/g/functions/uac2.usb0/p_chmask
 echo 96000 > /sys/kernel/config/usb_gadget/g/functions/uac2.usb0/p_srate
 echo 3 > /sys/kernel/config/usb_gadget/g/functions/uac2.usb0/p_ssize
 
 # Ethernet
 mkdir -p /sys/kernel/config/usb_gadget/g/functions/ecm.usb0
-#echo eth0 > /sys/kernel/config/usb_gadget/g/functions/ecm.usb0/ifname
-#echo "6B65626C6F00" > /sys/kernel/config/usb_gadget/g/functions/ecm.usb0/dev_addr
+
+## first byte of address must be even
+echo "6a:65:62:6f:6f:00" > /sys/kernel/config/usb_gadget/g/functions/ecm.usb0/dev_addr
+echo "6a:65:62:6c:6f:02" > /sys/kernel/config/usb_gadget/g/functions/ecm.usb0/host_addr
 
 mkdir -p /sys/kernel/config/usb_gadget/g/configs/c.1
 echo 250 > /sys/kernel/config/usb_gadget/g/configs/c.1/MaxPower
@@ -50,5 +52,8 @@ ln -s /sys/kernel/config/usb_gadget/g/functions/uac2.usb0  /sys/kernel/config/us
 #ln -s /sys/kernel/config/usb_gadget/g/functions/acm.usb0  /sys/kernel/config/usb_gadget/g/configs/c.1/
 #ln -s /sys/kernel/config/usb_gadget/g/functions/hid.usb0  /sys/kernel/config/usb_gadget/g/configs/c.1/
 udevadm settle -t 5 || :
-ls /sys/class/udc/ > /sys/kernel/config/usb_gadget/g/UDC
+echo 31000000.usb > /sys/kernel/config/usb_gadget/g/UDC
 
+ip addr add 192.168.7.10/24 dev usb0
+ip link set usb0 down
+ip link set usb0 up
