@@ -1,0 +1,9 @@
+# AM62x
+
+The AM62x has 2 silicon version wrt to the security.
+
+The pocketbeagle use the GP version. But the MYIR seems
+to use old chip with older Silicon Revision.
+
+More on that topic https://software-dl.ti.com/processor-sdk-linux/esd/AM62X/10_00_07_04/exports/docs/linux/Foundational_Components_Migration_Guide.html
+
