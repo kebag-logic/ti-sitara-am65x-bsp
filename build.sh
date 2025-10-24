@@ -7,46 +7,82 @@ set -x
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
-export CC32=arm-none-linux-gnueabihf-
-export CC64=aarch64-linux-gnu-
+CC32=arm-none-linux-gnueabihf-
+CC64=aarch64-linux-gnu-
 
-export LNX_FW_PATH=${SCRIPT_DIR}/ti-linux-firmware/
-export OPTEE_PATH=${SCRIPT_DIR}/optee_os
-export UBOOT_DIR=${SCRIPT_DIR}/u-boot-official
-export UBOOT_DIR_PB=${SCRIPT_DIR}/u-boot-pb
-export TFA_PATH=${SCRIPT_DIR}/trusted-firmware-a/
+LNX_FW_PATH=${SCRIPT_DIR}/ti-linux-firmware/
+OPTEE_PATH=${SCRIPT_DIR}/optee_os
+UBOOT_DIR=${SCRIPT_DIR}/u-boot-official
+UBOOT_DIR_PB=${SCRIPT_DIR}/u-boot-pb
+TFA_PATH=${SCRIPT_DIR}/trusted-firmware-a/
 
-export TFA_BOARD=lite
-export OPTEE_PLATFORM=k3-am62x
+# This is for hte TARGET BOARD https://docs.u-boot.org/en/stable/board/ti/k3.html#building-tispl-bin
+TFA_BOARD=lite
+OPTEE_PLATFORM=k3-am62x
 
+
+PB2_A53_CONFIG=am6232_pocketbeagle2_a53_defconfig
+PB2_R5_DFU_CONFIG="am6232_pocketbeagle2_r5_defconfig am62x_r5_usbdfu.config"
+PB2_R5_CONFIG=am6232_pocketbeagle2_r5_defconfig
+
+MYIR_AM6254_A53_CONFIG=myc_am62x_a53_defconfig
+MYIR_AM6254_R5_DFU_CONFIG="myc_am62x_r5_defconfig am62x_r5_usbdfu.config"
+MYIR_AM6254_R5_CONFIG=myc_am62x_r5_defconfig
+
+# Below the default values
+DEFAULT_OUT_FOLDER="myir"
+
+DEFAULT_A53_CONFIG=$MYIR_AM6254_A53_CONFIG
+DEFAULT_R5_DFU_CONFIG=$MYIR_AM6254_R5_DFU_CONFIG
+DEFAULT_R5_CONFIG=$MYIR_AM6254_R5_CONFIG
+# Default patgh
+UB_R5_PATH=${UBOOT_DIR}/out_${DEFAULT_OUT_FOLDER}/r5
+UB_A53_PATH=${UBOOT_DIR}/out_${DEFAULT_OUT_FOLDER}/a53
+
+BL31_PATH=$TFA_PATH/build/k3/$TFA_BOARD/release/bl31.bin
+TEE_PATH=$OPTEE_PATH/out/arm-plat-k3/core/tee-raw.bin
+
+echo "Starting building/image creator"
+case $1 in
+	'PB2')
+		DEFAULT_OUT_FOLDER="bp2"
+		UB_R5_PATH=${UBOOT_DIR_PB}/out_${DEFAULT_OUT_FOLDER}/r5
+		UB_A53_PATH=${UBOOT_DIR_PB}/out_${DEFAULT_OUT_FOLDER}/a53
+
+		DEFAULT_A53_CONFIG=$PB2_AM6254_A53_CONFIG
+		DEFAULT_R5_DFU_CONFIG=$PB2_AM6254_R5_DFU_CONFIG
+		DEFAULT_R5_CONFIG=$PB2_AM6254_R5_CONFIG
+		;;
+	'MYIR')
+		;;
+	*)
+	echo "Not user define board choiced (PB2 or MYIR), choosing default MYIR"
+	;;
+esac
+
+echo "Going to build the ${DEFAULT_OUT_FOLDER}"
 # Bin output
-export UB_R5_PATH=${UBOOT_DIR_PB}/out/r5
-export UB_A53_PATH=${UBOOT_DIR_PB}/out/a53
-export BL31_PATH=$TFA_PATH/build/k3/$TFA_BOARD/release/bl31.bin
-export TEE_PATH=$OPTEE_PATH/out/arm-plat-k3/core/tee-raw.bin
-
-export PB2_A53_CONFIG=am6232_pocketbeagle2_a53_defconfig
-export PB2_R5_DFU_CONFIG="am6232_pocketbeagle2_r5_defconfig am62x_r5_usbdfu.config"
-export PB2_R5_CONFIG=am6232_pocketbeagle2_r5_defconfig
 
 cd $TFA_PATH
-#Prepare the A53 to be wokenup
+#Prepare the A53 to be woken-up
 make CROSS_COMPILE=$CC64 ARCH=aarch64 PLAT=k3 SPD=opteed TARGET_BOARD=$TFA_BOARD
 
-cd $UBOOT_DIR_PB
+cd $UBOOT_DIR
 #Prepare the R5 Wakeup Domain processor
-make ARCH=arm CROSS_COMPILE=$CC32 ${PB2_R5_CONFIG}  O=$UB_R5_PATH -j$(nproc)
-make ARCH=arm CROSS_COMPILE=$CC32 O=$UB_R5_PATH  BINMAN_INDIRS=${LNX_FW_PATH} -j$(nproc)
+make ARCH=arm CROSS_COMPILE=$CC32 ${DEFAULT_R5_CONFIG} O=${UB_R5_PATH} -j$(nproc) V=1
+make ARCH=arm CROSS_COMPILE=$CC32 O=${UB_R5_PATH} BINMAN_INDIRS=${LNX_FW_PATH} -j$(nproc) -j16 V=1
+
+exit 0
 
 cd $OPTEE_PATH
 make CROSS_COMPILE=$CC32 CROSS_COMPILE64=$CC64 CFG_ARM64_core=y $OPTEE_EXTRA_ARGS \
 	      PLATFORM=$OPTEE_PLATFORM -j$(nproc)
-##
-###build A53 uboot
-cd $UBOOT_DIR_PB
-make ARCH=arm CROSS_COMPILE=$CC64 $PB2_A53_CONFIG O=$UB_A53_PATH
+#
+##build A53 uboot
+cd $UBOOT_DIR
+make ARCH=arm CROSS_COMPILE=$CC64 $DEFAULT_A53_CONFIG O=$UB_A53_PATH
 make ARCH=arm CROSS_COMPILE=$CC64 BINMAN_INDIRS=$LNX_FW_PATH  O=$UB_A53_PATH \
 	       BL31=$BL31_PATH TEE=$TEE_PATH -j$(nproc)
 
-#mkimage -A arm64 -O linux -T kernel -C none -a 0x80008000 -e 0x80008000 -n "Linux kernel" -d linux/arch/arm/boot/Image uImage
-mkimage -r -f fitImage.its fitimage #-k $UBOOT_PATH/arch/arm/mach-k3/keys -K $UBOOT_PATH/build/$ARMV8/dts/dt.dtb fitImage
+##mkimage -A arm64 -O linux -T kernel -C none -a 0x80008000 -e 0x80008000 -n "Linux kernel" -d linux/arch/arm/boot/Image uImage
+#mkimage -r -f fitImage.its fitimage #-k $UBOOT_PATH/arch/arm/mach-k3/keys -K $UBOOT_PATH/build/$ARMV8/dts/dt.dtb fitImage
