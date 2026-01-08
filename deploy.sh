@@ -3,7 +3,7 @@
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 UBOOT_PATH=${SCRIPT_DIR}/u-boot-official
-TIBOOT3_BIN_PATH=${UBOOT_PATH}/out/r5/tiboot3.bin
+#TIBOOT3_BIN_PATH=${UBOOT_PATH}/out/r5/tiboot3.bin
 TISPL_BIN_PATH=${UBOOT_PATH}/out/a53/tispl.bin
 UBOOT_BIN_PATH=${UBOOT_PATH}/out/a53/u-boot.img
 
