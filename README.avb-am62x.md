@@ -42,23 +42,23 @@ See `br2-external/README.md`. The Milan PipeWire can be baked in
 - **SD (current path)**: `./deploy_sd.sh` copies the bootloaders to the SD `BOOT`
   partition; put `Image`+`*.dtb` (or the FIT `fitimage`) there too; rootfs on
   `mmcblk1p2`. Boot env in `res/uEnv.txt` (console `ttyS7,115200n8`).
-- **Network (target path)**: deploy over **`eth1` / 192.168.1.0/24** (agent
-  `enp7s0` = .1; `ssh root@<board>` — MYIR Yocto ships ssh, root/empty password).
-  Have U-Boot `tftp` the `Image`+`*.dtb` and keep the SD `uEnv.txt`/`extlinux` as
-  fail-over (never overwrite the only good SD boot — no JTAG). Keep `eth0` clean
-  for AVB. See `README.load.md`.
+- **Network (target path)**: the management/deploy port is **`eth0`** (TFTP/NFS/
+  ssh); have U-Boot `tftp` the `Image`+`*.dtb` and keep the SD `uEnv.txt`/
+  `extlinux` as fail-over (never overwrite the only good SD boot — no JTAG).
+  **While `eth0` is down (cable)**, reach the board via the jump-host jump:
+  `ssh board` (= `ssh -J jump-host root@192.168.1.10`). See `README.load.md`.
 - **Recovery**: `snagboot` over USB DFU (`deploy.sh` has the `snagrecover` stub).
 
 ## 5. Bring up AVB
 On the board (or via the deployed `/opt/pipewire-helper`):
 ```sh
-ip -br addr                 # eth0 = AVB net, eth1 = mgmt (192.168.1.x)
-setup-vlan.sh eth0          # VLAN id 2 on the AVB port
-prepare-traffic-shaper-am62x.sh eth0   # mqprio bw_rlimit (NOT tc cbs offload)
-AVB_INTERFACE=eth0 ptp-start.sh eth0   # ptp4l + phc2sys (gPTP)
+ip -o addr                  # eth1 = AVB net, eth0 = mgmt/deploy
+setup-vlan.sh eth1          # VLAN id 2 on the AVB port
+prepare-traffic-shaper-am62x.sh eth1   # mqprio bw_rlimit (NOT tc cbs offload)
+AVB_INTERFACE=eth1 ptp-start.sh eth1   # ptp4l + phc2sys (gPTP)
 # then start the Milan pipewire (helper start script / pipewire-avb)
 ```
-Never shape/VLAN `eth1` — it is the deploy/ssh path.
+Never shape/VLAN `eth0` — it is the management/deploy path.
 The `S95avb` init script in the rootfs overlay automates steps 1-3 at boot.
 
 ## 6. Validate
