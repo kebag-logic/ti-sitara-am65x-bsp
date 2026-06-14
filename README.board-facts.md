@@ -7,8 +7,11 @@ MYC-YM6254-8E2D (quad Cortex-A53 @ 1.4 GHz, 2 GB DDR4, 8 GB eMMC).
 - **2× RJ45, both gigabit** (10/100/1000), each via a **Motorcomm YT8531** PHY.
 - CPSW3g MAC, **RGMII1 → ENET1 (J22)** and **RGMII2 → ENET2 (J23)**; MAC supports
   **IEEE 1588**. PHY driver: `drivers/net/phy/motorcomm.c`.
-- eth0/eth1 → RJ45 mapping is **not documented** — confirm on the running board
-  (`ethtool -P`, `dmesg`, DT alias). AVB binds one interface; default to ENET1.
+- **Role split (confirmed by the project owner)**: **`eth0` = AVB network**,
+  **`eth1` = management/deploy net** (192.168.1.0/24; the agent is
+  `192.168.1.1` on `enp7s0`). Bind AVB to `eth0`; ssh/TFTP/NFS-deploy over
+  `eth1`. The physical RJ45→ethN mapping is not in the docs — verify with
+  `ip -br addr`/`ethtool -P` on the board if needed.
 
 ## USB (UAC2 audio endpoint)
 - **2× USB 2.0 Type-A host** (J16, double-stacked) + **1× USB-C OTG** (J15/J10).
