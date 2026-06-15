@@ -4,9 +4,14 @@ Sourced from the manufacturer PDFs (docs.tar.gz). SoM under test:
 MYC-YM6254-8E2D (quad Cortex-A53 @ 1.4 GHz, 2 GB DDR4, 8 GB eMMC).
 
 ## Ethernet (AVB-relevant)
-- **2× RJ45, both gigabit** (10/100/1000), each via a **Motorcomm YT8531** PHY.
+- **2× RJ45, both gigabit** (10/100/1000) off the CPSW3g MAC over RGMII.
 - CPSW3g MAC, **RGMII1 → ENET1 (J22)** and **RGMII2 → ENET2 (J23)**; MAC supports
-  **IEEE 1588**. PHY driver: `drivers/net/phy/motorcomm.c`.
+  **IEEE 1588**. The DT gives the PHYs **no vendor `compatible`**, so the running
+  kernel binds the **generic PHY** driver (verified on-board: `MOTORCOMM_PHY` is not
+  even built; the YT8531 named in the MYD PDF is driven generically). **MDIO
+  addresses: `eth0` = 5, `eth1` = 1.** Both PHYs are held in reset by an **NXP
+  PCA9555** (`nxp,pca9555` @ I2C `0x20` on `main_i2c1`, pins 5/6 → needs
+  `CONFIG_GPIO_PCA953X`, which the board config has).
 - **Role split (confirmed by the project owner)**: **`eth1` = AVB network**
   (to AVB Switch 0; eth1's MAC is **U-Boot-random per boot** — DT `port@2` has no
   efuse MAC — so the AVB entity_id churns), **`eth0` = management/deploy net**
@@ -36,7 +41,9 @@ MYC-YM6254-8E2D (quad Cortex-A53 @ 1.4 GHz, 2 GB DDR4, 8 GB eMMC).
   - **SD (MMCSD):** `0 0 0 1 / 0 0 1`
   - **eMMC:** `1 0 0 1 / 0 0 0`
   - **OSPI:** `0 1 1 1 / 0 0 1`
-- U-Boot supports **USB DFU** (used by `snagboot` for no-JTAG recovery).
+- U-Boot supports **USB DFU** (the basis for `snagboot` no-JTAG recovery) — but
+  **DFU/snagboot is not currently set up**, so a bad bootloader recovers only via an
+  SD-card reader or serial. Flash bootloaders recoverably (see `README.uboot.md`).
 - **Security variant**: docs do not state GP vs HS. The project targets **GP**
   (build uses `gp-evm` + unsigned `tispl`; `README.silcons` notes GP/old silicon).
 

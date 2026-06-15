@@ -1,0 +1,10 @@
+# Fetched/external source trees (built by build.sh, not part of this repo)
+/optee_os/
+/trusted-firmware-a/
+/ti-linux-firmware/
+/u-boot-official/
+
+# Kernel module staging + large generated/backup artifacts
+/.kstage/
+/res/spare-sd/
+/res/sd-boot-backup/
