@@ -8,3 +8,6 @@
 /.kstage/
 /res/spare-sd/
 /res/sd-boot-backup/
+
+# generated bootchooser script (built from res/ab/boot.cmd)
+/res/ab/boot.scr
