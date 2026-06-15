@@ -24,6 +24,10 @@ format it:
   *silently* at power-on (no serial, no heartbeat) even though U-Boot reads it fine (so
   it boots over DFU/ext). `-a` disables alignment (restores 614400); `mformat`/old
   `mkdosfs` also write the full count.
+  Reference (verified): dosfstools issue #165
+  <https://github.com/dosfstools/dosfstools/issues/165> (root cause: 4.1=0xC0000 vs
+  4.2=0xBFFEC, ROM needs the full count) and the `-a` workaround at Bootlin
+  <https://bootlin.com/blog/workaround-for-creating-bootable-fat-partition-for-beagle-bone-am335x-on-recent-distros/>.
 * Second partion with mkfs.ext4 -L rootfs -o^64 for beyong 2038 limit
 
 
