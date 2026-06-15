@@ -15,12 +15,15 @@ write it
 
 
 format it:
-* First partition (boot): **`mformat -R 6 -F -v BOOT -i /dev/sdxN ::`** (mtools).
-  CRITICAL: the K3 boot ROM's minimal FAT driver only reads a **low reserved-sector
-  count**. `mkfs.vfat -F 32` defaults to **32 reserved sectors → NOT ROM-bootable**
-  (U-Boot reads it fine, so it boots over DFU/EXT, but the ROM hangs *silently* at
-  power-on — no serial, no heartbeat). `mformat -R 6` matches the on-device `mkdosfs`
-  that works (reserved=6); `mkfs.vfat -R 8` is the lowest `mkfs.vfat` allows.
+* First partition (boot): **`mkfs.vfat -F 32 -a -n BOOT /dev/sdxN`** (the `-a` is the
+  fix), or **`mformat -R 6 -F -v BOOT -i /dev/sdxN ::`** (mtools).
+  CRITICAL — known **dosfstools 4.2 boot-ROM regression** (dosfstools#165, Bootlin):
+  mkfs.fat ≥4.2 *aligns* the filesystem, shrinking the **total-sector count at offset
+  0x20** (e.g. 614400→614376). The TI boot ROM (AM335x and the K3/AM62x ROM) needs the
+  **full** count, so a plain `mkfs.vfat -F 32` is **NOT ROM-bootable** — it hangs
+  *silently* at power-on (no serial, no heartbeat) even though U-Boot reads it fine (so
+  it boots over DFU/ext). `-a` disables alignment (restores 614400); `mformat`/old
+  `mkdosfs` also write the full count.
 * Second partion with mkfs.ext4 -L rootfs -o^64 for beyong 2038 limit
 
 

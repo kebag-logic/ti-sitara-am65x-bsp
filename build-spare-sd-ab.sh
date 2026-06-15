@@ -31,7 +31,7 @@ EOF
 
 LOOP=$(sudo losetup -fP --show "$OUT")
 trap 'sudo umount "$MB" "$MA" "$MBp" 2>/dev/null||true; sudo losetup -d "$LOOP" 2>/dev/null||true' EXIT
-# K3 ROM FAT driver only reads a low reserved-sector count; mkfs.vfat's default 32 is NOT ROM-bootable (U-Boot reads it, ROM can't) — mformat -R 6 matches the on-device mkdosfs that works
+# dosfstools 4.2 aligns the FAT, shrinking the total-sector count @0x20 (614400->614376) which the K3 boot ROM rejects (silent hang; U-Boot reads it fine). See dosfstools#165 / Bootlin. mformat keeps the full count; `mkfs.vfat -a` is the documented equivalent.
 sudo mformat -R 6 -F -v BOOT -i "${LOOP}p1" ::
 sudo mkfs.ext4 -q -L rootfs.A "${LOOP}p2"; sudo mkfs.ext4 -q -L rootfs.B "${LOOP}p3"
 
