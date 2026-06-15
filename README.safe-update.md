@@ -41,8 +41,15 @@ Downstream logic cannot rescue an upstream failure, so each layer needs its own 
 ## Phased plan — prototype on the SPARE SD, golden SD stays the escape hatch
 Every phase ends with a **deliberate-failure test** (corrupt the new slot, confirm the
 net recovers) before it is trusted; nothing risky touches the golden SD first.
-- **P0 (prereq):** persistent+redundant env + `bootcount`/`altbootcmd`; add `mmc-utils`.
-  Test: break the default boot entry → confirm `altbootcmd` falls back. *(lowest risk)*
+- **P0 (prereq) — DONE 2026-06-15, validated:** redundant raw MMC env on the SD
+  (`ENV_IS_IN_MMC` dev 1, `0x80000`/`0xC0000` in the empty pre-partition gap;
+  `ENV_REDUNDANT`; `ENV_MMC_DEVICE_INDEX=1`), `BOOTCOUNT_ENV`, `fw_setenv` from Linux
+  (`libubootenv` + `/etc/fw_env.config`), and `S99bootgood` (commits the trial on a
+  healthy boot). Validated: marker+bootcount persist across reboot; commit path clears
+  `upgrade_available`; fallback path (`bootcount>bootlimit`) runs `altbootcmd` and boots.
+  **Gotchas:** `altbootcmd` MUST mirror `bootcmd` (`run envboot; run distro_bootcmd`) —
+  bare `run distro_bootcmd` lands at the extlinux menu without auto-selecting and strands
+  the board; `bootcount_env` only saves when `upgrade_available!=0` (RAUC trial gate).
 - **P1 (SPL net):** set backup boot mode = DFU; wire `snagboot` recovery. Test: zero the
   primary `tiboot3` on the spare → confirm ROM drops to DFU and `snagrecover` restores it.
 - **P2 (OS A/B):** GPT layout, A/B rootfs+kernel, RAUC + bootcount. Test: deploy a
@@ -53,5 +60,16 @@ net recovers) before it is trusted; nothing risky touches the golden SD first.
   the OTA flow end-to-end.
 
 ## Recovery cheat-sheet (until P1 lands)
-No DFU yet → a bad bootloader recovers only via SD reader (restore `boot-backup/*`) or
-serial. So do bootloader changes on the spare SD, never the golden one, until P1.
+No DFU yet → a bad bootloader/env recovers via the **serial console** or an SD reader.
+The board's U-Boot console is on **serial-host `/dev/ttyACM0`** (CH342 `1a86:55d2` if0,
+115200 8N1; `alex` is in `dialout`). Drive it headless, e.g.:
+```sh
+ssh serial-host 'stty -F /dev/ttyACM0 115200 cs8 -parenb raw -echo
+  timeout 20 cat /dev/ttyACM0 & sleep .5
+  printf "\003\r" >/dev/ttyACM0; sleep 1                 # Ctrl-C: abort a stuck extlinux menu -> => prompt
+  printf "setenv upgrade_available 0\r" >/dev/ttyACM0
+  printf "setenv bootlimit 0\r;saveenv\r" >/dev/ttyACM0; sleep 2
+  printf "run bootcmd\r" >/dev/ttyACM0'                  # boots the normal path
+```
+Or via SD reader: copy `u-boot.img.v2026ok` over `u-boot.img` (reverts to the env-less
+v2026.04 that boots regardless). Until P1, do bootloader changes on the spare SD.

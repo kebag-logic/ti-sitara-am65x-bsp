@@ -1,0 +1,13 @@
+#!/bin/sh
+
+# Commit the U-Boot bootcount A/B trial: a healthy boot clears upgrade_available so U-Boot stops counting; a boot-loop instead exceeds bootlimit and U-Boot runs altbootcmd (auto-rollback). Extend health_ok() with a real probe per product.
+FP=/usr/sbin/fw_printenv; FW=/usr/sbin/fw_setenv
+health_ok() { [ -w / ]; }   # placeholder: rootfs writable => userspace reached; replace with a real service/network/AVB probe
+case "$1" in
+	start)
+		[ -x "$FW" ] || exit 0
+		[ "$("$FP" -n upgrade_available 2>/dev/null)" = "1" ] || exit 0
+		if health_ok; then "$FW" upgrade_available 0; "$FW" bootcount 0; logger -t bootgood "trial committed (boot good)"
+		else logger -t bootgood "health check failed; leaving trial -> bootcount will roll back"; fi
+		;;
+esac
