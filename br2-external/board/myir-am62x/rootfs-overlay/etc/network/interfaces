@@ -1,0 +1,8 @@
+auto lo
+iface lo inet loopback
+
+# eth1 = AVB interface, static (usb0 mgmt link is set up by S99usb_gadgets, not here)
+auto eth1
+iface eth1 inet static
+	address 192.168.1.10
+	netmask 255.255.255.0

@@ -1,0 +1,8 @@
+#!/bin/bash
+
+# Bring up the composite UAC2+ECM USB gadget (usb0 = mgmt/ssh link) at boot
+case "$1" in
+start) /root/setup_gadgets.sh; exit 0 ;;
+stop)  /root/remove_usb.sh; exit 0 ;;
+*) echo "Usage: $0 {start|stop}"; exit 1 ;;
+esac
