@@ -85,10 +85,35 @@ net recovers) before it is trusted; nothing risky touches the golden SD first.
   `rauc install` to the inactive slot, reboot, confirm the slot switched, `rauc status
   mark-good`; the prior slot stays as the fallback (safe). Test: install a bad slot →
   boot-loop reverts to the prior slot.
-- **P3 (firmware A/B):** rebuild U-Boot with FWU; two firmware banks. Test: write a bad
-  `u-boot.img` to the inactive bank → confirm trial-boot reverts the bank.
-- **P4 (field layout):** make eMMC primary + SD/DFU backup (or keep SD primary), document
-  the OTA flow end-to-end.
+- **P3 (firmware A/B via FWU) — builds 2026-06-15, NOT flashed:** a **separate**
+  `configs/myc_am62x_a53_fwu_defconfig` (`#include`s the base + `EFI_CAPSULE_ON_DISK`,
+  `EFI_CAPSULE_FIRMWARE_RAW`, `FWU_MULTI_BANK_UPDATE`, `FWU_MDATA`+`FWU_MDATA_GPT_BLK`,
+  `FWU_MDATA_V2`, `FWU_NUM_BANKS=2`, `FWU_NUM_IMAGES_PER_BANK=3`, `CMD_FWU_METADATA`) plus
+  board glue in `board/myir/myc_am62x/som.c` (`efi_fw_image fw_images[]` for
+  tiboot3/tispl/u-boot + `efi_capsule_update_info update_info` with MYIR-own GUIDs).
+  Builds to `out_fwu/a53` (the validated `out_myir` is untouched); the binary carries the
+  `fwu` command + metadata. **Required board glue:** `update_info` is *not* weak — without
+  it the FWU link fails (`undefined reference to 'update_info'`); the TI EVM defines it in
+  `board/ti/am62x/evm.c`, MYIR did not. **GPT-vs-MBR-vs-FAT tension:** the K3 ROM reads
+  `tiboot3` from a **FAT file** on the SD (MBR card), so FWU's raw/GPT metadata does not
+  fit SD-FAT boot. The realistic MYIR firmware-A/B home is the **eMMC `boot0`/`boot1`** HW
+  boot partitions (31 MB each = natural A/B banks, raw — no FAT gotcha) selected by EXT_CSD
+  `PARTITION_CONFIG`, or a GPT *data* medium for FWU metadata while `tiboot3` stays
+  ROM-reachable. **NOT flashed** (a bad `tiboot3`/`tispl` bricks → recover via P1 DFB/DFU =
+  physical); the `dfu_string`/bank offsets in `som.c` are a starting layout needing
+  on-hardware validation. Test (on HW): write a bad bank → confirm trial-boot reverts.
+- **P4 (eMMC-primary field layout) — documented 2026-06-15:** board storage (verified):
+  eMMC `mmcblk0` 8 GB with `boot0`/`boot1` (31 MB HW boot partitions) + `rpmb` + user area
+  (factory `p1` 512 MB + `p2` 6.8 GB); SD `mmcblk1` 64 GB (current boot, already A/B
+  partitioned p1/p2/p3). **Field target:** boot switch → **eMMC primary** (MMC1, DEVSTAT
+  bootmode `0x09`) with **SD or USB-DFU as backup**; `tiboot3`/`tispl`/`u-boot` A/B in eMMC
+  `boot0`/`boot1` (P3 FWU), rootfs+kernel A/B in the eMMC user area via RAUC (P2b), SD kept
+  as a golden recovery image. eMMC boot reads `tiboot3` raw from `boot0` (no SD-FAT
+  gotcha), so it is the cleaner home for robust firmware A/B. **Needs the user:** flip the
+  boot switch to eMMC and flash the eMMC (physical; a bad eMMC bootloader recovers via P1
+  USB-DFU). OTA flow end-to-end: RAUC bundle → inactive rootfs slot (validated P2b); FWU
+  capsule → inactive firmware bank (built P3, needs HW validation); `bootcount`/bootchooser
+  reverts either on a failed trial boot.
 
 ## Recovery cheat-sheet (until P1 lands)
 No DFU yet → a bad bootloader/env recovers via the **serial console** or an SD reader.
