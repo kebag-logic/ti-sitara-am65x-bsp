@@ -24,6 +24,7 @@ TFA_PATH=${SCRIPT_DIR}/trusted-firmware-a/
 K3_IMG_GEN_PATH=
 LINUX_PATH=
 SNAGBOOT_PATH=
+BUILDROOT_PATH=${SCRIPT_DIR}/../buildroot   # sibling of ti-bsp; build with BR2_EXTERNAL=../ti-sitara-am65x-bsp/br2-external
 
 git clone $LNX_FW_REPO $LNX_FW_PATH
 git clone $OPTEE_REPO $OPTEE_PATH
@@ -32,3 +33,4 @@ git clone $TFA_REPO $TFA_PATH
 git clone $K3_IMG_GEN_REPO $K3_IMG_GEN_PATH
 git clone $LINUX_REPO $LINUX_PATH
 git clone $SNAGBOOT_REPO $SNAGBOOT_PATH
+git clone -b 2026.05 $BUILDROOT_REPO $BUILDROOT_PATH   # latest Buildroot release

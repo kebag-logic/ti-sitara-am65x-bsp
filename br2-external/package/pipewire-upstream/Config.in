@@ -1,0 +1,16 @@
+config BR2_PACKAGE_PIPEWIRE_UPSTREAM
+	bool "pipewire-upstream (official master)"
+	depends on BR2_TOOLCHAIN_HAS_THREADS
+	depends on BR2_TOOLCHAIN_HAS_SYNC_4
+	depends on !BR2_PACKAGE_PIPEWIRE
+	depends on !BR2_PACKAGE_PIPEWIRE_MILAN
+	select BR2_PACKAGE_ALSA_LIB
+	select BR2_PACKAGE_LINUXPTP
+	help
+	  PipeWire built from the official upstream master
+	  (gitlab.freedesktop.org/pipewire/pipewire) with module-avb enabled.
+	  Installs /usr/bin/pipewire, so it conflicts with the stock pipewire
+	  and pipewire-milan packages (enable exactly one).
+
+comment "pipewire-upstream needs threads and conflicts with stock pipewire / pipewire-milan"
+	depends on !BR2_TOOLCHAIN_HAS_THREADS || BR2_PACKAGE_PIPEWIRE || BR2_PACKAGE_PIPEWIRE_MILAN

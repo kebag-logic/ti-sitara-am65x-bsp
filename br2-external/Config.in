@@ -1,1 +1,2 @@
 source "$BR2_EXTERNAL_KL_AM62X_PATH/package/pipewire-milan/Config.in"
+source "$BR2_EXTERNAL_KL_AM62X_PATH/package/pipewire-upstream/Config.in"
