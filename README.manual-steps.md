@@ -13,9 +13,11 @@ flashed the rest is remote and safe.
 ---
 
 ## 1. Finish P2b — RAUC A↔B failover  (≈10 min, then fully validated)
-The rauc rootfs reproduces the board's reachability: composite USB gadget brings up
-`usb0 = 192.168.7.10` (so `ssh board` works) and `/root/.ssh/authorized_keys` carries
-your `user@host` + `user@host` keys; `eth1` is static `192.168.1.10` for AVB.
+The rauc rootfs reproduces the board's reachability: `eth1` is static `192.168.1.10` — the
+`ssh board` path (`ssh -J jump-host root@192.168.1.10`) — with your `user@host` +
+`user@host` keys in `/root/.ssh/authorized_keys`. It also brings up `usb0 = 192.168.7.10`
+(composite UAC2+ECM USB gadget) as a second link. A bare Buildroot rootfs boots unreachable
+without these, so they were added to the overlay.
 
 1. **Flash the A/B card** (dev host; microSD in a reader — find it with `lsblk`):
    ```sh
