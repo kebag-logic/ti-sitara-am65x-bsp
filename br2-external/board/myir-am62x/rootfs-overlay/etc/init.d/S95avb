@@ -1,22 +1,25 @@
 #!/bin/sh
 
-# AVB network prep on boot: VLAN + traffic shaper + gPTP (PipeWire is started separately)
-# Sources /etc/avb/avb.env and delegates to the deployed pipewire-helper scripts
+# AVB bring-up service: VLAN + CBS/mqprio egress shaper + gPTP + allmulti + PipeWire-AVB
+# Skeleton init wrapper - the logic lives in the deployed pipewire-helper scripts (PW_HELPER_DIR)
 
 [ -f /etc/avb/avb.env ] && . /etc/avb/avb.env
+: "${AVB_INTERFACE:=eth1}"
+: "${PW_HELPER_DIR:=/opt/pipewire-helper}"
 
 start() {
 	# Bail out cleanly if the helper scripts are not deployed yet
-	[ -d "$PW_HELPER_DIR" ] || { echo "S95avb: $PW_HELPER_DIR missing, skipping"; return 0; }
+	[ -d "$PW_HELPER_DIR" ] || { echo "S95avb: $PW_HELPER_DIR missing, skipping AVB"; return 0; }
 	ip link set dev "$AVB_INTERFACE" up
-	"$PW_HELPER_DIR/setup-vlan.sh" "$AVB_INTERFACE"
-	"$PW_HELPER_DIR/prepare-traffic-shaper-am62x.sh" "$AVB_INTERFACE"
-	AVB_INTERFACE="$AVB_INTERFACE" "$PW_HELPER_DIR/ptp-start.sh" "$AVB_INTERFACE" &
+	# VLAN + HW egress shaper for the talker (best-effort; skip if a script is absent)
+	[ -x "$PW_HELPER_DIR/setup-vlan.sh" ] && "$PW_HELPER_DIR/setup-vlan.sh" "$AVB_INTERFACE"
+	[ -x "$PW_HELPER_DIR/prepare-traffic-shaper-am62x.sh" ] && "$PW_HELPER_DIR/prepare-traffic-shaper-am62x.sh" "$AVB_INTERFACE"
+	# Full bring-up = gPTP + allmulti + base pipewire + pipewire-avb (backgrounded, waits for gPTP lock)
+	"$PW_HELPER_DIR/bringup-avb-am62x.sh" "$AVB_INTERFACE" &
 }
 
 stop() {
-	pkill ptp4l 2>/dev/null
-	pkill phc2sys 2>/dev/null
+	kill $(pidof pipewire-avb pipewire ptp4l phc2sys 2>/dev/null) 2>/dev/null
 	tc qdisc del dev "$AVB_INTERFACE" root 2>/dev/null
 }
 
