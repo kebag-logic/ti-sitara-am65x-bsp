@@ -50,8 +50,20 @@ net recovers) before it is trusted; nothing risky touches the golden SD first.
   **Gotchas:** `altbootcmd` MUST mirror `bootcmd` (`run envboot; run distro_bootcmd`) —
   bare `run distro_bootcmd` lands at the extlinux menu without auto-selecting and strands
   the board; `bootcount_env` only saves when `upgrade_available!=0` (RAUC trial gate).
-- **P1 (SPL net):** set backup boot mode = DFU; wire `snagboot` recovery. Test: zero the
-  primary `tiboot3` on the spare → confirm ROM drops to DFU and `snagrecover` restores it.
+- **P1 (SPL net) — DONE 2026-06-15, validated:** USB-C DFU recovery via `snagboot` on
+  serial-host. `./dfu-recover.sh {build|host-setup|recover}` builds DFU-capable bootloaders
+  (R5+A53 `am62x_*_usbdfu.config`), installs+patches snagboot, and pushes
+  `tiboot3→tispl→u-boot` over USB-C. Validated: with the board in **USB-DFU boot mode
+  (primary boot-switch B4 ON = bootmode `0x0A`)**, `snagrecover -s am625` recovered a
+  board with no usable on-media bootloader → booted U-Boot over USB → kernel from SD.
+  **Required fix:** snagboot's `get_string(dev, intf.iInterface)` must pass an explicit
+  langid `0x0409` — the TI ROM DFU returns no langid list (`dfu-recover.sh host-setup`
+  applies it). **Net options:** (1) *manual, proven now* — normal boot = SD (B4 OFF); to
+  recover, flip B4 ON + `dfu-recover.sh recover`. (2) *automatic* — primary=SD +
+  backup=USB-DFU; needs the MYIR **backup** boot-switch value (the primary nibble decodes
+  cleanly — B3–B6 reversed → bootmode[6:3]: SD `0001`=0x08, eMMC `1001`=0x09, USB-DFU
+  `0101`=0x0A — but the backup nibble B7–B9 does not map 1:1, so derive it from the MYIR
+  table or by reading `devmem 0x43000030` while trying backup settings).
 - **P2 (OS A/B):** GPT layout, A/B rootfs+kernel, RAUC + bootcount. Test: deploy a
   deliberately-panicking kernel to slot B → confirm auto-revert to A.
 - **P3 (firmware A/B):** rebuild U-Boot with FWU; two firmware banks. Test: write a bad
@@ -72,4 +84,9 @@ ssh serial-host 'stty -F /dev/ttyACM0 115200 cs8 -parenb raw -echo
   printf "run bootcmd\r" >/dev/ttyACM0'                  # boots the normal path
 ```
 Or via SD reader: copy `u-boot.img.v2026ok` over `u-boot.img` (reverts to the env-less
-v2026.04 that boots regardless). Until P1, do bootloader changes on the spare SD.
+v2026.04 that boots regardless).
+
+**USB-DFU recovery (P1, no media swap):** if the on-media bootloader is dead, set the
+board to USB-DFU boot (primary boot-switch **B4 ON**), power-cycle, then on the dev host
+`./dfu-recover.sh recover` (or `watch`) — snagboot on serial-host reflashes the whole chain
+over USB-C and the board boots. Flip B4 OFF afterwards for normal SD boot.
