@@ -17,17 +17,17 @@ branch for the full porting plan and rationale.
 Artifacts: `out_myir/r5/tiboot3-am62x-gp-myc-am62x.bin`,
 `out_myir/a53/tispl.bin_unsigned`, `out_myir/a53/u-boot.img`.
 
-## 2. Kernel (mainline + RT + AVB)
-```sh
-cd linux
-make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- defconfig   # or the BSP res/defconfig
-scripts/kconfig/merge_config.sh -m .config ../res/kl-avb-rt.config
-make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j"$(nproc)" Image dtbs
-```
-`res/kl-avb-rt.config` adds `CONFIG_PREEMPT_RT`, `CONFIG_TI_AM65_CPSW_QOS`
-(EST/TAS offload), `CONFIG_MOTORCOMM_PHY` (YT8531), pins the CPSW/MDIO/PHY
-symbols and the AVB qdiscs/PTP/VLAN/USB-audio. Verify on boot:
-`cat /sys/kernel/realtime` → `1`.
+## 2. Kernel (mainline, reuse the board config)
+The proven path is **`./build-am62-kernel.sh all`** — clone mainline **v7.1**,
+**reuse the board's own `/proc/config.gz`**, `olddefconfig`, cross-build
+`Image.gz`+modules, and deploy via `extlinux` with the original kernel kept as a
+serial-selectable fallback. Full step-by-step + caveats in
+`README.install-kernel.md`. The board currently runs a rebuilt **`7.1.0 PREEMPT`**.
+
+For a fully **PREEMPT_RT** kernel, merge the RT/AVB fragment after the config step:
+`scripts/kconfig/merge_config.sh -m linux/.config res/kl-avb-rt.config`
+(adds `CONFIG_PREEMPT_RT`, `TI_AM65_CPSW_QOS` EST/TAS, `MOTORCOMM_PHY` (YT8531),
+pins CPSW/MDIO/PHY + AVB qdiscs/PTP/VLAN/USB-audio; verify `cat /sys/kernel/realtime`→1).
 
 ## 3. Root filesystem (Buildroot, AVB)
 ```sh
@@ -50,16 +50,16 @@ See `br2-external/README.md`. The Milan PipeWire can be baked in
 - **Recovery**: `snagboot` over USB DFU (`deploy.sh` has the `snagrecover` stub).
 
 ## 5. Bring up AVB
-On the board (or via the deployed `/opt/pipewire-helper`):
+The rootfs-overlay init services do it at boot: **`S50uac2gadget`** starts the USB
+2.0 UAC2 audio gadget, then **`S95avb`** runs the full bring-up (VLAN + mqprio CBS
+shaper + gPTP + `allmulti` + base pipewire + pipewire-avb) by delegating to the
+deployed `/opt/pipewire-helper` scripts (tunable in `/etc/avb/avb.env`). Manually:
 ```sh
-ip -o addr                  # eth1 = AVB net, eth0 = mgmt/deploy
-setup-vlan.sh eth1          # VLAN id 2 on the AVB port
-prepare-traffic-shaper-am62x.sh eth1   # mqprio bw_rlimit (NOT tc cbs offload)
-AVB_INTERFACE=eth1 ptp-start.sh eth1   # ptp4l + phc2sys (gPTP)
-# then start the Milan pipewire (helper start script / pipewire-avb)
+/opt/pipewire-helper/bringup-avb-am62x.sh eth1   # gPTP + allmulti + pipewire-avb (the whole stack)
 ```
-Never shape/VLAN `eth0` — it is the management/deploy path.
-The `S95avb` init script in the rootfs overlay automates steps 1-3 at boot.
+Never shape/VLAN `eth0` — it is the management/deploy path. `allmulti` on the AVB
+port is **required** for stream multicast RX (the `multicast` net stat reads 0 even
+when it works — am65-cpsw never implements it; check `rx_packets`).
 
 ## 6. Validate
 Use the milan-tests-avb methodology (the `milan-avb-validate` skill): AVB

@@ -8,8 +8,9 @@ MYC-YM6254-8E2D (quad Cortex-A53 @ 1.4 GHz, 2 GB DDR4, 8 GB eMMC).
 - CPSW3g MAC, **RGMII1 → ENET1 (J22)** and **RGMII2 → ENET2 (J23)**; MAC supports
   **IEEE 1588**. PHY driver: `drivers/net/phy/motorcomm.c`.
 - **Role split (confirmed by the project owner)**: **`eth1` = AVB network**
-  (to AVB Switch 0; `16:63:8a:90:6f:e7`), **`eth0` = management/deploy net**
-  (`XX:XX:XX:XX:XX:XX`). Bind AVB to `eth1`; ssh/TFTP/NFS-deploy over `eth0`.
+  (to AVB Switch 0; eth1's MAC is **U-Boot-random per boot** — DT `port@2` has no
+  efuse MAC — so the AVB entity_id churns), **`eth0` = management/deploy net**
+  (`XX:XX:XX:XX:XX:XX`, stable efuse MAC). Bind AVB to `eth1`; ssh/TFTP/NFS over `eth0`.
   `eth0` is currently **down (cable not seated)**, so the board is reached via the
   jump-host jump: `ssh -J jump-host root@192.168.1.10` (eth1 carries a temporary
   `192.168.1.10/24`, dhcpcd static). The physical RJ45→ethN mapping is not in
@@ -45,4 +46,6 @@ MYC-YM6254-8E2D (quad Cortex-A53 @ 1.4 GHz, 2 GB DDR4, 8 GB eMMC).
 - **Yocto / Arago** (not Buildroot). Root login: user `root`, **empty password**.
   Hostname `myd-am62x`. Network: DHCP / random MAC (set static via
   `/etc/network/interfaces`).
-- The target build moves to mainline kernel + Buildroot rootfs (see README.md).
+- **Now running:** a rebuilt **mainline `7.1.0 PREEMPT`** kernel (cross-built from
+  the board's own config — see `README.install-kernel.md`) + Buildroot rootfs, with
+  the prior `6.16.0-…-dirty` mainline kept as an extlinux fallback.
