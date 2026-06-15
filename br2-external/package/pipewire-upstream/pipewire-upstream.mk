@@ -20,10 +20,18 @@ PIPEWIRE_UPSTREAM_CONF_OPTS = \
 	-Dpipewire-alsa=enabled \
 	-Ddbus=enabled \
 	-Dudev=enabled \
-	-Dsystemd=disabled \
+	-Dlibsystemd=disabled \
+	-Dsystemd-system-service=disabled \
+	-Dsystemd-user-service=disabled \
+	-Dflatpak=disabled \
+	-Dgsettings=disabled \
 	-Dgstreamer=disabled \
 	-Dman=disabled \
 	-Dtests=disabled \
-	-Dexamples=disabled
+	-Dexamples=disabled \
+	-Dsession-managers=[] \
+	-Dpipewire-jack=disabled \
+	-Dpipewire-v4l2=disabled \
+	-Dbluez5=disabled
 
 $(eval $(meson-package))

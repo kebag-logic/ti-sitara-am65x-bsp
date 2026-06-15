@@ -5,6 +5,7 @@ config BR2_PACKAGE_PIPEWIRE_UPSTREAM
 	depends on !BR2_PACKAGE_PIPEWIRE
 	depends on !BR2_PACKAGE_PIPEWIRE_MILAN
 	select BR2_PACKAGE_ALSA_LIB
+	select BR2_PACKAGE_DBUS
 	select BR2_PACKAGE_LINUXPTP
 	help
 	  PipeWire built from the official upstream master

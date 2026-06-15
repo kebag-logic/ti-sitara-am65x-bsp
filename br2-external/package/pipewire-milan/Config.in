@@ -4,6 +4,7 @@ config BR2_PACKAGE_PIPEWIRE_MILAN
 	depends on BR2_TOOLCHAIN_HAS_SYNC_4
 	depends on !BR2_PACKAGE_PIPEWIRE
 	select BR2_PACKAGE_ALSA_LIB
+	select BR2_PACKAGE_DBUS
 	select BR2_PACKAGE_LINUXPTP
 	help
 	  PipeWire built from the Milan AVB fork (gitlab Mister-M-alt/pipewire)

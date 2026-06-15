@@ -14,13 +14,18 @@ below); this is the target architecture and a safe, phased way to get there.
 
 Downstream logic cannot rescue an upstream failure, so each layer needs its own net.
 
-## Current gap (verified 2026-06-15)
-- **`CONFIG_ENV_IS_NOWHERE=y`** — U-Boot env is volatile; `saveenv` is a no-op. **This
-  blocks every fallback mechanism** and must be fixed first.
-- `BOOTCOUNT_LIMIT` unset, FWU runtime unset (only `FWU_NUM_BANKS=2` default), no A/B
-  layout, no update framework, SD is MBR (FWU wants GPT), `mmc-utils` not in the rootfs.
+## Starting gap (2026-06-15) and what closed it
+- **RESOLVED (P0):** was `CONFIG_ENV_IS_NOWHERE=y` (volatile env, `saveenv` a no-op —
+  blocked every fallback) + `BOOTCOUNT_LIMIT` unset → now redundant raw MMC env +
+  `BOOTCOUNT_ENV` + `fw_setenv` in the rootfs.
+- **RESOLVED (P2a/P2b):** was no A/B layout, no update framework, `mmc-utils`/`rauc` not
+  in the rootfs → now MBR A/B card + RAUC 1.15.2 userspace + signed bundle (verified).
+- **Still open (P3):** SD is **MBR** but FWU multi-bank wants **GPT**, while the K3 ROM
+  needs an MBR-readable FAT for `tiboot3` — so firmware A/B needs a GPT *data* medium or a
+  ROM-compatible layout (see P3). FWU runtime still unbuilt.
 - Assets present: K3 ROM **primary/backup boot modes**, eMMC **boot0/boot1**, DFU R5+A53
-  configs, `SPL_FIT`, and the manual recoverable flow (`flash-uboot-sd.sh`).
+  configs, `SPL_FIT`, manual recoverable flow (`flash-uboot-sd.sh`), USB-DFU net
+  (`dfu-recover.sh`).
 
 ## Recovery foundations (bottom-up)
 1. **SPL/ROM net — the key one.** Set the board's **backup boot mode = USB DFU** (the
@@ -64,8 +69,22 @@ net recovers) before it is trusted; nothing risky touches the golden SD first.
   cleanly — B3–B6 reversed → bootmode[6:3]: SD `0001`=0x08, eMMC `1001`=0x09, USB-DFU
   `0101`=0x0A — but the backup nibble B7–B9 does not map 1:1, so derive it from the MYIR
   table or by reading `devmem 0x43000030` while trying backup settings).
-- **P2 (OS A/B):** GPT layout, A/B rootfs+kernel, RAUC + bootcount. Test: deploy a
-  deliberately-panicking kernel to slot B → confirm auto-revert to A.
+- **P2a (OS A/B boot) — DONE 2026-06-15, validated:** MBR A/B card (`build-spare-sd-ab.sh`):
+  300M FAT boot + rootfs.A (`mmcblk1p2`) + rootfs.B (`p3`); RAUC-compatible U-Boot
+  bootchooser (`res/ab/boot.cmd`→`boot.scr`, `BOOT_ORDER="A B"`/`BOOT_{A,B}_LEFT`). ROM-boots
+  (FAT total-sectors 614400 via `mformat -R 6`; MBR not GPT — see `README.sd-card.md`).
+- **P2b (RAUC userspace) — built + verified 2026-06-15:** real Buildroot 2026.05 rootfs
+  (pipewire master + AVB, rauc 1.15.2, `fw_setenv`/`mmc`/`mkfs.ext4`, `S99bootgood`) in
+  both slots + 643 kernel modules. `etc/rauc/system.conf` (compatible=`myir-am62x`,
+  bootloader=`uboot`, `slot.rootfs.{0,1}`=p2/p3 bootname A/B, `statusfile=per-slot`) +
+  `keyring.pem`. `build-rauc-bundle.sh` makes a signed `plain` bundle carrying a complete
+  slot as a **tar** image (RAUC formats the inactive ext4 slot + extracts → no size limit).
+  Verified on the host: `rauc info` confirms the signature (`O=Kebag-Logic,
+  CN=myir-am62x-dev`), `Compatible: myir-am62x`, image `Type: tar (detected)`.
+  **On-hardware step (needs the A/B card flashed + booted):** `./validate-ab.sh` →
+  `rauc install` to the inactive slot, reboot, confirm the slot switched, `rauc status
+  mark-good`; the prior slot stays as the fallback (safe). Test: install a bad slot →
+  boot-loop reverts to the prior slot.
 - **P3 (firmware A/B):** rebuild U-Boot with FWU; two firmware banks. Test: write a bad
   `u-boot.img` to the inactive bank → confirm trial-boot reverts the bank.
 - **P4 (field layout):** make eMMC primary + SD/DFU backup (or keep SD primary), document
