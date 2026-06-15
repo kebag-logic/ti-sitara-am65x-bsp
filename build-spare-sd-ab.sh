@@ -21,17 +21,18 @@ for f in "$R5" "$TISPL" "$UB" "$MKIMAGE" "$KIMG" "$DTB" "$ROOTTAR" "$HERE/res/ab
 "$MKIMAGE" -A arm64 -T script -C none -d "$HERE/res/ab/boot.cmd" "$HERE/res/ab/boot.scr" >/dev/null
 
 rm -f "$OUT"; truncate -s "${SIZE_MB}M" "$OUT"
-# GPT: p1 bootable FAT32 (boot), p2 rootfs.A, p3 rootfs.B
+# MBR (dos) — the K3 boot ROM reads the legacy MBR to find the FAT with tiboot3; a GPT protective MBR hides it. p1 bootable FAT32(LBA), p2 rootfs.A, p3 rootfs.B
 sfdisk "$OUT" >/dev/null <<EOF
-label: gpt
-start=2048, size=$((BOOT_MB*2048)), type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B, name=boot
-size=$((SLOT_MB*2048)), type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name=rootfs.A
-type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name=rootfs.B
+label: dos
+start=2048, size=$((BOOT_MB*2048)), type=c, bootable
+size=$((SLOT_MB*2048)), type=83
+type=83
 EOF
 
 LOOP=$(sudo losetup -fP --show "$OUT")
 trap 'sudo umount "$MB" "$MA" "$MBp" 2>/dev/null||true; sudo losetup -d "$LOOP" 2>/dev/null||true' EXIT
-sudo mkfs.vfat -F 32 -n boot "${LOOP}p1" >/dev/null
+# K3 ROM FAT driver only reads a low reserved-sector count; mkfs.vfat's default 32 is NOT ROM-bootable (U-Boot reads it, ROM can't) — mformat -R 6 matches the on-device mkdosfs that works
+sudo mformat -R 6 -F -v BOOT -i "${LOOP}p1" ::
 sudo mkfs.ext4 -q -L rootfs.A "${LOOP}p2"; sudo mkfs.ext4 -q -L rootfs.B "${LOOP}p3"
 
 # boot partition: bootloaders + bootchooser (NO extlinux.conf, so distro_bootcmd runs boot.scr)

@@ -15,7 +15,12 @@ write it
 
 
 format it:
-* First patition with mkfs.vfat -F 32 -n BOOT
+* First partition (boot): **`mformat -R 6 -F -v BOOT -i /dev/sdxN ::`** (mtools).
+  CRITICAL: the K3 boot ROM's minimal FAT driver only reads a **low reserved-sector
+  count**. `mkfs.vfat -F 32` defaults to **32 reserved sectors → NOT ROM-bootable**
+  (U-Boot reads it fine, so it boots over DFU/EXT, but the ROM hangs *silently* at
+  power-on — no serial, no heartbeat). `mformat -R 6` matches the on-device `mkdosfs`
+  that works (reserved=6); `mkfs.vfat -R 8` is the lowest `mkfs.vfat` allows.
 * Second partion with mkfs.ext4 -L rootfs -o^64 for beyong 2038 limit
 
 

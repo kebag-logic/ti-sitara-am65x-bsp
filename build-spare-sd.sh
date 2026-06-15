@@ -27,7 +27,8 @@ EOF
 
 LOOP=$(sudo losetup -fP --show "$OUT")
 trap 'sudo umount "$MB" 2>/dev/null||true; sudo umount "$MR" 2>/dev/null||true; sudo losetup -d "$LOOP" 2>/dev/null||true' EXIT
-sudo mkfs.vfat -F 32 -n BOOT "${LOOP}p1" >/dev/null
+# K3 ROM FAT driver only reads a low reserved-sector count; mkfs.vfat's default 32 is NOT ROM-bootable (U-Boot reads it, ROM can't) — mformat -R 6 matches the on-device mkdosfs that works
+sudo mformat -R 6 -F -v BOOT -i "${LOOP}p1" ::
 sudo mkfs.ext4 -q -L rootfs "${LOOP}p2"
 
 MB=$(mktemp -d); sudo mount "${LOOP}p1" "$MB"
