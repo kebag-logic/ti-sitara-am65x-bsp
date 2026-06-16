@@ -1,13 +1,12 @@
 #!/bin/sh
 
-# Commit the U-Boot bootcount A/B trial: a healthy boot clears upgrade_available so U-Boot stops counting; a boot-loop instead exceeds bootlimit and U-Boot runs altbootcmd (auto-rollback). Extend health_ok() with a real probe per product.
-FP=/usr/sbin/fw_printenv; FW=/usr/sbin/fw_setenv
-health_ok() { [ -w / ]; }   # placeholder: rootfs writable => userspace reached; replace with a real service/network/AVB probe
+# Healthy boot -> mark the booted RAUC slot good (resets BOOT_x_LEFT so a good slot is never abandoned after a few reboots) + clear the U-Boot bootcount trial; a boot-loop never reaches here so the slot drains and U-Boot falls over. Replace health_ok() with a real probe per product.
+FW=$(command -v fw_setenv); FP=$(command -v fw_printenv); RAUC=$(command -v rauc)
+health_ok() { [ -w / ]; }
 case "$1" in
 	start)
-		[ -x "$FW" ] || exit 0
-		[ "$("$FP" -n upgrade_available 2>/dev/null)" = "1" ] || exit 0
-		if health_ok; then "$FW" upgrade_available 0; "$FW" bootcount 0; logger -t bootgood "trial committed (boot good)"
-		else logger -t bootgood "health check failed; leaving trial -> bootcount will roll back"; fi
+		health_ok || { logger -t bootgood "health check FAILED; leaving trial -> bootchooser rolls back"; exit 0; }
+		[ -n "$RAUC" ] && "$RAUC" status mark-good 2>/dev/null && logger -t bootgood "rauc slot marked good"
+		[ -n "$FW" ] && [ "$("$FP" -n upgrade_available 2>/dev/null)" = "1" ] && { "$FW" upgrade_available 0; "$FW" bootcount 0; logger -t bootgood "u-boot trial committed"; }
 		;;
 esac

@@ -18,6 +18,8 @@ DTB="$HERE/res/spare-sd/boot/ti/k3-am625x-myd-6254-71.dtb"
 ROOTTAR="${ROOTTAR:-$HERE/../buildroot/output/images/rootfs.tar.gz}"
 # staged kernel modules matching the deployed Image, copied into each slot if present
 MODDIR="${MODDIR:-$HERE/linux/output_modules/lib/modules}"
+# kernel release the Image actually reports — modules_install may add -dirty/-gNNNN which would break modprobe (uname mismatch)
+KREL=$(strings "$KIMG" 2>/dev/null | grep -m1 -oE 'Linux version [0-9][^ ]+' | awk '{print $3}')
 SIZE_MB="${SIZE_MB:-3000}"; BOOT_MB="${BOOT_MB:-300}"; SLOT_MB="${SLOT_MB:-1300}"
 
 for f in "$R5" "$TISPL" "$UB" "$MKIMAGE" "$KIMG" "$DTB" "$ROOTTAR" "$HERE/res/ab/boot.cmd"; do [ -s "$f" ] || { echo "missing input: $f"; exit 1; }; done
@@ -51,7 +53,7 @@ for m in "$MA" "$MBp"; do
 	sudo tar -C "$m" -xzf "$ROOTTAR"
 	sudo mkdir -p "$m/boot"
 	sudo cp "$KIMG" "$m/boot/Image"; sudo cp "$DTB" "$m/boot/k3-am625x-myd-6254-71.dtb"
-	[ -d "$MODDIR" ] && sudo mkdir -p "$m/lib/modules" && sudo cp -a "$MODDIR/." "$m/lib/modules/"
+	[ -d "$MODDIR" ] && [ -n "$KREL" ] && sudo mkdir -p "$m/lib/modules/$KREL" && sudo cp -a "$MODDIR"/*/. "$m/lib/modules/$KREL/"
 done
 sudo sync; sudo umount "$MA" "$MBp"; rmdir "$MA" "$MBp"
 sudo losetup -d "$LOOP"; trap - EXIT

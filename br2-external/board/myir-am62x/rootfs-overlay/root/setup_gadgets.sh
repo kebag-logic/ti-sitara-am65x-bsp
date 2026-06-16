@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Composite USB gadget = UAC2 audio + ECM ethernet (usb0=192.168.7.10, the mgmt/ssh link); mirrors the proven board setup
 mount -t configfs none /sys/kernel/config/ 2>/dev/null || true

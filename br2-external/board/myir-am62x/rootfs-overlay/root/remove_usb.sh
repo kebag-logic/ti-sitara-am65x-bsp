@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Tear down the composite gadget: unbind the UDC (drops usb0), then remove links + dirs in reverse
 G=/sys/kernel/config/usb_gadget/g

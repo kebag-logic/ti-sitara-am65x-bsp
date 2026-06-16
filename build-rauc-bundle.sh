@@ -12,6 +12,8 @@ ROOTTAR="${ROOTTAR:-$HERE/../buildroot/output/images/rootfs.tar.gz}"
 KIMG="$HERE/linux/arch/arm64/boot/Image"
 DTB="$HERE/res/spare-sd/boot/ti/k3-am625x-myd-6254-71.dtb"
 MODDIR="${MODDIR:-$HERE/linux/output_modules/lib/modules}"
+# kernel release the Image actually reports — modules_install may add -dirty/-gNNNN which would break modprobe (uname mismatch)
+KREL=$(strings "$KIMG" 2>/dev/null | grep -m1 -oE 'Linux version [0-9][^ ]+' | awk '{print $3}')
 CERT="$HERE/res/rauc/rauc-dev.cert.pem"; KEY="$HERE/res/rauc/rauc-dev.key.pem"
 VERSION="${VERSION:-$(date +%Y%m%d-%H%M%S)}"
 # prefer the reproducible buildroot host tools (rauc + mksquashfs live here); fall back to a system rauc
@@ -27,7 +29,7 @@ SLOT="$WORK/slot"; mkdir -p "$SLOT" "$WORK/content"
 sudo tar -C "$SLOT" -xzf "$ROOTTAR"
 sudo mkdir -p "$SLOT/boot"
 sudo cp "$KIMG" "$SLOT/boot/Image"; sudo cp "$DTB" "$SLOT/boot/k3-am625x-myd-6254-71.dtb"
-[ -d "$MODDIR" ] && sudo mkdir -p "$SLOT/lib/modules" && sudo cp -a "$MODDIR/." "$SLOT/lib/modules/"
+[ -d "$MODDIR" ] && [ -n "$KREL" ] && sudo mkdir -p "$SLOT/lib/modules/$KREL" && sudo cp -a "$MODDIR"/*/. "$SLOT/lib/modules/$KREL/"
 sudo tar -C "$SLOT" -czf "$WORK/content/rootfs.tar.gz" .
 sudo chown "$(id -u):$(id -g)" "$WORK/content/rootfs.tar.gz"
 

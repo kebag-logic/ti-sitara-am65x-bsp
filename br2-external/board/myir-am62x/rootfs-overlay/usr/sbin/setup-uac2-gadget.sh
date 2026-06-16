@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # SPDX-FileCopyrightText: Copyright © 2025 Kebag-Logic
 # SPDX-License-Identifier: MIT

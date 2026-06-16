@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Bring up the composite UAC2+ECM USB gadget (usb0 = mgmt/ssh link) at boot
 case "$1" in

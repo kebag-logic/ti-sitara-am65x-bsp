@@ -10,8 +10,12 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 BOARD="${BOARD:-board}"
 BUNDLE="${1:-$HERE/res/rauc/myir-am62x-bundle.raucb}"
 SSH="ssh -o ConnectTimeout=10 $BOARD"
+# eth1's MAC randomizes each boot (DT has no MAC) -> the jump host's ARP for the board goes stale after a reboot; flush it to reconnect
+JUMP="${JUMP:-jump-host}"; BOARDIP="${BOARDIP:-192.168.1.10}"
+arp_flush(){ ssh -o ConnectTimeout=8 "$JUMP" "sudo ip neigh flush $BOARDIP" 2>/dev/null || true; }
 say(){ echo "== $* =="; }
-boot_slot(){ $SSH "mount" | sed -n 's| on / type.*||p' | grep -o 'mmcblk1p[0-9]'; }
+# root mounts as /dev/root on the rauc rootfs, so read the booted slot (A/B) from rauc itself
+boot_slot(){ $SSH "rauc status 2>/dev/null" | sed -n 's/.*Booted from:.*(\([AB]\)).*/\1/p'; }
 
 [ -s "$BUNDLE" ] || { echo "missing bundle $BUNDLE (run build-rauc-bundle.sh)"; exit 1; }
 say "precheck: rauc present + current slot"
@@ -24,9 +28,9 @@ scp "$BUNDLE" "$BOARD:/tmp/upd.raucb"
 $SSH "rauc install /tmp/upd.raucb"
 $SSH "rauc status"
 
-say "reboot and wait for the board"
+say "reboot and wait for the board (flushing stale ARP on $JUMP each retry)"
 $SSH "reboot" || true
-sleep 8; for i in $(seq 1 60); do $SSH true 2>/dev/null && break; sleep 5; done
+sleep 8; for i in $(seq 1 60); do arp_flush; $SSH true 2>/dev/null && break; sleep 5; done
 
 AFTER=$(boot_slot); say "after reboot booted from $AFTER"
 [ "$AFTER" != "$BEFORE" ] || { echo "slot did NOT switch ($BEFORE) — inspect bootchooser env (fw_printenv BOOT_ORDER BOOT_A_LEFT BOOT_B_LEFT)"; exit 1; }
