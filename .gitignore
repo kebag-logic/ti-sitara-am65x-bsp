@@ -12,5 +12,6 @@
 # generated bootchooser script (built from res/ab/boot.cmd)
 /res/ab/boot.scr
 
-# signed RAUC bundle artifact (built by build-rauc-bundle.sh); keep the dev cert/key
+# signed RAUC bundle + signing key (build-rauc-bundle.sh); provide your own key, never commit it
 /res/rauc/*.raucb
+/res/rauc/*.key.pem
