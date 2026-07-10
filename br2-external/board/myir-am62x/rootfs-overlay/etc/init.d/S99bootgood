@@ -3,10 +3,17 @@
 # Healthy boot -> mark the booted RAUC slot good (resets BOOT_x_LEFT so a good slot is never abandoned after a few reboots) + clear the U-Boot bootcount trial; a boot-loop never reaches here so the slot drains and U-Boot falls over. Replace health_ok() with a real probe per product.
 FW=$(command -v fw_setenv); FP=$(command -v fw_printenv); RAUC=$(command -v rauc)
 health_ok() { [ -w / ]; }
+booted_slot() { sed -n 's/.*rauc\.slot=\([AB]\).*/\1/p' /proc/cmdline; }
 case "$1" in
 	start)
 		health_ok || { logger -t bootgood "health check FAILED; leaving trial -> bootchooser rolls back"; exit 0; }
-		[ -n "$RAUC" ] && "$RAUC" status mark-good 2>/dev/null && logger -t bootgood "rauc slot marked good"
+		marked=
+		[ -n "$RAUC" ] && "$RAUC" status mark-good 2>/dev/null && { marked=1; logger -t bootgood "rauc slot marked good"; }
+		# rauc missing or broken must not drain a healthy slot: restore the booted slot's attempts directly
+		if [ -z "$marked" ] && [ -n "$FW" ]; then
+			s=$(booted_slot)
+			[ -n "$s" ] && { "$FW" "BOOT_${s}_LEFT" 3; logger -t bootgood "restored BOOT_${s}_LEFT=3 (rauc unavailable)"; }
+		fi
 		[ -n "$FW" ] && [ "$("$FP" -n upgrade_available 2>/dev/null)" = "1" ] && { "$FW" upgrade_available 0; "$FW" bootcount 0; logger -t bootgood "u-boot trial committed"; }
 		;;
 esac
