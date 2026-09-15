@@ -12,12 +12,15 @@ R5="$HERE/u-boot-official/out_myir/r5/tiboot3-am62x-gp-myc-am62x.bin"
 TISPL="$HERE/u-boot-official/out_myir/a53/tispl.bin"
 UB="$HERE/u-boot-official/out_myir/a53/u-boot.img"
 MKIMAGE="$HERE/u-boot-official/out_myir/a53/tools/mkimage"
-KIMG="$HERE/linux/arch/arm64/boot/Image"
-DTB="$HERE/res/spare-sd/boot/ti/k3-am625x-myd-6254-71.dtb"
+KIMG="${KIMG:-$HERE/linux/arch/arm64/boot/Image}"
+# DTB content is overridable (e.g. res/tdm8/k3-am625x-myd-6254-tdm8.dtb); the
+# NAME it lands under in the slot must stay in step with res/ab/boot.cmd.
+DTB="${DTB:-$HERE/res/spare-sd/boot/ti/k3-am625x-myd-6254-71.dtb}"
+DTB_NAME="${DTB_NAME:-k3-am625x-myd-6254-71.dtb}"
 # Buildroot rootfs (pipewire-master + rauc + P0 env tools); override with ROOTTAR=...
 ROOTTAR="${ROOTTAR:-$HERE/../buildroot/output/images/rootfs.tar.gz}"
 # staged kernel modules matching the deployed Image, copied into each slot if present
-MODDIR="${MODDIR:-$HERE/linux/output_modules/lib/modules}"
+MODDIR="${MODDIR:-$HERE/linux/output_modules/lib/modules}"   # TDM8: .kstage-tdm8/lib/modules
 # kernel release the Image actually reports — modules_install may add -dirty/-gNNNN which would break modprobe (uname mismatch)
 KREL=$(strings "$KIMG" 2>/dev/null | grep -m1 -oE 'Linux version [0-9][^ ]+' | awk '{print $3}')
 SIZE_MB="${SIZE_MB:-3000}"; BOOT_MB="${BOOT_MB:-300}"; SLOT_MB="${SLOT_MB:-1300}"
@@ -52,7 +55,7 @@ sudo mount "${LOOP}p2" "$MA"; sudo mount "${LOOP}p3" "$MBp"
 for m in "$MA" "$MBp"; do
 	sudo tar -C "$m" -xzf "$ROOTTAR"
 	sudo mkdir -p "$m/boot"
-	sudo cp "$KIMG" "$m/boot/Image"; sudo cp "$DTB" "$m/boot/k3-am625x-myd-6254-71.dtb"
+	sudo cp "$KIMG" "$m/boot/Image"; sudo cp "$DTB" "$m/boot/$DTB_NAME"
 	[ -d "$MODDIR" ] && [ -n "$KREL" ] && sudo mkdir -p "$m/lib/modules/$KREL" && sudo cp -a "$MODDIR"/*/. "$m/lib/modules/$KREL/"
 done
 sudo sync; sudo umount "$MA" "$MBp"; rmdir "$MA" "$MBp"

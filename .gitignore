@@ -6,6 +6,7 @@
 
 # Kernel module staging + large generated/backup artifacts
 /.kstage/
+/.kstage-tdm8/
 /res/spare-sd/
 /res/sd-boot-backup/
 
@@ -15,3 +16,7 @@
 # signed RAUC bundle + signing key (build-rauc-bundle.sh); provide your own key, never commit it
 /res/rauc/*.raucb
 /res/rauc/*.key.pem
+
+# TDM8 device tree generated from the vendor blob by res/tdm8/mk-tdm8-dtb.py
+/res/tdm8/k3-am625x-myd-6254-tdm8.dtb
+/res/tdm8/k3-am625x-myd-6254-tdm8.dts

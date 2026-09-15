@@ -9,13 +9,15 @@ set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 OUT="${1:-$HERE/res/spare-sd/spare-am62x-v2026.img}"
 BOOTSRC="$HERE/res/spare-sd/boot"                 # kernels/DTBs/extlinux pulled from the working SD
-ROOTTAR="$HERE/res/spare-sd/rootfs.tar.gz"        # board rootfs (bind-mount tar, no virtual fs)
+ROOTTAR="${ROOTTAR:-$HERE/res/spare-sd/rootfs.tar.gz}"   # board rootfs; override with the Buildroot output/images/rootfs.tar.gz
 R5="$HERE/u-boot-official/out_myir/r5/tiboot3-am62x-gp-myc-am62x.bin"
 TISPL="$HERE/u-boot-official/out_myir/a53/tispl.bin"
 UB="$HERE/u-boot-official/out_myir/a53/u-boot.img"
+# which staged kernel must be present (build-tdm8-uac2.sh stage writes Image-<rel>.gz)
+KIMG_NAME="${KIMG_NAME:-Image-7.1.0.gz}"
 SIZE_MB="${SIZE_MB:-1600}"; BOOT_MB="${BOOT_MB:-300}"
 
-for f in "$BOOTSRC/Image-7.1.0.gz" "$ROOTTAR" "$R5" "$TISPL" "$UB"; do [ -s "$f" ] || { echo "missing input: $f"; exit 1; }; done
+for f in "$BOOTSRC/$KIMG_NAME" "$ROOTTAR" "$R5" "$TISPL" "$UB"; do [ -s "$f" ] || { echo "missing input: $f"; exit 1; }; done
 
 rm -f "$OUT"; truncate -s "${SIZE_MB}M" "$OUT"
 # DOS table: p1 = bootable FAT32(LBA), p2 = Linux

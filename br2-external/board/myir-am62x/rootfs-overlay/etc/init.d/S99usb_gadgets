@@ -1,8 +1,36 @@
 #!/bin/sh
 
-# Bring up the composite UAC2+ECM USB gadget (usb0 = mgmt/ssh link) at boot
+# Bring up the USB gadget on the OTG port (usb0 = mgmt/ssh link) at boot.
+#
+# Two shapes, selected by TDM8_ENABLE in /etc/tdm8/tdm8.env:
+#   yes -> TDM8 8x8 UAC2 + ECM, plus the alsaloop bridge to the McASP1 TDM link
+#   no  -> the plain composite gadget the safe-update/RAUC flow has always used
+TDM8_ENV=/etc/tdm8/tdm8.env
+TDM8_ENABLE=no
+[ -r "$TDM8_ENV" ] && . "$TDM8_ENV"
+
 case "$1" in
-start) /root/setup_gadgets.sh; exit 0 ;;
-stop)  /root/remove_usb.sh; exit 0 ;;
-*) echo "Usage: $0 {start|stop}"; exit 1 ;;
+start)
+	if [ "$TDM8_ENABLE" = yes ]; then
+		/usr/sbin/tdm8-uac2.sh gadget-up || exit 1
+		# the bridge waits for both ALSA cards, so park it in the
+		# background instead of stalling the rest of the boot on the FPGA
+		/usr/sbin/tdm8-uac2.sh bridge-up &
+	else
+		/root/setup_gadgets.sh
+	fi
+	exit 0
+	;;
+stop)
+	if [ "$TDM8_ENABLE" = yes ]; then
+		/usr/sbin/tdm8-uac2.sh down
+	else
+		/root/remove_usb.sh
+	fi
+	exit 0
+	;;
+*)
+	echo "Usage: $0 {start|stop}"
+	exit 1
+	;;
 esac

@@ -1,0 +1,102 @@
+/*
+ * TDM8 (8 in / 8 out) on McASP1, brought out on the MYD-YM62X J11 2x15 GPMC
+ * expansion header, bridged to the USB Audio Class 2.0 gadget.
+ *
+ * SPDX-FileCopyrightText: Copyright (c) 2026 Kebag-Logic
+ * SPDX-License-Identifier: MIT
+ *
+ * This is NOT a standalone device tree: res/tdm8/mk-tdm8-dtb.py injects each
+ * SECTION below into the vendor blob's decompiled source and recompiles it into
+ * k3-am625x-myd-6254-tdm8.dtb. The vendor blob is never modified. The @PH_*@
+ * placeholders are replaced with phandle values above the vendor blob's highest.
+ *
+ * Wiring (see README.tdm8-uac2.md for the full table). The FPGA owns the audio
+ * oscillator and is bit-clock + frame master, so ACLKX/AFSX are SoC inputs:
+ *
+ *   J11-21  GPMC0_BE0n_CLE  pad 0x0090 mux2  MCASP1_ACLKX  <- FPGA BCLK  12.288 MHz
+ *   J11-15  GPMC0_WAIT0     pad 0x0098 mux2  MCASP1_AFSX   <- FPGA FSYNC 48 kHz
+ *   J11-9   GPMC0_WEn       pad 0x008c mux2  MCASP1_AXR0   -> FPGA DIN   (8 slots out)
+ *   J11-17  GPMC0_ADVn_ALE  pad 0x0084 mux2  MCASP1_AXR2   <- FPGA DOUT  (8 slots in)
+ *   J11-3/4/13/14/23/24  GND
+ *
+ * PIN_INPUT = 0x50000, PIN_OUTPUT = 0x10000; the low nibble is the mux mode.
+ */
+
+/* === SECTION: /bus@f0000/pinctrl@f4000/main-mcasp1-pins-default === */
+				pinctrl-single,pins = <
+					0x0090 0x50002	/* GPMC0_BE0n_CLE.MCASP1_ACLKX  in   J11-21 */
+					0x0098 0x50002	/* GPMC0_WAIT0.MCASP1_AFSX      in   J11-15 */
+					0x008c 0x10002	/* GPMC0_WEn.MCASP1_AXR0        out  J11-9  */
+					0x0084 0x50002	/* GPMC0_ADVn_ALE.MCASP1_AXR2   in   J11-17 */
+				>;
+				phandle = <@PH_PINS@>;
+
+/* === SECTION: /bus@f0000/audio-controller@2b10000 === */
+			#sound-dai-cells = <0x00>;
+			pinctrl-names = "default";
+			pinctrl-0 = <@PH_PINS@>;
+			op-mode = <0x00>;		/* DAVINCI_MCASP_IIS_MODE (not DIT) */
+			tdm-slots = <0x08>;
+			/*
+			 * One serializer per direction is all a TDM8 link needs:
+			 * 0 = inactive, 1 = TX, 2 = RX. AXR0 transmits the 8 output
+			 * slots, AXR2 receives the 8 input slots.
+			 */
+			serial-dir = <0x01 0x00 0x02 0x00
+				      0x00 0x00 0x00 0x00
+				      0x00 0x00 0x00 0x00
+				      0x00 0x00 0x00 0x00>;
+			tx-num-evt = <0x20>;
+			rx-num-evt = <0x20>;
+			/*
+			 * No "ti,async-mode": RX must stay in the TX clock domain,
+			 * because ACLKR/AFSR have no pad on J11. Synchronous mode
+			 * also forces both directions to the same rate/format,
+			 * which is what the bridge wants anyway.
+			 */
+			status = "okay";
+			phandle = <@PH_MCASP1@>;
+
+/* === SECTION: / === */
+
+	tdm8-codec {
+		compatible = "kebag-logic,tdm8-dummy";
+		#sound-dai-cells = <0x00>;
+		status = "okay";
+		phandle = <@PH_CODEC@>;
+	};
+
+	sound-tdm8 {
+		compatible = "simple-audio-card";
+		simple-audio-card,name = "TDM8";
+		/*
+		 * dsp_a: 1-BCLK-wide frame sync, slot 0 starts one BCLK after the
+		 * FSYNC edge, MSB first. If the FPGA emits slot 0 on the FSYNC edge
+		 * itself, change this to "dsp_b"; if FSYNC is active low, add
+		 * simple-audio-card,frame-inversion.
+		 */
+		simple-audio-card,format = "dsp_a";
+		/*
+		 * Both phandles point at the codec DAI subnode => the FPGA is bit-clock
+		 * and frame master. ASoC reads these "from the codec perspective"
+		 * (CBP_CFP) and snd_soc_runtime_set_dai_fmt() flips them for the CPU
+		 * DAI, so davinci-mcasp gets BC_FC, clears ACLKXE/AFSXE and leaves
+		 * ACLKX/AFSX as inputs - matching the PIN_INPUT pinmux above.
+		 * Point them at the cpu subnode instead and McASP drives the clocks.
+		 */
+		simple-audio-card,bitclock-master = <@PH_CODEC_DAI@>;
+		simple-audio-card,frame-master = <@PH_CODEC_DAI@>;
+
+		simple-audio-card,cpu {
+			sound-dai = <@PH_MCASP1@>;
+			dai-tdm-slot-num = <0x08>;
+			dai-tdm-slot-width = <0x20>;
+		};
+
+		simple-audio-card,codec {
+			sound-dai = <@PH_CODEC@>;
+			dai-tdm-slot-num = <0x08>;
+			dai-tdm-slot-width = <0x20>;
+			phandle = <@PH_CODEC_DAI@>;
+		};
+	};

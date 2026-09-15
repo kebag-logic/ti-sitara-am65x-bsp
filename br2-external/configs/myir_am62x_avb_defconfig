@@ -17,6 +17,12 @@ BR2_PACKAGE_RAUC=y
 BR2_PACKAGE_LINUXPTP=y
 BR2_PACKAGE_ALSA_UTILS=y
 BR2_PACKAGE_ALSA_UTILS_APLAY=y
+# alsaloop bridges the McASP1 TDM8 card to the UAC2 gadget card
+BR2_PACKAGE_ALSA_UTILS_ALSALOOP=y
+# amixer reaches the gadget's "Capture Pitch 1000000" feedback control
+BR2_PACKAGE_ALSA_UTILS_AMIXER=y
+# libsamplerate gives alsaloop --sync=samplerate (FPGA-vs-host clock drift)
+BR2_PACKAGE_LIBSAMPLERATE=y
 BR2_PACKAGE_ETHTOOL=y
 BR2_PACKAGE_IPROUTE2=y
 BR2_PACKAGE_LIBCAP=y
