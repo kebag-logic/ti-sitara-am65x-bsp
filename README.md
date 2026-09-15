@@ -51,3 +51,15 @@ called as following:
 
 By default, if no parameters are passed, the build.sh will by default select
 the MYIR branch
+
+## Guides
+
+* `README.board-facts.md` — the MYIR MYD-YM62X / MYC-YM62X hardware fact sheet
+* `README.uboot.md` / `README.sd-card.md` — bootloaders and SD layout
+* `README.install-kernel.md` — build + deploy a mainline kernel, with a fallback
+* `README.avb-am62x.md` — PipeWire AVB / Milan bring-up over `eth1`
+* `README.safe-update.md` — A/B, RAUC and the USB-C DFU brick-net
+* `README.tdm8-uac2.md` — **TDM8 8×8 on McASP1/J11 → USB Audio Class 2.0 gadget**:
+  the J11 pinout and cable, the FPGA clock/framing contract, the codec shim,
+  the device tree, the alsaloop bridge, and how to build it all into an image
+  (rootfs, spare SD, A/B SD, RAUC bundle)
