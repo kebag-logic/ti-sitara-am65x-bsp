@@ -108,6 +108,25 @@ ${SCRIPT_DIR}/res/uboot/fix-pylibfdt-swig.sh "$UBOOT_SRC"
 # See res/uboot/fix-binman-pkg-resources.sh.
 ${SCRIPT_DIR}/res/uboot/fix-binman-pkg-resources.sh "$UBOOT_SRC"
 
+# PocketBeagle 2 only. All three are no-ops on any other tree, but run them
+# just for PB2 so a MYIR/SK build cannot be surprised by them.
+if [ "$1" = "PB2" ]; then
+	# The A53 SPL's console pinmux group has no bootph-*, so fdtgrep drops it
+	# and the SPL prints into an unmuxed UART: boot goes silent right after
+	# "Entry point address = 0x80080000".
+	${SCRIPT_DIR}/res/uboot/fix-pb2-uart6-bootph.sh "$UBOOT_SRC"
+
+	# Without kernel_comp_addr_r / kernel_comp_size, booti refuses a gzipped
+	# Image and every extlinux label fails with err=-14.
+	${SCRIPT_DIR}/res/uboot/fix-pb2-kernel-comp.sh "$UBOOT_SRC"
+
+	# The board splits its boot log across two UARTs - R5/TF-A/OP-TEE on
+	# main_uart0 (P1.30/P1.32), A53 U-Boot and Linux on main_uart6 (JST-SH).
+	# Default to putting the A53 stages on main_uart0 too, so the whole log
+	# lands on one wire; PB2_CONSOLE_ON_P1=off keeps the stock split.
+	${SCRIPT_DIR}/res/uboot/pb2-console-on-p1.sh "${PB2_CONSOLE_ON_P1:-on}" "$UBOOT_SRC"
+fi
+
 cd $UBOOT_SRC
 #Prepare the R5 Wakeup Domain processor
 make ARCH=arm CROSS_COMPILE=$CC32 ${DEFAULT_R5_CONFIG} O=${UB_R5_PATH} -j$(nproc) V=1
