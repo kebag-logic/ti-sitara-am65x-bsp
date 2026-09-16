@@ -1,9 +1,128 @@
-# AM62x
+# AM62x silicon: GP, HS-FS, HS-SE — and which bootloader each one takes
 
-The AM62x has 2 silicon version wrt to the security.
+K3 parts ship in one of three *device types*, and the boot ROM will only accept a
+`tiboot3.bin` packaged for the one in front of it.
 
-The pocketbeagle use the GP version. But the MYIR seems
-to use old chip with older Silicon Revision.
+| Device type | Authenticates? | Customer keys in eFuse? | Our payloads encrypted? |
+|---|---|---|---|
+| **GP** — General Purpose | no | n/a | no |
+| **HS-FS** — High Security, Field Securable | yes, but against *any* key | **no** | **no** |
+| **HS-SE** — High Security, Security Enforced | yes, against your fused key | yes, one-way | no (unless you add it) |
 
-More on that topic https://software-dl.ti.com/processor-sdk-linux/esd/AM62X/10_00_07_04/exports/docs/linux/Foundational_Components_Migration_Guide.html
+U-Boot's own `doc/board/ti/k3.rst` puts HS-FS like this:
 
+> HS-FS (High Security - Field Securable) is the state of a K3 device before it
+> has been eFused with customer security keys. In the HS-FS state the
+> authentication still can function as in HS-SE, but as there are no customer
+> keys to verify the signatures against, the authentication will pass for
+> certificates signed with any key.
+
+**HS-FS is the "secure but no encryption and no keys" configuration**, and it is
+what this BSP targets on every HS board. Concretely:
+
+* The chain is **signed, never encrypted**. The only encrypted thing anywhere is
+  TI's *own* firmware blob (`ti-fs-firmware-am62x-hs-fs-enc.bin`), which TI ships
+  that way and the ROM decrypts with TI's key. Our SPL, ATF, OP-TEE, DM and
+  U-Boot go in as plain signed images.
+* The signing key is **U-Boot's in-tree demo key**,
+  `arch/arm/mach-k3/keys/custMpk.pem`. `arch/arm/dts/k3-binman.dtsi` copies it
+  into the build directory, binman signs with it, and on HS-FS the ROM accepts
+  it because no customer hash is fused. The resulting certificate reads
+  `CN=TI Support` and carries a 30-day validity window — harmless, because
+  ROM/TIFS have no clock and do not check dates.
+* **No `TI_SECURE_DEV_PKG` is needed**, and none is used here. That variable is
+  for the legacy signing path; everything on these boards goes through binman.
+* Nothing here fuses anything. Moving a board to HS-SE means burning your own
+  MPK hash into eFuse, which is **one-way** — do not do it by accident, and note
+  that the demo key above would stop working the moment you did.
+
+## What this BSP actually flashes
+
+| Board | Device type | `tiboot3.bin` from | `tispl.bin` / `u-boot.img` from |
+|---|---|---|---|
+| MYIR MYD-YM62X | GP | `tiboot3-am62x-gp-myc-am62x.bin` | `tispl.bin` / `u-boot.img` |
+| TI SK-AM62B-P1 | HS-FS | `tiboot3-am62x-hs-fs-evm.bin` | `tispl.bin` / `u-boot.img` |
+| BeagleBoard PocketBeagle 2 | HS-FS | `tiboot3-am62x-hs-fs-evm.bin` | `tispl.bin` / `u-boot.img` |
+
+On **PocketBeagle 2** there is no choice to get wrong: BeagleBoard's
+`arch/arm/dts/k3-am6232-pocketbeagle2-binman.dtsi` defines only two R5 images,
+`tiboot3-am62x-hs-evm.bin` (HS-SE) and `tiboot3-am62x-hs-fs-evm.bin` (HS-FS),
+and symlinks `tiboot3.bin` to the HS-FS one. **It builds no GP image at all.**
+An earlier revision of this page said the PocketBeagle used the GP version; that
+is wrong for PocketBeagle 2, and the missing GP image is the proof.
+
+On **HS-FS and HS-SE you flash the signed `tispl.bin` and `u-boot.img`**, not the
+`tispl.bin_unsigned` / `u-boot.img_unsigned` twins sitting next to them in the
+same directory. `doc/board/ti/k3.rst` names the `_unsigned` pair for GP; GP
+silicon does not enforce authentication either way, and this BSP's MYIR chain
+uses the signed pair in practice.
+
+Watch the **`tiboot3.bin` symlink**: binman points it at whichever variant the
+board file declares, which is not always the one you want. On the MYIR board
+`k3-myc-am62x-dev-binman.dtsi` symlinks it to the **hs-fs** image even though the
+silicon is GP, so `build-spare-sd.sh` names the gp file explicitly. On the SK and
+PocketBeagle 2 the symlink happens to be right — but name the file anyway.
+
+Flashing the wrong variant fails **silently**: the ROM rejects the image before
+the UART comes up, so the board looks dead rather than printing an error.
+
+## Two silent failure modes, and how to catch both
+
+The second one is easier to hit than the first. U-Boot invokes binman with
+`--allow-missing --fake-ext-blobs` (see `cmd_binman` in its `Makefile`), so a
+build with no `BINMAN_INDIRS` **succeeds** — it just writes zero-byte stand-ins
+for the TI firmware into `<out>/binman-fake/` and packages those. The result is
+the right size, has a real certificate, and contains no TIFS at all. The TIFS
+*stub* inside `tispl.bin` is worse: `k3-*-binman.dtsi` marks it `optional;`, so
+binman does not even warn.
+
+`res/uboot/check-bootloader.sh` checks the artifacts rather than the build log —
+it searches the images for the actual firmware bytes:
+
+```sh
+./res/uboot/check-bootloader.sh u-boot-pb/out_bp2                    # PocketBeagle 2, HS-FS
+./res/uboot/check-bootloader.sh u-boot-official/out_sk               # SK, HS-FS
+VARIANT=gp ./res/uboot/check-bootloader.sh u-boot-official/out_myir  # MYIR, GP
+```
+
+It verifies the variant, the `tiboot3.bin` symlink, that the variant's real TIFS
+blob is embedded, that the ROM certificate parses, that the signed `tispl.bin` /
+`u-boot.img` exist and differ from their unsigned twins, and that the TIFS stub
+made it into `tispl.bin` — then prints the exact `build-spare-sd.sh` variables.
+Non-zero exit means do not flash.
+
+A populated `binman-fake/` is reported as a warning, not a failure: binman
+creates that directory on every build and never cleans it, so leftovers from an
+earlier bad run are common. The embedded-blob checks are the authoritative ones.
+
+## Confirming the silicon itself
+
+Two ways, both on the board rather than on the host:
+
+```
+U-Boot SPL 2025.04 ...
+SoC:   AM62X SR1.0 HS-FS          <- or GP, or HS-SE
+```
+
+or, if it will not boot far enough to print that, put it in UART boot, capture
+the SoC ID dump the ROM emits and decode it:
+
+```sh
+./res/parse_uart_boot_socid.py socid.txt
+# DeviceType           : HS-FS      (or GP)
+```
+
+The `DeviceType` field is the ROM's own answer and is the one to trust.
+
+## References
+
+* TI, [Foundational Components Migration Guide — device types](https://software-dl.ti.com/processor-sdk-linux/esd/AM62X/10_00_07_04/exports/docs/linux/Foundational_Components_Migration_Guide.html)
+* U-Boot, `doc/board/ti/k3.rst` — "Secure Boot" and the chain of trust
+* U-Boot, `arch/arm/dts/k3-binman.dtsi` — where `custMpk.pem` comes from
+* BeagleBoard U-Boot fork, `arch/arm/dts/k3-am6232-pocketbeagle2-binman.dtsi` —
+  the PocketBeagle 2 image list (`u-boot-pb/`, cloned by `fetch.sh`)
+
+Carried over from the original note on this page: the MYIR board appears to use
+an older silicon revision than the other two, which is consistent with it being
+the only GP part here.  That note also called the PocketBeagle a GP board — see
+above for why that does not hold for PocketBeagle 2.

@@ -29,12 +29,20 @@ KVER="${KVER:-v7.1}"
 BOARD="${BOARD:-sk}"               # ssh alias of a live SK-AM62B-P1
 JOBS="${JOBS:-$(nproc)}"
 KSRC="$HERE/linux"
-DTB_NAME="k3-am625-sk-tdm8"        # McASP1, 8x8
+DTB_NAME="k3-am625-sk-tdm8"        # McASP1 8x8, audio-bus tap
+DTB_OSPI_NAME="k3-am625-sk-tdm8-ospi"      # McASP1 8x8 via OSPI0 pads + J3-15
+DTB_SPLIT_NAME="k3-am625-sk-tdm8-split"    # McASP1 TX + McASP0 RX, 2 off-header wires
 DTB_J3_NAME="k3-am625-sk-tdm8-j3"  # McASP0 on J3, capture only
+DTB_J3M1_NAME="k3-am625-sk-tdm8-j3-mcasp1" # McASP1 on J3, capture only, no TIFS clash
 DTB_STOCK="k3-am625-sk"            # untouched mainline SK tree, the fallback
 OUTDIR="$HERE/res/tdm8-sk"
 STAGE="$HERE/.kstage-tdm8-sk"
 BOOTDIR="$HERE/res/spare-sd-sk/boot"
+# Which label the boot menu selects on its own. "tdm8" is the McASP1 8x8 tree;
+# set TDM8_DEFAULT_LABEL=tdm8-j3 on a board where the FPGA cable lands on the
+# 40-pin header instead, which is capture only. Either way the other labels stay
+# in the menu, so this only changes what happens when nobody touches the console.
+TDM8_DEFAULT_LABEL="${TDM8_DEFAULT_LABEL:-tdm8}"
 CROSS="${CROSS_COMPILE:-aarch64-linux-gnu-}"
 # LOCALVERSION= (set but empty) stops setlocalversion appending "+" for an
 # out-of-tag tree, so the release is exactly 7.1.0-tdm8-sk on every rebuild.
@@ -87,9 +95,9 @@ config() {
 dtb() {
 	[ -f "$KSRC/.config" ] || { echo "run '$0 config' first" >&2; exit 1; }
 	[ -f "$KSRC/arch/arm64/boot/dts/ti/$DTB_NAME.dts" ] || { echo "run '$0 dts' first" >&2; exit 1; }
-	M "ti/$DTB_NAME.dtb" "ti/$DTB_J3_NAME.dtb" "ti/$DTB_STOCK.dtb"
+	M "ti/$DTB_NAME.dtb" "ti/$DTB_OSPI_NAME.dtb" "ti/$DTB_SPLIT_NAME.dtb" "ti/$DTB_J3_NAME.dtb" "ti/$DTB_J3M1_NAME.dtb" "ti/$DTB_STOCK.dtb"
 	mkdir -p "$OUTDIR"
-	for d in "$DTB_NAME" "$DTB_J3_NAME" "$DTB_STOCK"; do
+	for d in "$DTB_NAME" "$DTB_OSPI_NAME" "$DTB_SPLIT_NAME" "$DTB_J3_NAME" "$DTB_J3M1_NAME" "$DTB_STOCK"; do
 		cp "$KSRC/arch/arm64/boot/dts/ti/$d.dtb" "$OUTDIR/$d.dtb"
 	done
 	ls -l "$OUTDIR"/*.dtb
@@ -109,14 +117,14 @@ build() {
 stage() {
 	local rel append existing
 	rel=$(M -s kernelrelease)
-	for d in "$DTB_NAME" "$DTB_J3_NAME" "$DTB_STOCK"; do
+	for d in "$DTB_NAME" "$DTB_OSPI_NAME" "$DTB_SPLIT_NAME" "$DTB_J3_NAME" "$DTB_J3M1_NAME" "$DTB_STOCK"; do
 		[ -f "$OUTDIR/$d.dtb" ] || { echo "run '$0 dtb' first" >&2; exit 1; }
 	done
 	[ -f "$KSRC/arch/arm64/boot/Image.gz" ] || { echo "run '$0 build' first" >&2; exit 1; }
 
 	mkdir -p "$BOOTDIR/ti" "$BOOTDIR/extlinux"
 	cp "$KSRC/arch/arm64/boot/Image.gz" "$BOOTDIR/Image-$rel.gz"
-	for d in "$DTB_NAME" "$DTB_J3_NAME" "$DTB_STOCK"; do
+	for d in "$DTB_NAME" "$DTB_OSPI_NAME" "$DTB_SPLIT_NAME" "$DTB_J3_NAME" "$DTB_J3M1_NAME" "$DTB_STOCK"; do
 		cp "$OUTDIR/$d.dtb" "$BOOTDIR/ti/$d.dtb"
 	done
 
@@ -129,25 +137,43 @@ stage() {
 	[ -n "$append" ] || append="console=ttyS2,115200n8 earlycon=ns16550a,mmio32,0x02800000 root=/dev/mmcblk1p2 ro rootfstype=ext4 rootwait net.ifnames=0"
 
 	# everything from the first "label" onward, minus labels we own
-	existing=$(awk '/^label /{ keep = ($2 != "tdm8" && $2 != "tdm8-j3" && $2 != "notdm8") } keep' \
+	existing=$(awk '/^label /{ keep = ($2 != "tdm8" && $2 != "tdm8-ospi" && $2 != "tdm8-split" && $2 != "tdm8-j3" && $2 != "tdm8-j3-mcasp1" && $2 != "notdm8") } keep' \
 		"$BOOTDIR/extlinux/extlinux.conf" 2>/dev/null || true)
 
 	{
 		echo "menu title TI SK-AM62B-P1 microSD (TDM8 -> UAC2)"
 		echo "timeout 30"
 		echo "prompt 1"
-		echo "default tdm8"
+		echo "default $TDM8_DEFAULT_LABEL"
 		echo "label tdm8"
 		echo "    menu label Linux $rel + TDM8 8x8 on McASP1"
 		echo "    kernel /Image-$rel.gz"
 		echo "    fdtdir /"
 		echo "    fdt /ti/$DTB_NAME.dtb"
 		echo "    append $append"
+		echo "label tdm8-ospi"
+		echo "    menu label Linux $rel + TDM8 8x8 on McASP1 (OSPI0 D5/D6/D7 + J3-15, flash off)"
+		echo "    kernel /Image-$rel.gz"
+		echo "    fdtdir /"
+		echo "    fdt /ti/$DTB_OSPI_NAME.dtb"
+		echo "    append $append"
+		echo "label tdm8-split"
+		echo "    menu label Linux $rel + TDM8 8x8 split: McASP1 TX (OSPI0 D6/D7 + J3-31) / McASP0 RX (J3-39/12/33)"
+		echo "    kernel /Image-$rel.gz"
+		echo "    fdtdir /"
+		echo "    fdt /ti/$DTB_SPLIT_NAME.dtb"
+		echo "    append $append"
 		echo "label tdm8-j3"
-		echo "    menu label Linux $rel + TDM8 8-in on McASP0 (40-pin header J3)"
+		echo "    menu label Linux $rel + TDM8 8-in on McASP0 (J3-39/12/33, clashes with TIFS UART1)"
 		echo "    kernel /Image-$rel.gz"
 		echo "    fdtdir /"
 		echo "    fdt /ti/$DTB_J3_NAME.dtb"
+		echo "    append $append"
+		echo "label tdm8-j3-mcasp1"
+		echo "    menu label Linux $rel + TDM8 8-in on McASP1 (J3-22/5/15, no TIFS clash)"
+		echo "    kernel /Image-$rel.gz"
+		echo "    fdtdir /"
+		echo "    fdt /ti/$DTB_J3M1_NAME.dtb"
 		echo "    append $append"
 		# same kernel, stock device tree: isolates a TDM8 DT problem from a
 		# kernel problem without reflashing
@@ -163,8 +189,8 @@ stage() {
 
 	echo "staged into $BOOTDIR:"
 	echo "  Image-$rel.gz"
-	echo "  ti/$DTB_NAME.dtb  ti/$DTB_J3_NAME.dtb  ti/$DTB_STOCK.dtb"
-	echo "  extlinux/extlinux.conf  (default=tdm8; kept: $(echo "$existing" | grep -c '^label ') pre-existing label(s))"
+	echo "  ti/$DTB_NAME.dtb  ti/$DTB_OSPI_NAME.dtb  ti/$DTB_SPLIT_NAME.dtb  ti/$DTB_J3_NAME.dtb  ti/$DTB_J3M1_NAME.dtb  ti/$DTB_STOCK.dtb"
+	echo "  extlinux/extlinux.conf  (default=$TDM8_DEFAULT_LABEL; kept: $(echo "$existing" | grep -c '^label ') pre-existing label(s))"
 	echo "next: BOOTSRC=res/spare-sd-sk/boot UBOUT=u-boot-official/out_sk \\"
 	echo "      R5_NAME=tiboot3-am62x-hs-fs-evm.bin KIMG_NAME=Image-$rel.gz \\"
 	echo "      ROOTTAR=../buildroot/output/images/rootfs.tar.gz \\"
@@ -173,7 +199,7 @@ stage() {
 
 deploy() {
 	local rel; rel=$(M -s kernelrelease)
-	for d in "$DTB_NAME" "$DTB_J3_NAME" "$DTB_STOCK"; do
+	for d in "$DTB_NAME" "$DTB_OSPI_NAME" "$DTB_SPLIT_NAME" "$DTB_J3_NAME" "$DTB_J3M1_NAME" "$DTB_STOCK"; do
 		[ -f "$OUTDIR/$d.dtb" ] || { echo "run '$0 dtb' first" >&2; exit 1; }
 	done
 	tar -C "$STAGE/lib/modules" -czf /tmp/kmods-"$rel".tgz "$rel"

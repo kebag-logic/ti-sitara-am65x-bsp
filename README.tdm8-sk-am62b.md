@@ -108,6 +108,78 @@ Four wires plus ground, same contract as the MYIR link:
 | 4 | `MCASP1_AXR0` | serial data in, 8 slots | SoC → FPGA |
 | 5,6 | `GND` | ground | — |
 
+#### Pin-to-pin: full duplex, SK-AM62B-P1 to AX7101 J11
+
+There is NO clean J3-to-J11 ribbon for full duplex. Of the four McASP1 signals
+only `MCASP1_AXR2` reaches the 40-pin header (J3-15); `ACLKX`, `AFSX` and `AXR0`
+do not come out on any header and must be tapped at the M.2 E-key connector's
+BT PCM pins (behind `MCASP1_BUF_BT_EN`) or at the on-board audio buffer.
+
+| Function | AX7101 J11 pin (ball) | Direction | SoC signal (ball) | SK access point |
+|---|---|---|---|---|
+| Data out, 8 slots (render) | **5** (A20) | FPGA -> SoC | `MCASP1_AXR2` (L23) | **J3-15** (on the header) |
+| BCLK 12.288 MHz | **6** (B20) | FPGA -> SoC | `MCASP1_ACLKX` (M24) | M.2 E-key / buffer (no header) |
+| FSYNC 48 kHz | **8** (F19) | FPGA -> SoC | `MCASP1_AFSX` (U23) | M.2 E-key / buffer (no header) |
+| Data in, 8 slots (capture) | **7** (F20) | SoC -> FPGA | `MCASP1_AXR0` (L25) | M.2 E-key / buffer (no header) |
+| GND | **1**, **37**/**38** | shared | `GND` | J3 ground (for AXR2) + M.2/buffer ground |
+
+Before connecting, isolate the on-board loads (TLV320AIC3106 codec, SII9022 HDMI,
+M.2 BT) from the bus with the TCA6424 expander lines `MCASP1_FET_EN`,
+`MCASP1_BUF_BT_EN`, `MCASP1_FET_SEL` (polarity found on the bench, then hogged in
+the dts) or the FPGA and the codec drive into each other. Same 3.3 V, same
+22-33 ohm series resistor in BCLK, same <= 15 cm ribbon rule.
+
+**The exact M.2 E-key and buffer pin numbers for ACLKX / AFSX / AXR0 need the
+SK-AM62B-P1 board schematic (TI SPRUJ40 / the EVM schematic), which is not on
+this machine.** Until that is on hand, the header-only capture path (McASP0 on
+J3, one plain ribbon, 8-in) is the buildable full connection; full duplex needs
+the schematic (or a scope on the buffer nets) to finish the three off-header
+wires safely.
+
+### Wiring - split full duplex (capture AND render), the recommended 8x8
+
+The clean way to get capture and render on this board is the SPLIT tree
+`k3-am625-sk-tdm8-split.dtb`: one McASP TRANSMITS and the other RECEIVES, and the
+FPGA's single BCLK and FSYNC each fan out to both. McASP1 transmits (feeds the
+FPGA capture), McASP0 receives in async mode (captures the FPGA render). This is
+better than the single-McASP McASP1 tree because only the transmit CLOCK pair has
+to leave the header; every data wire is on J3. Two off-header wires instead of
+three, and no bus-isolation FET juggling.
+
+| Function | AX7101 J11 pin (ball) | Direction | SK signal (ball, pad) | SK access point |
+|---|---|---|---|---|
+| BCLK 12.288 MHz | **6** (B20) | FPGA -> SoC | MCASP0_ACLKR (A20, 0x1b0) **and** MCASP1_ACLKX (H25, 0x024) | **J3-39** and **OSPI0_D6 (solder)** |
+| FSYNC 48 kHz | **8** (F19) | FPGA -> SoC | MCASP0_AFSR (E19, 0x1ac) **and** MCASP1_AFSX (J22, 0x028) | **J3-12** and **OSPI0_D7 (solder)** |
+| Data out, render (8 slots) | **5** (A20) | FPGA -> SoC | MCASP0_AXR0 (E18, 0x1a0), SoC RX | **J3-33** |
+| Data in, capture (8 slots) | **7** (F20) | SoC -> FPGA | MCASP1_AXR1 (L24, 0x088), SoC TX | **J3-31** |
+| GND | **1**, **37**/**38** | shared | GND | J3-25/34 (and a ground beside the OSPI solder pads) |
+
+The FPGA's BCLK and FSYNC each drive two 3.3 V CMOS loads: put the 22-33 ohm
+series resistor at the FPGA end, BEFORE the split, and keep the two stubs short.
+BCLK from J11.6 goes to J3-39 and to the OSPI0_D6 pad; FSYNC from J11.8 goes to
+J3-12 and to the OSPI0_D7 pad. Only those two clock wires (OSPI0_D6/D7, balls
+H25/J22) are off-header solder points; the two data wires and both grounds are on
+J3.
+
+This tree gives up, while booted: the OSPI NOR flash (`&ospi0`, whose D6/D7 pads
+carry the transmit clock), MAIN_UART1 (J3-39/J3-12, the TIFS trace UART - scope
+J3-39 first), EHRPWM1 (J3-33), and the on-board 3.5 mm codec (`&codec_audio`,
+since McASP1 is ours). It registers TWO ALSA cards, TDM8TX and TDM8RX.
+
+To run it: build with `BOARD=sk ./build-tdm8-uac2-sk.sh all`, select the
+`tdm8-split` label at the boot menu (or set `TDM8_DEFAULT_LABEL=tdm8-split`), and
+in `/etc/tdm8/tdm8.env` set `TDM8_DIRECTION=duplex` and uncomment
+`TDM8_CARD_ID_TX=TDM8TX` and `TDM8_CARD_ID_RX=TDM8RX`. The bridge then pumps the
+host's USB-OUT into TDM8TX (McASP1 -> FPGA capture) and TDM8RX (McASP0 <- FPGA
+render) into the host's USB-IN, an 8-in / 8-out UAC2 device on the USB-C port.
+
+Why split at all: a McASP transmit section is always clocked from its own
+ACLKX/AFSX, and no McASP transmit frame sync reaches any expansion header of this
+board (MCASP0_AFSX is on D20, MCASP1_AFSX on J22). Splitting does not change that,
+but by putting TRANSMIT on McASP1 (whose AXR1 data pin is on J3-31) and RECEIVE on
+McASP0 (async, on the J3 ACLKR/AFSR pair), it confines the off-header wires to the
+single transmit-clock pair.
+
 Before connecting, take the on-board loads off the bus, or the codec and the
 FPGA will drive into each other. The expander lines are named, so find them
 rather than counting:
@@ -134,6 +206,37 @@ survive a reboot by uncommenting the `gpio-hog` block at the bottom of
 | 2 | **12** | `MCASP0_AFSR` | frame sync out, 48 kHz |
 | 3 | **33** | `MCASP0_AXR0` | serial data out, 8 slots |
 | 4 | 6, 9, 14, 20, 25, 30, 34 | `GND` | ground |
+
+#### Pin-to-pin: SK-AM62B-P1 J3 to AX7101 J11
+
+The FPGA TDM wires come out on the AX7101's 40-pin "FPGA 40 PIN External IO"
+header **J11** (`sw/litex/platforms/alinx_ax7101.py`, the `tdm` resource). For
+the capture-only J3 path connect exactly these, ground included:
+
+| Function | AX7101 J11 pin (ball) | Direction | SK-AM62B J3 pin (signal) |
+|---|---|---|---|
+| BCLK 12.288 MHz | **6** (B20) | FPGA -> SoC | **39** (`MCASP0_ACLKR`) |
+| FSYNC 48 kHz | **8** (F19) | FPGA -> SoC | **12** (`MCASP0_AFSR`) |
+| Data, 8 slots (render) | **5** (A20) | FPGA -> SoC | **33** (`MCASP0_AXR0`) |
+| GND | **1** | shared | **34** (or 6/9/14/20/25/30) |
+| GND | **37** (or 38) | shared | **25** (or another J3 ground) |
+
+Five conductors, three signals and two grounds. Rules:
+
+- **No power rail between the boards.** AX7101 J11.2 is +5 V and J11.39/J11.40
+  are +3.3 V; SK J3-1/17 are `VCC3V3_EXP` and J3-2/4 are `VCC5V0_EXP`. Leave all
+  of them unconnected; the SK powers from its own USB-C.
+- Both ends are 3.3 V I/O (AX7101 banks 15/16 at 3.3 V; the SK J3 bank is 3.3 V),
+  so no level shifter.
+- Put a 22-33 ohm series resistor in the BCLK wire (J11.6 -> J3-39), and scope
+  J3-39 for TIFS trace-UART traffic before plugging in.
+- Ribbon <= 15 cm; pair each signal with an adjacent ground at both ends.
+- Continuity-check that AX7101 J11 pins 1, 37 and 38 are ground (the vendor
+  schematic draws them with a ground symbol but does not number the rail).
+
+The FPGA's capture-in pin (`din`, J11.7, ball F20, SoC -> FPGA) and `mclk`
+(J11.3) are **not used** on the J3 capture-only path; they belong to the McASP1
+duplex variant above.
 
 Two on-board owners are released by `k3-am625-sk-tdm8-j3.dts`:
 
@@ -279,6 +382,18 @@ with these substitutions:
 | `tiboot3-am62x-gp-myc-am62x.bin` | `tiboot3-am62x-hs-fs-evm.bin` |
 | kernel release `7.1.0-tdm8` | `7.1.0-tdm8-sk` |
 
+### Step 0 — host prerequisites
+
+See `README.prereq.md`. For this pipeline: an `aarch64-linux-gnu-` toolchain for
+the A53 side, `arm-none-linux-gnueabihf-` for the R5 SPL and OP-TEE, `bc`, `dtc`,
+`python3`, and — for step 5 — `sudo`, a loadable `loop` module, `mtools`,
+`e2fsprogs` and `util-linux`.
+
+```sh
+which aarch64-linux-gnu-gcc arm-none-linux-gnueabihf-gcc dtc bc python3 mformat mkfs.ext4
+grep -qw loop /proc/devices && echo "step 5 will work"
+```
+
 ### Step 1 — bootloaders
 
 ```sh
@@ -286,9 +401,50 @@ with these substitutions:
 ```
 
 Produces `u-boot-official/out_sk/r5/tiboot3-am62x-{gp,hs-fs,hs}-evm.bin`,
-`out_sk/a53/tispl.bin` and `out_sk/a53/u-boot.img`. **Use the `hs-fs` image** —
-SK-AM62B-P1 ships HS-FS silicon, and binman symlinks `tiboot3.bin` to exactly
-that one.
+`out_sk/a53/tispl.bin` and `out_sk/a53/u-boot.img`.
+
+#### Which `tiboot3` — this matters, and it is board-specific
+
+The three are different *containers*, not one image with three signatures
+(`arch/arm/dts/k3-am625-sk-binman.dtsi`):
+
+| variant | SPL content | TIFS firmware blob | keyfile |
+|---|---|---|---|
+| `gp` | `u_boot_spl_unsigned` | `ti-fs-firmware-am62x-gp.bin`, plain | `ti-degenerate-key.pem` |
+| `hs-fs` | `u_boot_spl_fs` | `…-hs-fs-enc.bin`, **encrypted**, + `-hs-fs-cert.bin` | `custMpk.pem` |
+| `hs` | `u_boot_spl` | `…-hs-enc.bin`, **encrypted**, + `-hs-cert.bin` | `custMpk.pem` |
+
+A GP device's ROM ignores the certificate but needs the GP TIFS build; an HS-FS
+device's ROM authenticates the certificate and needs the HS-FS TIFS. Neither
+boots the other's image, and the failure is **silent** — the ROM rejects it
+before anything reaches the UART, so a wrong `tiboot3.bin` looks like a dead
+board, not an error message.
+
+**Use the `hs-fs` image**: SK-AM62B-P1 ships HS-FS silicon, and binman symlinks
+`tiboot3.bin` to exactly that one. Do not take the symlink as proof on its own,
+though — the MYIR board in this same BSP symlinks `tiboot3.bin` to its *hs-fs*
+variant while actually being GP (`README.silcons`), which is why
+`build-spare-sd.sh` defaults to `tiboot3-am62x-gp-myc-am62x.bin` there.
+
+Confirm on your own board from the U-Boot banner — `print_cpuinfo()` in
+`arch/arm/mach-k3/common.c` prints the device type after the family and
+revision:
+
+```
+SoC:   AM62X SR1.0 HS-FS        <- or GP, or HS-SE
+```
+
+Linux's `k3-socinfo.c` does not expose this in sysfs, so U-Boot is the place to
+look. If your board says **GP**, nothing needs rebuilding — `build.sh SK` made
+all three variants and `build-spare-sd.sh` just copies `$R5` to `::tiboot3.bin`,
+so swap that one file on the finished card:
+
+```sh
+mcopy -o -i res/spare-sd-sk/sk-am62b-tdm8.img@@1048576 \
+  u-boot-official/out_sk/r5/tiboot3-am62x-gp-evm.bin ::tiboot3.bin
+```
+
+or pass `R5_NAME=tiboot3-am62x-gp-evm.bin` to step 5 and rebuild the image.
 
 ### Step 2 — kernel, device trees, modules
 
@@ -310,6 +466,21 @@ board. Outputs: `linux/arch/arm64/boot/Image.gz`, `res/tdm8-sk/*.dtb`,
 
 ### Step 4 — rootfs
 
+One Buildroot checkout, two boards: `.config` and `output/` are per build
+directory, so building the SK in `../buildroot` itself overwrites the MYIR ones.
+Give the SK its own output directory instead:
+
+```sh
+make -C ../buildroot O=$PWD/../buildroot-sk \
+     BR2_EXTERNAL=$PWD/br2-external ti_sk_am62b_avb_defconfig
+make -C ../buildroot O=$PWD/../buildroot-sk
+```
+
+Images then land in `../buildroot-sk/images/` — note that is `<O>/images/`, not
+`<O>/output/images/`, which is what step 5's `ROOTTAR` has to point at.
+
+In-tree works too if you do not care about the MYIR `.config`:
+
 ```sh
 cd ../buildroot
 make BR2_EXTERNAL=$(pwd)/../ti-sitara-am65x-bsp/br2-external ti_sk_am62b_avb_defconfig
@@ -322,7 +493,7 @@ boards' defconfigs changed in this commit (they now list two overlay
 directories), so an old `.config` will silently miss `tdm8-uac2.sh`.
 
 ```sh
-tar tzf ../buildroot/output/images/rootfs.tar.gz |
+tar tzf ../buildroot-sk/images/rootfs.tar.gz |
   grep -cE 'lib/modules/7\.1\.0-tdm8-sk/.*(kl-tdm8-dummy|davinci-mcasp|simple-card)|usr/sbin/tdm8-uac2\.sh|etc/tdm8/tdm8\.env|usr/bin/alsaloop'
 # expect 6 or more
 ```
@@ -334,12 +505,12 @@ BOOTSRC=res/spare-sd-sk/boot \
 UBOUT=u-boot-official/out_sk \
 R5_NAME=tiboot3-am62x-hs-fs-evm.bin \
 KIMG_NAME=Image-7.1.0-tdm8-sk.gz \
-ROOTTAR=../buildroot/output/images/rootfs.tar.gz \
+ROOTTAR=../buildroot-sk/images/rootfs.tar.gz \
   ./build-spare-sd.sh res/spare-sd-sk/sk-am62b-tdm8.img
 ```
 
 `ROOTTAR` is not optional — without it the script falls back to the MYIR board
-snapshot. `KIMG_NAME` is only the presence check; the whole staged
+snapshot. Use `../buildroot/output/images/rootfs.tar.gz` if you built in-tree. `KIMG_NAME` is only the presence check; the whole staged
 `res/spare-sd-sk/boot/` tree is copied, so the card boots `tdm8` by default with
 `tdm8-j3` and `notdm8` on the serial console.
 

@@ -40,6 +40,11 @@ TDM8_CHANNELS=${TDM8_CHANNELS:-8}
 TDM8_FORMAT=${TDM8_FORMAT:-S32_LE}
 TDM8_DIRECTION=${TDM8_DIRECTION:-duplex}
 TDM8_CARD_ID=${TDM8_CARD_ID:-TDM8}
+# Boards that split the link across two McASP instances register two cards
+# instead of one (e.g. k3-am625-sk-tdm8-split.dtb -> TDM8TX + TDM8RX). Both
+# default to the single-card id, so a one-card board needs no change.
+TDM8_CARD_ID_TX=${TDM8_CARD_ID_TX:-$TDM8_CARD_ID}
+TDM8_CARD_ID_RX=${TDM8_CARD_ID_RX:-$TDM8_CARD_ID}
 TDM8_GADGET_CARD_ID=${TDM8_GADGET_CARD_ID:-UAC2Gadget}
 TDM8_SYNC=${TDM8_SYNC:-samplerate}
 TDM8_LATENCY_US=${TDM8_LATENCY_US:-8000}
@@ -225,26 +230,36 @@ bridge_up() {
 		modprobe "$m" 2>/dev/null || true
 	done
 
-	wait_for_card "$TDM8_CARD_ID" >/dev/null \
-		|| die "ALSA card '$TDM8_CARD_ID' never appeared - is the McASP1 node enabled and snd-soc-kl-tdm8-dummy loaded?"
+	# only wait for the card(s) the enabled direction(s) actually need
+	case "$TDM8_DIRECTION" in
+	duplex)   need="$TDM8_CARD_ID_RX $TDM8_CARD_ID_TX" ;;
+	capture)  need="$TDM8_CARD_ID_RX" ;;
+	playback) need="$TDM8_CARD_ID_TX" ;;
+	*)        die "unsupported TDM8_DIRECTION=$TDM8_DIRECTION" ;;
+	esac
+	for c in $need; do
+		wait_for_card "$c" >/dev/null \
+			|| die "ALSA card '$c' never appeared - is the McASP node enabled and snd-soc-kl-tdm8-dummy loaded?"
+	done
 	wait_for_card "$TDM8_GADGET_CARD_ID" >/dev/null \
 		|| die "ALSA card '$TDM8_GADGET_CARD_ID' never appeared - the UAC2 gadget is not bound"
 
-	tdm=$(card_index "$TDM8_CARD_ID")
+	tdm_rx=$(card_index "$TDM8_CARD_ID_RX" 2>/dev/null || true)
+	tdm_tx=$(card_index "$TDM8_CARD_ID_TX" 2>/dev/null || true)
 	gad=$(card_index "$TDM8_GADGET_CARD_ID")
 
 	# The FPGA is the clock master: with no BCLK/FSYNC on the link the McASP
 	# never advances and the loops stall. Bring the FPGA up before this runs.
 	case "$TDM8_DIRECTION" in
 	duplex)
-		loop_start to-host   "hw:$tdm,0" "hw:$gad,0"
-		loop_start from-host "hw:$gad,0" "hw:$tdm,0"
+		loop_start to-host   "hw:$tdm_rx,0" "hw:$gad,0"
+		loop_start from-host "hw:$gad,0"    "hw:$tdm_tx,0"
 		;;
 	capture)
-		loop_start to-host   "hw:$tdm,0" "hw:$gad,0"
+		loop_start to-host   "hw:$tdm_rx,0" "hw:$gad,0"
 		;;
 	playback)
-		loop_start from-host "hw:$gad,0" "hw:$tdm,0"
+		loop_start from-host "hw:$gad,0"    "hw:$tdm_tx,0"
 		;;
 	*)
 		die "unsupported TDM8_DIRECTION=$TDM8_DIRECTION"

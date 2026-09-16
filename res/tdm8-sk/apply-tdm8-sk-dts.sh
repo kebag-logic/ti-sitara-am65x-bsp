@@ -16,7 +16,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 KSRC=${1:-$(cd "$HERE/../.." && pwd)/linux}
 TI="$KSRC/arch/arm64/boot/dts/ti"
 
-DTS_LIST="k3-am625-sk-tdm8 k3-am625-sk-tdm8-j3"
+DTS_LIST="k3-am625-sk-tdm8 k3-am625-sk-tdm8-ospi k3-am625-sk-tdm8-split k3-am625-sk-tdm8-j3 k3-am625-sk-tdm8-j3-mcasp1"
 
 [ -f "$KSRC/Makefile" ] || { echo "not a kernel tree: $KSRC" >&2; exit 1; }
 [ -f "$TI/k3-am625-sk.dts" ] || {

@@ -59,6 +59,10 @@ If no parameter is passed, `build.sh` selects MYIR.
   `mtools` for the SD images, RAUC/DFU extras, and the loop-module gotcha
 * `README.board-facts.md` — the MYIR MYD-YM62X / MYC-YM62X hardware fact sheet
 * `README.uboot.md` / `README.sd-card.md` — bootloaders and SD layout
+* `README.silcons` — **GP vs HS-FS vs HS-SE**: which `tiboot3` / `tispl.bin` /
+  `u-boot.img` each board takes, why HS-FS is secure boot with no encryption and
+  no keys of yours, and `res/uboot/check-bootloader.sh` to prove a built chain
+  before it reaches a card
 * `README.install-kernel.md` — build + deploy a mainline kernel, with a fallback
 * `README.avb-am62x.md` — PipeWire AVB / Milan bring-up over `eth1`
 * `README.safe-update.md` — A/B, RAUC and the USB-C DFU brick-net
@@ -69,5 +73,9 @@ If no parameter is passed, `build.sh` selects MYIR.
 * `README.tdm8-sk-am62b.md` — **the same TDM8 → UAC2 function on the TI
   SK-AM62B-P1**: why that board needs two device trees (McASP1 8×8 vs McASP0 on
   the 40-pin header J3, capture only), the connector tables, and its build path
+* `README.tdm8-pb2.md` — **the same TDM8 → UAC2 function on the PocketBeagle 2**
+  (AM6254, quad A53): the board that brings a whole McASP0 out to P1/P2, so the
+  8×8 duplex link is four jumper wires and no soldering — header/ball/pad
+  tables, the two-balls-per-header-pin trap, and its build path
 * `README.tdm8-validation.md` — bench log of the FPGA ↔ McASP1 link: what is
   proven, what is not, and the reproducible procedure

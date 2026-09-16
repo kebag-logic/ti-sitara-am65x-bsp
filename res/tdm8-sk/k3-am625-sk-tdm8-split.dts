@@ -1,0 +1,190 @@
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
+/*
+ * TDM8 8 in + 8 out on the TI SK-AM62B-P1 using TWO McASP instances:
+ * McASP1 transmits, McASP0 receives.  Two ALSA cards, TDM8TX and TDM8RX.
+ *
+ * SPDX-FileCopyrightText: Copyright (c) 2026 Kebag-Logic
+ *
+ * Why split it
+ * ------------
+ * A McASP transmit section is always clocked from its OWN ACLKX/AFSX pins, and
+ * per the AM625 datasheet (SPRSP58C tables 5-35..5-37) no transmit frame sync
+ * reaches any expansion header of this board - MCASP0_AFSX is on D20,
+ * MCASP1_AFSX on B23/J22/U23, MCASP2_AFSX on A15/AD21/T22, and J3, J9, J10 and
+ * J15 carry none of them.  Splitting does NOT change that: whichever instance
+ * transmits still needs its own AFSX.
+ *
+ * What it does buy is one wire.  A single-McASP duplex link
+ * (k3-am625-sk-tdm8-ospi.dts) needs three off-header wires - ACLKX, AFSX and
+ * AXR0 on OSPI0_D6/D7/D5.  Split across two instances, only the transmit clock
+ * pair has to leave the header, because McASP1's transmit data can go out on
+ * MCASP1_AXR1 at J3-31:
+ *
+ *   McASP1 = TX
+ *     OSPI0_D6  H25  pad 0x024 mux2  MCASP1_ACLKX  <- FPGA BCLK  12.288 MHz  (solder)
+ *     OSPI0_D7  J22  pad 0x028 mux2  MCASP1_AFSX   <- FPGA FSYNC 48 kHz      (solder)
+ *     J3-31     L24  pad 0x088 mux2  MCASP1_AXR1   -> FPGA DIN  (8 slots out)
+ *
+ *   McASP0 = RX  (async mode: receive runs on ACLKR/AFSR)
+ *     J3-39     A20  pad 0x1b0 mux0  MCASP0_ACLKR  <- FPGA BCLK  (same net)
+ *     J3-12     E19  pad 0x1ac mux0  MCASP0_AFSR   <- FPGA FSYNC (same net)
+ *     J3-33     E18  pad 0x1a0 mux0  MCASP0_AXR0   <- FPGA DOUT (8 slots in)
+ *
+ *   J3-6/9/14/20/25/30/34  GND
+ *
+ * The FPGA's BCLK and FSYNC each fan out to two SoC pins - one on the header
+ * for McASP0's receive pair, one on the OSPI pad for McASP1's transmit pair.
+ * That is two 3.3 V CMOS loads per clock; keep the stubs short and put the
+ * series resistor at the FPGA end, before the split.
+ *
+ * Costs, relative to k3-am625-sk-tdm8-ospi.dts:
+ *   - RX borrows J3-39 and J3-12, which are MAIN_UART1 TXD/RXD, the port
+ *     mainline reserves for the TIFS firmware trace.  Scope J3-39 before
+ *     connecting; if TIFS drives it, use the single-McASP OSPI tree instead.
+ *   - Two ALSA cards, so /etc/tdm8/tdm8.env needs TDM8_CARD_ID_TX=TDM8TX and
+ *     TDM8_CARD_ID_RX=TDM8RX.
+ *   - The OSPI NOR flash and EHRPWM1 are given up while this tree is booted.
+ */
+
+#include "k3-am625-sk.dts"
+
+/ {
+	model = "Texas Instruments AM625 SK + Kebag-Logic TDM8 8x8 (McASP1 TX / McASP0 RX)";
+
+	tdm8_codec_tx: tdm8-codec-tx {
+		compatible = "kebag-logic,tdm8-dummy";
+		#sound-dai-cells = <0>;
+		status = "okay";
+	};
+
+	tdm8_codec_rx: tdm8-codec-rx {
+		compatible = "kebag-logic,tdm8-dummy";
+		#sound-dai-cells = <0>;
+		status = "okay";
+	};
+
+	sound_tdm8_tx: sound-tdm8-tx {
+		compatible = "simple-audio-card";
+		simple-audio-card,name = "TDM8TX";
+		simple-audio-card,format = "dsp_a";
+		/* the FPGA owns BCLK and FSYNC on both instances */
+		simple-audio-card,bitclock-master = <&tdm8_tx_codec_dai>;
+		simple-audio-card,frame-master = <&tdm8_tx_codec_dai>;
+
+		simple-audio-card,cpu {
+			sound-dai = <&mcasp1>;
+			dai-tdm-slot-num = <8>;
+			dai-tdm-slot-width = <32>;
+		};
+
+		tdm8_tx_codec_dai: simple-audio-card,codec {
+			sound-dai = <&tdm8_codec_tx>;
+			dai-tdm-slot-num = <8>;
+			dai-tdm-slot-width = <32>;
+		};
+	};
+
+	sound_tdm8_rx: sound-tdm8-rx {
+		compatible = "simple-audio-card";
+		simple-audio-card,name = "TDM8RX";
+		simple-audio-card,format = "dsp_a";
+		simple-audio-card,bitclock-master = <&tdm8_rx_codec_dai>;
+		simple-audio-card,frame-master = <&tdm8_rx_codec_dai>;
+
+		simple-audio-card,cpu {
+			sound-dai = <&mcasp0>;
+			dai-tdm-slot-num = <8>;
+			dai-tdm-slot-width = <32>;
+		};
+
+		tdm8_rx_codec_dai: simple-audio-card,codec {
+			sound-dai = <&tdm8_codec_rx>;
+			dai-tdm-slot-num = <8>;
+			dai-tdm-slot-width = <32>;
+		};
+	};
+};
+
+&main_pmx0 {
+	main_mcasp1_tdm8_tx_pins_default: main-mcasp1-tdm8-tx-default-pins {
+		pinctrl-single,pins = <
+			AM62X_IOPAD(0x0024, PIN_INPUT, 2)  /* (H25) OSPI0_D6.MCASP1_ACLKX      in  */
+			AM62X_IOPAD(0x0028, PIN_INPUT, 2)  /* (J22) OSPI0_D7.MCASP1_AFSX       in  */
+			AM62X_IOPAD(0x0088, PIN_OUTPUT, 2) /* (L24) GPMC0_OEn_REn.MCASP1_AXR1  out  J3-31 */
+		>;
+	};
+
+	main_mcasp0_tdm8_rx_pins_default: main-mcasp0-tdm8-rx-default-pins {
+		pinctrl-single,pins = <
+			AM62X_IOPAD(0x01b0, PIN_INPUT, 0) /* (A20) MCASP0_ACLKR  in  J3-39 */
+			AM62X_IOPAD(0x01ac, PIN_INPUT, 0) /* (E19) MCASP0_AFSR   in  J3-12 */
+			AM62X_IOPAD(0x01a0, PIN_INPUT, 0) /* (E18) MCASP0_AXR0   in  J3-33 */
+		>;
+	};
+};
+
+/* the flash owns D6/D7; this board boots from the microSD */
+&ospi0 {
+	status = "disabled";
+};
+
+/* J3-39 / J3-12 are MAIN_UART1 TXD/RXD - see the TIFS note in the header */
+&main_uart1 {
+	status = "disabled";
+};
+
+/* J3-33 is EHRPWM1_B, the same pad as MCASP0_AXR0 */
+&epwm1 {
+	status = "disabled";
+};
+
+/* mcasp1 belongs to exactly one card */
+&codec_audio {
+	status = "disabled";
+};
+
+&mcasp1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&main_mcasp1_tdm8_tx_pins_default>;
+
+	op-mode = <0>;			/* DAVINCI_MCASP_IIS_MODE (not DIT) */
+	tdm-slots = <8>;
+
+	/* 0 = inactive, 1 = TX, 2 = RX.  AXR1 transmits the 8 output slots. */
+	serial-dir = <
+		0 1 0 0
+		0 0 0 0
+		0 0 0 0
+		0 0 0 0
+	>;
+	tx-num-evt = <32>;
+	rx-num-evt = <32>;
+	status = "okay";
+};
+
+&mcasp0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&main_mcasp0_tdm8_rx_pins_default>;
+
+	#sound-dai-cells = <0>;
+	op-mode = <0>;
+	tdm-slots = <8>;
+
+	/* receive runs on ACLKR/AFSR, which is why this one is async */
+	ti,async-mode;
+
+	/* AXR0 receives the 8 input slots */
+	serial-dir = <
+		2 0 0 0
+		0 0 0 0
+		0 0 0 0
+		0 0 0 0
+	>;
+	tx-num-evt = <32>;
+	rx-num-evt = <32>;
+	status = "okay";
+};
+
+&usb0 {
+	dr_mode = "peripheral";
+};
