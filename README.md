@@ -40,20 +40,23 @@ application beside a linux OS more details:
 * [Jailhouse from TI and the AM62x perspective](https://software-dl.ti.com/processor-sdk-linux/esd/AM62X/latest/exports/docs/linux/Foundational_Components/Hypervisor/Jailhouse.html#enabling-hypervisor-on-part-family-device-names-platform)
 * [JailHouse Hypervisor](https://github.com/siemens/jailhouse)
 
-# MYIR AM6254 device use
+# Supported boards
 
-To compile the board support package for the MYIR AM6254, build.sh needs to be
-called as following:
+`build.sh` builds the bootloader chain; the argument picks the board and the
+`u-boot-official/out_<board>/` directory it lands in.
 
 ```bash
-./build.sh MYIR
+./build.sh MYIR   # MYIR MYD-YM62X / MYC-YM6254  -> out_myir  (the default)
+./build.sh SK     # TI SK-AM62B-P1 (AM625 SK)    -> out_sk
+./build.sh PB2    # PocketBeagle 2               -> out_bp2
 ```
 
-By default, if no parameters are passed, the build.sh will by default select
-the MYIR branch
+If no parameter is passed, `build.sh` selects MYIR.
 
 ## Guides
 
+* `README.prereq.md` — **build-host prerequisites**: toolchains, `dtc`/`bc`,
+  `mtools` for the SD images, RAUC/DFU extras, and the loop-module gotcha
 * `README.board-facts.md` — the MYIR MYD-YM62X / MYC-YM62X hardware fact sheet
 * `README.uboot.md` / `README.sd-card.md` — bootloaders and SD layout
 * `README.install-kernel.md` — build + deploy a mainline kernel, with a fallback
@@ -63,3 +66,8 @@ the MYIR branch
   the J11 pinout and cable, the FPGA clock/framing contract, the codec shim,
   the device tree, the alsaloop bridge, and how to build it all into an image
   (rootfs, spare SD, A/B SD, RAUC bundle)
+* `README.tdm8-sk-am62b.md` — **the same TDM8 → UAC2 function on the TI
+  SK-AM62B-P1**: why that board needs two device trees (McASP1 8×8 vs McASP0 on
+  the 40-pin header J3, capture only), the connector tables, and its build path
+* `README.tdm8-validation.md` — bench log of the FPGA ↔ McASP1 link: what is
+  proven, what is not, and the reproducible procedure

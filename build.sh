@@ -25,6 +25,13 @@ PB2_A53_CONFIG=am6232_pocketbeagle2_a53_defconfig
 PB2_R5_DFU_CONFIG="am6232_pocketbeagle2_r5_defconfig am62x_r5_usbdfu.config"
 PB2_R5_CONFIG=am6232_pocketbeagle2_r5_defconfig
 
+# TI AM625 Starter Kit (SK-AM62B / SK-AM62B-P1). U-Boot calls the SK "evm";
+# its control DTB is ti/k3-am625-sk, and binman symlinks tiboot3.bin to the
+# HS-FS image, which is the silicon the SK-AM62B-P1 ships with.
+SK_AM62B_A53_CONFIG=am62x_evm_a53_defconfig
+SK_AM62B_R5_DFU_CONFIG="am62x_evm_r5_defconfig am62x_r5_usbdfu.config"
+SK_AM62B_R5_CONFIG=am62x_evm_r5_defconfig
+
 MYIR_AM6254_A53_CONFIG=myc_am62x_a53_defconfig
 MYIR_AM6254_R5_DFU_CONFIG="myc_am62x_r5_defconfig am62x_r5_usbdfu.config"
 MYIR_AM6254_R5_CONFIG=myc_am62x_r5_defconfig
@@ -49,14 +56,23 @@ case $1 in
 		UB_R5_PATH=${UBOOT_DIR_PB}/out_${DEFAULT_OUT_FOLDER}/r5
 		UB_A53_PATH=${UBOOT_DIR_PB}/out_${DEFAULT_OUT_FOLDER}/a53
 
-		DEFAULT_A53_CONFIG=$PB2_AM6254_A53_CONFIG
-		DEFAULT_R5_DFU_CONFIG=$PB2_AM6254_R5_DFU_CONFIG
-		DEFAULT_R5_CONFIG=$PB2_AM6254_R5_CONFIG
+		DEFAULT_A53_CONFIG=$PB2_A53_CONFIG
+		DEFAULT_R5_DFU_CONFIG=$PB2_R5_DFU_CONFIG
+		DEFAULT_R5_CONFIG=$PB2_R5_CONFIG
+		;;
+	'SK'|'SK-AM62B'|'SK-AM62B-P1')
+		DEFAULT_OUT_FOLDER="sk"
+		UB_R5_PATH=${UBOOT_DIR}/out_${DEFAULT_OUT_FOLDER}/r5
+		UB_A53_PATH=${UBOOT_DIR}/out_${DEFAULT_OUT_FOLDER}/a53
+
+		DEFAULT_A53_CONFIG=$SK_AM62B_A53_CONFIG
+		DEFAULT_R5_DFU_CONFIG=$SK_AM62B_R5_DFU_CONFIG
+		DEFAULT_R5_CONFIG=$SK_AM62B_R5_CONFIG
 		;;
 	'MYIR')
 		;;
 	*)
-	echo "Not user define board choiced (PB2 or MYIR), choosing default MYIR"
+	echo "No board given (PB2, SK or MYIR), choosing default MYIR"
 	;;
 esac
 

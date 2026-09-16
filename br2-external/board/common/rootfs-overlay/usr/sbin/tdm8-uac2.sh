@@ -3,17 +3,28 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 Kebag-Logic
 # SPDX-License-Identifier: MIT
 
-# Bridge the 8-in/8-out TDM8 link on McASP1 (J11) to a USB Audio Class 2.0
+# Bridge the 8-in/8-out TDM8 link on the board's McASP to a USB Audio Class 2.0
 # gadget on the USB-C OTG port, so a host sees one 8x8 UAC2 interface.
 #
-#   FPGA 8 slots out -> MCASP1_AXR2 -> hw:TDM8 capture  -> alsaloop -> gadget playback -> USB IN  -> host
-#   host -> USB OUT  -> gadget capture -> alsaloop -> hw:TDM8 playback -> MCASP1_AXR0 -> FPGA 8 slots in
+# Board-independent: which McASP, which pins and which direction(s) the link
+# carries all come from the device tree and /etc/tdm8/tdm8.env. Used by the
+# MYIR AM6254 (McASP1 on J11, see README.tdm8-uac2.md) and the TI SK-AM62B-P1
+# (McASP1, or McASP0 on the 40-pin header J3, see README.tdm8-sk-am62b.md).
+#
+#   FPGA 8 slots out -> McASP AXR rx -> hw:TDM8 capture  -> alsaloop -> gadget playback -> USB IN  -> host
+#   host -> USB OUT  -> gadget capture -> alsaloop -> hw:TDM8 playback -> McASP AXR tx -> FPGA 8 slots in
 #
 # f_uac2 naming, which is the opposite of what it looks like from the board:
 #   p_* = ALSA *playback* on the gadget card = USB IN  endpoint = board -> host
 #   c_* = ALSA *capture*  on the gadget card = USB OUT endpoint = host -> board
 # Only the OUT direction can carry an explicit feedback endpoint, which is why
 # c_sync=async is what makes the host track the FPGA's oscillator.
+#
+# TDM8_DIRECTION trims the link to one direction. Some boards cannot do both:
+# on the TI SK-AM62B-P1 the 40-pin header J3 has no McASP transmit frame sync
+# pin, so k3-am625-sk-tdm8-j3.dtb is capture only and wants
+# TDM8_DIRECTION=capture, which advertises an 8-in / 0-out UAC2 interface and
+# runs a single alsaloop leg.
 #
 # usage: tdm8-uac2.sh {up|down|status|gadget-up|gadget-down|bridge-up|bridge-down}
 
@@ -27,6 +38,7 @@ if [ -r "$ENV_FILE" ]; then . "$ENV_FILE"; fi
 TDM8_RATE=${TDM8_RATE:-48000}
 TDM8_CHANNELS=${TDM8_CHANNELS:-8}
 TDM8_FORMAT=${TDM8_FORMAT:-S32_LE}
+TDM8_DIRECTION=${TDM8_DIRECTION:-duplex}
 TDM8_CARD_ID=${TDM8_CARD_ID:-TDM8}
 TDM8_GADGET_CARD_ID=${TDM8_GADGET_CARD_ID:-UAC2Gadget}
 TDM8_SYNC=${TDM8_SYNC:-samplerate}
@@ -99,6 +111,14 @@ gadget_up() {
 	# have taken the UDC away from whatever gadget currently owns it
 	ssize=$(ssize_for "$TDM8_FORMAT")
 	chmask=$(printf '0x%x' $(((1 << TDM8_CHANNELS) - 1)))
+	# f_uac2 drops a direction entirely when its channel mask is 0, which is
+	# how a capture-only board still presents a valid UAC2 interface.
+	case "$TDM8_DIRECTION" in
+	duplex)   p_chmask=$chmask; c_chmask=$chmask ;;
+	capture)  p_chmask=$chmask; c_chmask=0 ;;
+	playback) p_chmask=0;       c_chmask=$chmask ;;
+	*) die "unsupported TDM8_DIRECTION=$TDM8_DIRECTION (use duplex, capture or playback)" ;;
+	esac
 
 	modprobe libcomposite 2>/dev/null || true
 	grep -q " $CFG configfs" /proc/mounts || mount -t configfs none "$CFG"
@@ -133,8 +153,8 @@ gadget_up() {
 
 	f=$G/functions/uac2.0
 	mkdir -p "$f"
-	echo "$chmask"    > "$f/p_chmask"	# board -> host (USB IN)
-	echo "$chmask"    > "$f/c_chmask"	# host -> board (USB OUT)
+	echo "$p_chmask"  > "$f/p_chmask"	# board -> host (USB IN)
+	echo "$c_chmask"  > "$f/c_chmask"	# host -> board (USB OUT)
 	echo "$TDM8_RATE" > "$f/p_srate"
 	echo "$TDM8_RATE" > "$f/c_srate"
 	echo "$ssize"     > "$f/p_ssize"
@@ -168,7 +188,7 @@ gadget_up() {
 	fi
 
 	echo "tdm8-uac2: gadget bound to $udc" \
-	     "(${TDM8_CHANNELS}ch in + ${TDM8_CHANNELS}ch out," \
+	     "(p_chmask=$p_chmask c_chmask=$c_chmask, dir=$TDM8_DIRECTION," \
 	     "${TDM8_RATE} Hz, ${ssize}-byte samples, OUT sync=async)"
 }
 
@@ -213,10 +233,23 @@ bridge_up() {
 	tdm=$(card_index "$TDM8_CARD_ID")
 	gad=$(card_index "$TDM8_GADGET_CARD_ID")
 
-	# The FPGA is the clock master: with no BCLK/FSYNC on J11 the McASP never
-	# advances and both loops stall. Bring the FPGA up before this runs.
-	loop_start to-host   "hw:$tdm,0" "hw:$gad,0"
-	loop_start from-host "hw:$gad,0" "hw:$tdm,0"
+	# The FPGA is the clock master: with no BCLK/FSYNC on the link the McASP
+	# never advances and the loops stall. Bring the FPGA up before this runs.
+	case "$TDM8_DIRECTION" in
+	duplex)
+		loop_start to-host   "hw:$tdm,0" "hw:$gad,0"
+		loop_start from-host "hw:$gad,0" "hw:$tdm,0"
+		;;
+	capture)
+		loop_start to-host   "hw:$tdm,0" "hw:$gad,0"
+		;;
+	playback)
+		loop_start from-host "hw:$gad,0" "hw:$tdm,0"
+		;;
+	*)
+		die "unsupported TDM8_DIRECTION=$TDM8_DIRECTION"
+		;;
+	esac
 }
 
 bridge_down() { loop_stop; }

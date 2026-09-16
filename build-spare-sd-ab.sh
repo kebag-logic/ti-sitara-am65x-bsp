@@ -28,6 +28,41 @@ SIZE_MB="${SIZE_MB:-3000}"; BOOT_MB="${BOOT_MB:-300}"; SLOT_MB="${SLOT_MB:-1300}
 for f in "$R5" "$TISPL" "$UB" "$MKIMAGE" "$KIMG" "$DTB" "$ROOTTAR" "$HERE/res/ab/boot.cmd"; do [ -s "$f" ] || { echo "missing input: $f"; exit 1; }; done
 "$MKIMAGE" -A arm64 -T script -C none -d "$HERE/res/ab/boot.cmd" "$HERE/res/ab/boot.scr" >/dev/null
 
+# losetup reports a bare "failed to set up loop device: No such file or directory"
+# when the loop module cannot be loaded. The usual cause is a kernel upgrade with
+# no reboot: /lib/modules/$(uname -r) is gone, so nothing can be modprobed at all.
+# Check before we create a multi-GB file and repartition it.
+check_loop() {
+	grep -qw loop /proc/devices && return 0        # already loaded, or built in
+	modprobe -qn loop 2>/dev/null && return 0      # loadable on demand
+	echo "error: no usable loop device - the 'loop' module is neither loaded nor" >&2
+	echo "       loadable for the running kernel $(uname -r)." >&2
+	if [ ! -d "/lib/modules/$(uname -r)" ]; then
+		echo "       /lib/modules/$(uname -r) does not exist; the installed module" >&2
+		echo "       tree is $(ls -d /lib/modules/*/ 2>/dev/null | xargs -n1 basename | tr '\n' ' ')" >&2
+		echo "       -> the kernel was upgraded and not rebooted. Reboot, then retry." >&2
+	else
+		echo "       -> try: sudo modprobe loop" >&2
+	fi
+	exit 1
+}
+check_loop
+
+# The host tools these images need. mformat (mtools) is required rather than
+# mkfs.vfat: see the dosfstools 4.2 alignment note further down.
+check_tools() {
+	miss=""
+	for t in sfdisk losetup mformat mkfs.ext4; do
+		command -v "$t" >/dev/null 2>&1 || miss="$miss $t"
+	done
+	[ -z "$miss" ] && return 0
+	echo "error: missing host tool(s):$miss" >&2
+	echo "       Arch: sudo pacman -S --needed mtools dosfstools e2fsprogs util-linux" >&2
+	echo "       Debian/Ubuntu: sudo apt install mtools dosfstools e2fsprogs util-linux" >&2
+	exit 1
+}
+check_tools
+
 rm -f "$OUT"; truncate -s "${SIZE_MB}M" "$OUT"
 # MBR (dos) — the K3 boot ROM reads the legacy MBR to find the FAT with tiboot3; a GPT protective MBR hides it. p1 bootable FAT32(LBA), p2 rootfs.A, p3 rootfs.B
 sfdisk "$OUT" >/dev/null <<EOF

@@ -176,12 +176,21 @@ sample width — which is what the bridge wants anyway.
 | `res/tdm8/mk-tdm8-dtb.py` | Injects that delta into the **vendor blob** and emits `k3-am625x-myd-6254-tdm8.dtb`. The vendor blob is never modified. |
 | `res/kl-tdm8-uac2.config` | Kernel config fragment. |
 | `build-tdm8-uac2.sh` | The recipe: `fetch → shim → config → dtb → build → {deploy \| stage}`. |
-| `br2-external/.../usr/sbin/tdm8-uac2.sh` | Builds the 8×8 UAC2 (+ECM) gadget and runs the alsaloop bridge. |
-| `br2-external/.../etc/tdm8/tdm8.env` | Runtime tunables, including the `TDM8_ENABLE` master switch. |
-| `br2-external/.../etc/init.d/S99usb_gadgets` | Now dispatches on `TDM8_ENABLE`; `no` keeps the exact gadget the safe-update/RAUC flow has always built. |
+| `br2-external/board/common/.../usr/sbin/tdm8-uac2.sh` | Builds the 8×8 UAC2 (+ECM) gadget and runs the alsaloop bridge. Board-independent, so it lives in the **shared** overlay (see below). |
+| `br2-external/board/myir-am62x/.../etc/tdm8/tdm8.env` | Runtime tunables, including the `TDM8_ENABLE` master switch. Per board. |
+| `br2-external/board/common/.../etc/init.d/S99usb_gadgets` | Dispatches on `TDM8_ENABLE`; `no` keeps the exact gadget the safe-update/RAUC flow has always built. Shared. |
 | `br2-external/.../post-build.sh` | Also chmods `tdm8-uac2.sh` and bakes `$KL_MODDIR` (default `.kstage-tdm8/lib/modules`) into the rootfs image. |
 | `br2-external/configs/myir_am62x_avb_defconfig` | Adds `alsaloop`, `amixer`, `libsamplerate`. |
-| `build-spare-sd.sh`, `build-spare-sd-ab.sh`, `build-rauc-bundle.sh` | Gained `KIMG_NAME` / `ROOTTAR` / `KIMG` / `DTB` / `DTB_NAME` overrides so the TDM8 kernel and device tree can go into an image. Defaults are unchanged. |
+| `build-spare-sd.sh`, `build-spare-sd-ab.sh`, `build-rauc-bundle.sh` | Gained `KIMG_NAME` / `ROOTTAR` / `KIMG` / `DTB` / `DTB_NAME` overrides so the TDM8 kernel and device tree can go into an image. `build-spare-sd.sh` also takes `BOOTSRC` / `UBOUT` / `R5_NAME` so a second board can pass its own boot chain. Defaults are unchanged. |
+
+The rootfs overlay is split in two since the TI SK-AM62B-P1 was added
+(`README.tdm8-sk-am62b.md`): `br2-external/board/common/rootfs-overlay` holds
+the board-independent gadget/bridge scripts and
+`br2-external/board/myir-am62x/rootfs-overlay` keeps everything MYIR-specific
+(AVB, RAUC, `fw_env.config`, `tdm8.env`, network). `BR2_ROOTFS_OVERLAY` in
+`myir_am62x_avb_defconfig` lists both, board-specific last — **re-run the
+defconfig**, a stale Buildroot `.config` still points at the old single path and
+silently produces a rootfs with no `tdm8-uac2.sh`.
 
 ### Why a device-tree *injector* and not a `.dtbo` overlay
 
@@ -268,88 +277,162 @@ This path leaves the rootfs alone. To also get `alsaloop`, `amixer` and
 
 ## 5. Build it into the image
 
-`deploy` in §4 is for iterating on a board you can already `ssh` into. To produce
-an **image** that comes up with TDM8 already working, build the kernel and DTB
-first, then pick the image flavour.
+`deploy` in §4 is for iterating on a board you can already `ssh` into. This
+section produces an **image** that comes up with TDM8 working from a cold flash.
 
-### Step 1 — kernel, DTB and boot artifacts
+### Order matters — read this first
 
-```sh
-./build-tdm8-uac2.sh image     # = fetch + shim + config + dtb + build + stage
+The steps are not independent. Two of them bake the output of an earlier step
+into their own output, so running them out of order produces an image that looks
+fine and silently does not work:
+
+```
+  0  host prerequisites
+        |
+  1  bootloaders ......................... tiboot3 / tispl / u-boot.img
+        |                                          \
+  2  kernel + device tree + modules .......|        \
+        |        -> .kstage-tdm8/lib/modules        |
+        |        -> res/spare-sd/boot/              |
+        |                    \                      |
+  3  TDM8_ENABLE in the overlay            |        |
+        |                     \            |        |
+  4  rootfs (Buildroot) <------+-----------+        |
+        |        -> rootfs.tar.gz  WITH modules,    |
+        |           tdm8-uac2.sh, alsaloop          |
+        |                                           |
+  5  SD image / A/B image / RAUC bundle <-----------+
+        |
+  6  flash, boot, verify
 ```
 
-`image` is `all` with `stage` instead of `deploy`: it touches no board. It leaves
-
-| Artifact | Path |
+| If you… | You get |
 |---|---|
-| kernel (compressed) | `linux/arch/arm64/boot/Image.gz` |
-| kernel (raw, for the A/B `booti` path) | `linux/arch/arm64/boot/Image` |
-| device tree | `res/tdm8/k3-am625x-myd-6254-tdm8.dtb` |
-| modules (`7.1.0-tdm8`) | `.kstage-tdm8/lib/modules/` |
-| staged boot partition | `res/spare-sd/boot/` — `Image-7.1.0-tdm8.gz`, `ti/k3-am625x-myd-6254-tdm8.dtb`, `extlinux/extlinux.conf` |
+| run **4 before 2** | a rootfs with no `/lib/modules/7.1.0-tdm8` → the McASP and codec modules never load → **no `TDM8` ALSA card** |
+| run **4 before 3** | `TDM8_ENABLE=no` baked in → nothing starts at boot (recoverable: edit `/etc/tdm8/tdm8.env` on the board) |
+| run **5 before 4** | the image ships whatever old rootfs was lying around — this is the easy one to hit, because `build-spare-sd.sh` defaults to `res/spare-sd/rootfs.tar.gz`, a **stale board snapshot**, not the Buildroot output |
+| run **5 before 1** | the script stops: missing `tiboot3-am62x-gp-myc-am62x.bin` |
+| `make` in Buildroot without re-running the **defconfig** | no `alsaloop` → the bridge cannot start. Adding packages needs the config regenerated, not just a rebuild |
 
-`stage` is **non-destructive**: kernels, DTBs and extlinux labels already staged
-in `res/spare-sd/boot/` are kept as fallback entries, and re-running replaces our
-own `tdm8`/`notdm8` labels instead of stacking duplicates. The generated
-`extlinux.conf` defaults to `tdm8` and adds a `notdm8` label — same kernel,
-stock device tree — which separates a device-tree problem from a kernel problem
-without reflashing.
+---
 
-### Step 2 — turn TDM8 on by default in the image
+### Step 0 — host prerequisites
 
-The rootfs ships with the feature **off** so an image built from this tree
-behaves exactly as before. To have it come up automatically:
+See `README.prereq.md`. For this pipeline specifically: an `aarch64-linux-gnu-`
+toolchain, `bc`, `dtc`, `python3`, and — for step 5 — `sudo`, a loadable `loop`
+module, `mtools`, `e2fsprogs` and `util-linux`.
+
+```sh
+grep -qw loop /proc/devices && command -v mformat >/dev/null && echo "step 5 will work"
+```
+
+### Step 1 — bootloaders (once per tree)
+
+Skip if `u-boot-official/out_myir/` is already populated.
+
+```sh
+./build.sh MYIR
+```
+
+Produces `out_myir/r5/tiboot3-am62x-gp-myc-am62x.bin`, `out_myir/a53/tispl.bin`
+and `out_myir/a53/u-boot.img`, which step 5 copies onto the boot partition.
+
+### Step 2 — kernel, device tree, modules
+
+```sh
+./build-tdm8-uac2.sh image
+```
+
+`image` is `fetch → shim → config → dtb → build → stage`. It touches no board.
+
+| Output | Path | Consumed by |
+|---|---|---|
+| kernel, compressed | `linux/arch/arm64/boot/Image.gz` | step 5 (a) |
+| kernel, raw | `linux/arch/arm64/boot/Image` | step 5 (b), (c) |
+| device tree | `res/tdm8/k3-am625x-myd-6254-tdm8.dtb` | step 5 |
+| **modules `7.1.0-tdm8`** | `.kstage-tdm8/lib/modules/` | **step 4** |
+| staged boot partition | `res/spare-sd/boot/` | step 5 (a) |
+
+`stage` is non-destructive: kernels, DTBs and extlinux labels already in
+`res/spare-sd/boot/` are kept as fallback entries, and re-running replaces our own
+`tdm8`/`notdm8` labels rather than stacking duplicates. The generated
+`extlinux.conf` defaults to `tdm8` and adds `notdm8` — same kernel, stock device
+tree — to separate a device-tree problem from a kernel problem without reflashing.
+
+### Step 3 — decide whether TDM8 starts at boot
+
+The overlay ships the feature **off** so an image built from this tree behaves
+exactly as before. To have it come up by itself:
 
 ```sh
 sed -i 's/^TDM8_ENABLE=no/TDM8_ENABLE=yes/' \
   br2-external/board/myir-am62x/rootfs-overlay/etc/tdm8/tdm8.env
 ```
 
-Leave it `no` to build a dual-purpose image and flip the switch on the board.
+This is a **rootfs overlay file**, so it must be set before step 4.
 
-### Step 3 — the rootfs image (Buildroot)
+### Step 4 — rootfs (after 2 and 3)
 
 ```sh
 cd ../buildroot
 make BR2_EXTERNAL=$(pwd)/../ti-sitara-am65x-bsp/br2-external myir_am62x_avb_defconfig
 make
+cd ../ti-sitara-am65x-bsp
 ```
 
-The defconfig now pulls in `alsaloop`, `amixer` and `libsamplerate`, and
-`post-build.sh` does two things for TDM8:
+**Re-run the defconfig line even on an existing tree.** `alsaloop`, `amixer` and
+`libsamplerate` were added to `myir_am62x_avb_defconfig`; a plain `make` against
+an older `.config` will not pull them in. Check before building:
 
-* `chmod 0755 usr/sbin/tdm8-uac2.sh` (and 0644 on `etc/tdm8/tdm8.env`);
+```sh
+grep -c BR2_PACKAGE_ALSA_UTILS_ALSALOOP=y ../buildroot/.config   # must be 1
+```
+
+During image assembly `post-build.sh` then:
+
+* `chmod 0755 usr/sbin/tdm8-uac2.sh`, `0644 etc/tdm8/tdm8.env`;
 * copies **`$KL_MODDIR`** — default `<bsp>/.kstage-tdm8/lib/modules` — into
   `lib/modules/<release>/`, dropping the dangling `build`/`source` symlinks.
 
-So the produced rootfs already carries the `7.1.0-tdm8` modules; nothing has to
-be `scp`'d after flashing. Override with `KL_MODDIR=/path/to/lib/modules` (for
-example `.kstage/lib/modules` to bake the *non*-TDM8 kernel's modules instead),
-or `KL_MODDIR=none` to skip module installation entirely:
+So the rootfs already carries the `7.1.0-tdm8` modules; nothing is `scp`'d after
+flashing. Override with `KL_MODDIR=/path/to/lib/modules`, or `KL_MODDIR=none` to
+skip module installation entirely.
+
+Output: `output/images/rootfs.tar.gz` and `rootfs.ext4`.
+
+Confirm before moving on:
 
 ```sh
-KL_MODDIR=none make          # rootfs without any kernel modules baked in
+tar tzf ../buildroot/output/images/rootfs.tar.gz |
+  grep -cE 'lib/modules/7\.1\.0-tdm8/.*(kl-tdm8-dummy|davinci-mcasp|simple-card)|usr/sbin/tdm8-uac2\.sh|etc/tdm8/tdm8\.env|usr/bin/alsaloop'
+# expect 6 or more
 ```
 
-Outputs: `output/images/rootfs.tar.gz` and `rootfs.ext4`.
+### Step 5 — build the image
 
-### Step 4 — pick an image
+> **Host note:** (a) and (b) write through a loop device, so they need `sudo`, a
+> working `loop` module, `mtools` and `e2fsprogs`. The scripts preflight both and
+> refuse to start otherwise. On a rolling distro a kernel upgrade without a reboot
+> removes `/lib/modules/$(uname -r)` and `losetup` then fails with a bare
+> `failed to set up loop device: No such file or directory` — see
+> `README.prereq.md` §5.
 
-**(a) Single-slot spare microSD** — full boot chain + kernel + rootfs, `dd`-able:
+**(a) Single-slot spare microSD** — bootloaders + kernel + rootfs, `dd`-able:
 
 ```sh
-cd ../ti-sitara-am65x-bsp
-KIMG_NAME=Image-7.1.0-tdm8.gz \
 ROOTTAR=../buildroot/output/images/rootfs.tar.gz \
+KIMG_NAME=Image-7.1.0-tdm8.gz \
   ./build-spare-sd.sh res/spare-sd/spare-am62x-tdm8.img
 ```
 
+**`ROOTTAR` is not optional.** Without it the script uses
+`res/spare-sd/rootfs.tar.gz`, a stale snapshot of a previous board rootfs — the
+card then boots the TDM8 kernel with none of the TDM8 userspace or modules.
 `KIMG_NAME` is only the presence check; the whole staged `res/spare-sd/boot/`
 tree is copied, so the card boots `tdm8` by default with `notdm8`, `rebuilt` and
 `linux` selectable on the serial console.
 
-**(b) A/B microSD** (safe-update P2a — GPT-less MBR, two rootfs slots, U-Boot
-bootchooser):
+**(b) A/B microSD** (safe-update P2a — MBR, two rootfs slots, U-Boot bootchooser):
 
 ```sh
 DTB=res/tdm8/k3-am625x-myd-6254-tdm8.dtb \
@@ -358,10 +441,10 @@ ROOTTAR=../buildroot/output/images/rootfs.tar.gz \
   ./build-spare-sd-ab.sh res/spare-sd/spare-am62x-ab-tdm8.img
 ```
 
-`KIMG` defaults to `linux/arch/arm64/boot/Image`, which after step 1 *is* the
-TDM8 kernel. The DTB lands in each slot as **`/boot/k3-am625x-myd-6254-71.dtb`**
-— that filename is hard-coded in `res/ab/boot.cmd`, so only the *content*
-changes; override `DTB_NAME` only if you edit `boot.cmd` to match.
+`KIMG` defaults to `linux/arch/arm64/boot/Image`, which after step 2 *is* the
+TDM8 kernel. The DTB lands in each slot as **`/boot/k3-am625x-myd-6254-71.dtb`** —
+that filename is hard-coded in `res/ab/boot.cmd`, so only the *content* changes;
+override `DTB_NAME` only if you edit `boot.cmd` to match.
 
 **(c) RAUC bundle** — OTA onto a board already running the A/B layout:
 
@@ -379,31 +462,38 @@ The bundle carries a whole slot (rootfs + `/boot/Image` + DTB + modules), so the
 inactive slot gets the TDM8 kernel and the bootchooser rolls back on its own if
 it fails to boot. See `README.safe-update.md`.
 
-Both (b) and (c) derive the module directory name from the Image itself
+(b) and (c) derive the module directory name from the Image itself
 (`strings … 'Linux version'`). Pinning `CONFIG_LOCALVERSION="-tdm8"` is what makes
 that reliable — with the board config's default `LOCALVERSION_AUTO=y` the release
 picks up a git hash and `-dirty`, and `modprobe` then fails on a `uname` mismatch.
 
-### Verify before you flash
+### Step 6 — verify, then flash
+
+Check the image before committing it to a card:
 
 ```sh
-# the TDM8 pieces are in the rootfs
-tar tzf ../buildroot/output/images/rootfs.tar.gz |
-  grep -E 'snd-soc-kl-tdm8-dummy|snd-soc-davinci-mcasp|snd-soc-simple-card|usb_f_uac2|tdm8-uac2.sh|tdm8.env|bin/alsaloop'
+IMG=res/spare-sd/spare-am62x-tdm8.img
 
-# the staged device tree really is the TDM8 one
+# boot partition: bootloaders + the TDM8 kernel + the TDM8 device tree
+mdir -i $IMG@@1048576 ::
+mdir -i $IMG@@1048576 ::/ti
+mtype -i $IMG@@1048576 ::/extlinux/extlinux.conf | head -5     # default tdm8
+
+# the device tree really is the TDM8 one
 dtc -q -I dtb -O dts res/spare-sd/boot/ti/k3-am625x-myd-6254-tdm8.dtb |
   sed -n '/audio-controller@2b10000 {/,/^\t\t};/p'
 # -> status = "okay"; tdm-slots = <0x08>; serial-dir = <0x01 0x00 0x02 0x00 ...>
 
-# and the kernel is the pinned release the module dir is named after
-strings linux/arch/arm64/boot/Image | grep -m1 'Linux version'
-# -> Linux version 7.1.0-tdm8 ...
-ls .kstage-tdm8/lib/modules/
-# -> 7.1.0-tdm8
+# kernel release matches the module directory name
+strings linux/arch/arm64/boot/Image | grep -m1 'Linux version'   # 7.1.0-tdm8
+ls .kstage-tdm8/lib/modules/                                     # 7.1.0-tdm8
 ```
 
-Flash: `sudo dd if=<image>.img of=/dev/sdX bs=4M conv=fsync status=progress`.
+Flash:
+
+```sh
+sudo dd if=$IMG of=/dev/sdX bs=4M conv=fsync status=progress
+```
 
 ---
 
@@ -526,6 +616,7 @@ All of `/etc/tdm8/tdm8.env`:
 | Host sees 2 channels, not 8 | An older gadget is still bound — `tdm8-uac2.sh gadget-down`, then `up`. `/root/setup_gadgets.sh` builds a different UAC2 (96 kHz, 3-byte) |
 | Steady XRUN growth | clock drift — set `TDM8_SYNC=samplerate`, raise `TDM8_LATENCY_US` |
 | `alsaloop: command not found` | rootfs predates `BR2_PACKAGE_ALSA_UTILS_ALSALOOP=y`; rebuild Buildroot |
+| `failed to set up loop device: No such file or directory` when building an SD image | build **host** problem, not the board: the `loop` module is not loadable. Usually a kernel upgrade with no reboot — `uname -r` no longer matches any `/lib/modules/*`. Reboot the build host |
 
 `dmesg | grep davinci-mcasp` reports the resolved BCLK/FSYNC and slot geometry;
 `/proc/asound/card*/pcm*/sub*/status` (also printed by `tdm8-uac2.sh status`)

@@ -50,6 +50,11 @@ config() {
 	( cd "$KSRC" && ARCH=arm64 ./scripts/kconfig/merge_config.sh -m -O . \
 		.config "$HERE/res/kl-tdm8-uac2.config" )
 	M olddefconfig
+	# olddefconfig only rewrites .config; setlocalversion (and so
+	# `make kernelrelease`) reads include/config/auto.conf, which stays at the
+	# previous board's value until a build syncs it. Both TDM8 scripts share
+	# ./linux, so refresh it here or `stage`/`deploy` name things wrongly.
+	M syncconfig
 	echo "kernelrelease=$(M -s kernelrelease)"
 	for s in CONFIG_SND_SOC_KL_TDM8_DUMMY CONFIG_SND_SIMPLE_CARD \
 	         CONFIG_SND_SOC_DAVINCI_MCASP CONFIG_USB_F_UAC2 CONFIG_USB_CONFIGFS; do

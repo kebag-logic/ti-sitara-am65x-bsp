@@ -7,7 +7,9 @@
 # Kernel module staging + large generated/backup artifacts
 /.kstage/
 /.kstage-tdm8/
+/.kstage-tdm8-sk/
 /res/spare-sd/
+/res/spare-sd-sk/
 /res/sd-boot-backup/
 
 # generated bootchooser script (built from res/ab/boot.cmd)
@@ -20,3 +22,7 @@
 # TDM8 device tree generated from the vendor blob by res/tdm8/mk-tdm8-dtb.py
 /res/tdm8/k3-am625x-myd-6254-tdm8.dtb
 /res/tdm8/k3-am625x-myd-6254-tdm8.dts
+
+# TDM8 device trees for the TI SK-AM62B-P1, compiled in-tree from the .dts next
+# to them by build-tdm8-uac2-sk.sh dtb
+/res/tdm8-sk/*.dtb
