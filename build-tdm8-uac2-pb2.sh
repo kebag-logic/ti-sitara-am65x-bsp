@@ -47,6 +47,7 @@
 #        image      = ... build + stage into res/spare-sd-pb2/boot for build-spare-sd.sh
 #        probe      = ask a live board what it is (rev A1/AM6254 vs rev A0/AM6232)
 #        bootloader = verify u-boot-pb/out_bp2 is a complete HS-FS chain
+#        sdimage    = build the microSD image (wraps build-spare-sd.sh; needs sudo)
 # Env:   KVER BOARD JOBS CROSS_COMPILE TDM8_DEFAULT_LABEL UBOUT_PB2 UB_VARIANT
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -70,15 +71,28 @@ UB_VARIANT="${UB_VARIANT:-hs-fs}"
 # drives two clock pairs.  Either way the other labels stay in the menu, so
 # this only changes what happens when nobody touches the console.
 TDM8_DEFAULT_LABEL="${TDM8_DEFAULT_LABEL:-tdm8}"
-# console = main_uart6 (the 3-pin JST-SH debug port); k3-am62-pocketbeagle2.dts
-# has stdout-path = &main_uart6 and aliases serial2 = &main_uart6, so it is
-# ttyS2, and k3-am62-main.dtsi puts it at 0x02860000.  sdhci1 is the only MMC
-# host the board enables (there is no eMMC) - but it is NOT mmcblk0.  The
-# board's aliases node says "mmc1 = &sdhci1", and mmc_alloc_host() takes
-# host->index straight from of_alias_get_id(np, "mmc"), so the microSD comes up
-# as mmcblk1 no matter that it is the only host.  U-Boot agrees: the PB2 env
-# sets mmcdev=1 / bootpart=1:2.
-DEFAULT_APPEND="console=ttyS2,115200n8 earlycon=ns16550a,mmio32,0x02860000 root=/dev/mmcblk1p2 ro rootfstype=ext4 rootwait net.ifnames=0"
+# Console.  PocketBeagle 2 splits its boot log across two UARTs out of the box,
+# which makes bring-up painful:
+#
+#   main_uart0  ttyS3  0x02800000  P1.30 TXD / P1.32 RXD   R5 SPL, TF-A, OP-TEE
+#   main_uart6  ttyS2  0x02860000  JST-SH 3-pin            A53 U-Boot, Linux
+#
+# res/uboot/pb2-console-on-p1.sh moves the A53 U-Boot stages onto main_uart0;
+# this puts the kernel there too, so the whole boot lands on one wire.  BOTH are
+# listed so kernel output still appears on the JST-SH as well - the LAST
+# console= is the one that owns /dev/console and therefore the login prompt, so
+# ttyS3 wins.  earlycon points at main_uart0 for the same reason, and carries an
+# explicit ,115200n8 so the earliest printks do not depend on whatever divisor
+# U-Boot happened to leave in the UART.  Swap the two
+# console= terms (and the earlycon base to 0x02860000) to put it back on the
+# JST-SH.
+#
+# root: sdhci1 is the only MMC host the board enables (there is no eMMC) - but
+# it is NOT mmcblk0.  The board's aliases node says "mmc1 = &sdhci1", and
+# mmc_alloc_host() takes host->index straight from of_alias_get_id(np, "mmc"),
+# so the microSD comes up as mmcblk1 no matter that it is the only host.
+# U-Boot agrees: the PB2 env sets mmcdev=1 / bootpart=1:2.
+DEFAULT_APPEND="console=ttyS2,115200n8 console=ttyS3,115200n8 earlycon=ns16550a,mmio32,0x02800000,115200n8 root=/dev/mmcblk1p2 ro rootfstype=ext4 rootwait net.ifnames=0"
 CROSS="${CROSS_COMPILE:-aarch64-linux-gnu-}"
 # LOCALVERSION= (set but empty) stops setlocalversion appending "+" for an
 # out-of-tag tree, so the release is exactly 7.1.0-tdm8-pb2 on every rebuild.
@@ -165,12 +179,13 @@ stage() {
 		cp "$OUTDIR/$d.dtb" "$BOOTDIR/ti/$d.dtb"
 	done
 
-	# reuse whatever cmdline is already staged; otherwise the PocketBeagle 2
-	# default derived above.
-	# NB: grep -m1 stops per FILE, so two files yield two lines - head -1 after.
-	append=$(grep -h 'append' "$BOOTDIR/extlinux/extlinux.conf" \
-		"$BOOTDIR/extlinux/extlinux.conf.orig" 2>/dev/null |
-		head -1 | sed 's/^[[:space:]]*append //')
+	# Inherit the cmdline ONLY from extlinux.conf.orig - a file that came off a
+	# real card and is worth preserving.  Deliberately NOT from our own
+	# extlinux.conf: inheriting from the previous run means a wrong default
+	# survives every later fix, which is exactly how a stale root=/dev/mmcblk0p2
+	# outlived the change that corrected it.
+	append=$(grep -m1 'append' "$BOOTDIR/extlinux/extlinux.conf.orig" 2>/dev/null |
+		sed 's/^[[:space:]]*append //')
 	[ -n "$append" ] || append="$DEFAULT_APPEND"
 
 	# everything from the first "label" onward, minus labels we own
@@ -215,13 +230,16 @@ stage() {
 	echo "PocketBeagle 2 is HS-FS: signed, not encrypted, no customer keys fused."
 	echo "  ./build.sh PB2                 # -> u-boot-pb/out_bp2/{r5,a53}"
 	echo "  $0 bootloader   # verify before flashing"
-	echo "next: BOOTSRC=res/spare-sd-pb2/boot KIMG_NAME=Image-$rel.gz \\"
-	echo "      UBOUT=u-boot-pb/out_bp2 \\"
-	echo "      R5=u-boot-pb/out_bp2/r5/tiboot3-am62x-hs-fs-evm.bin \\"
-	echo "      TISPL=u-boot-pb/out_bp2/a53/tispl.bin \\"
-	echo "      UB=u-boot-pb/out_bp2/a53/u-boot.img \\"
-	echo "      ROOTTAR=../buildroot/output/images/rootfs.tar.gz \\"
-	echo "      ./build-spare-sd.sh res/spare-sd-pb2/pocketbeagle2-tdm8.img"
+	echo "next, to build the card:"
+	echo
+	echo "    $0 sdimage"
+	echo
+	echo "which fills in BOOTSRC/UBOUT/R5/TISPL/UB/KIMG_NAME/ROOTTAR for this"
+	echo "board and checks each one exists first. Do NOT hand-write that call to"
+	echo "build-spare-sd.sh: every default in it points at the MYIR GP chain, so"
+	echo "one dropped assignment gives you a card built from another board's"
+	echo "bootloader, or a \"missing input: .../res/spare-sd/boot/...\" naming a"
+	echo "path you never typed."
 	echo "(or, to keep the card's own chain, skip build-spare-sd.sh entirely and"
 	echo " use '$0 deploy', which touches only the kernel, DTBs and extlinux.conf)"
 }
@@ -258,6 +276,52 @@ bootloader() {
 		exit 1
 	}
 	SOC=am62x VARIANT="$UB_VARIANT" "$HERE/res/uboot/check-bootloader.sh" "$UBOUT_PB2"
+}
+
+# Build the microSD image, with every PocketBeagle 2 path filled in.
+#
+# build-spare-sd.sh defaults BOOTSRC, UBOUT, R5, TISPL, UB, KIMG_NAME and
+# ROOTTAR to the MYIR GP chain, and the *_unsigned twins live in the same
+# directory as the signed ones this board needs.  Passing all seven by hand is
+# a paste away from a card built out of another board's bootloader, or from a
+# "missing input: .../res/spare-sd/boot/Image-....gz" when one assignment gets
+# dropped.  So don't pass them by hand.
+sdimage() {
+	local rel out roottar r5
+	rel=$(M -s kernelrelease)
+	out="${1:-$HERE/res/spare-sd-pb2/pocketbeagle2-tdm8.img}"
+	roottar="${ROOTTAR:-$HERE/../buildroot-pb2/images/rootfs.tar.gz}"
+	r5="$UBOUT_PB2/r5/tiboot3-am62x-$UB_VARIANT-evm.bin"
+
+	# Fail with the name of what is actually missing, rather than letting
+	# build-spare-sd.sh report a default path nobody asked for.
+	local miss=0
+	for f in "$BOOTDIR/Image-$rel.gz" "$BOOTDIR/extlinux/extlinux.conf" \
+	         "$r5" "$UBOUT_PB2/a53/tispl.bin" "$UBOUT_PB2/a53/u-boot.img" \
+	         "$roottar"; do
+		[ -s "$f" ] || { echo "missing: $f" >&2; miss=1; }
+	done
+	if [ "$miss" -ne 0 ]; then
+		echo >&2
+		echo "  kernel + DTBs + extlinux : $0 image" >&2
+		echo "  bootloaders              : ./build.sh PB2  (then $0 bootloader)" >&2
+		echo "  rootfs                   : make -C ../buildroot O=\$PWD/../buildroot-pb2 BR2_JLEVEL=32" >&2
+		echo "  or point ROOTTAR= at another rootfs.tar.gz" >&2
+		exit 1
+	fi
+
+	echo "building $out"
+	echo "  boot     $BOOTDIR (Image-$rel.gz)"
+	echo "  chain    $UB_VARIANT: $(basename "$r5"), tispl.bin, u-boot.img"
+	echo "  rootfs   $roottar"
+	BOOTSRC="$BOOTDIR" \
+	UBOUT="$UBOUT_PB2" \
+	R5="$r5" \
+	TISPL="$UBOUT_PB2/a53/tispl.bin" \
+	UB="$UBOUT_PB2/a53/u-boot.img" \
+	KIMG_NAME="Image-$rel.gz" \
+	ROOTTAR="$roottar" \
+		"$HERE/build-spare-sd.sh" "$out"
 }
 
 deploy() {
@@ -349,7 +413,8 @@ stage)  stage ;;
 deploy) deploy ;;
 probe)  probe ;;
 bootloader) bootloader ;;
+sdimage) shift 2>/dev/null; sdimage "$@" ;;
 all)    fetch; shim; dts; config; dtb; build; deploy ;;
 image)  fetch; shim; dts; config; dtb; build; stage ;;
-*) echo "Usage: $0 {fetch|shim|dts|config|dtb|build|stage|deploy|probe|bootloader|all|image}"; exit 1 ;;
+*) echo "Usage: $0 {fetch|shim|dts|config|dtb|build|stage|deploy|probe|bootloader|sdimage|all|image}"; exit 1 ;;
 esac
