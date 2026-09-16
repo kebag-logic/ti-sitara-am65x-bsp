@@ -1,0 +1,8 @@
+auto lo
+iface lo inet loopback
+
+# PocketBeagle 2 has no Ethernet controller and no RJ45. The only network
+# interface is usb0 - the ECM leg of the composite UAC2+ECM gadget on the USB-C
+# port - and that one is addressed by S99usb_gadgets from TDM8_USB0_IP in
+# /etc/tdm8/tdm8.env, not from here. Adding an "auto usb0" stanza here would
+# race the gadget: usb0 does not exist until configfs binds the UDC.

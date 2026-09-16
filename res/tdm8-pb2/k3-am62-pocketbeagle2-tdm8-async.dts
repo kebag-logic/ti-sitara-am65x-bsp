@@ -1,0 +1,136 @@
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
+/*
+ * TDM8 (8 in / 8 out) full duplex on McASP0 for the PocketBeagle 2, with the
+ * receive side on its OWN clock pair (ti,async-mode).  Six wires instead of
+ * four.
+ *
+ * SPDX-FileCopyrightText: Copyright (c) 2026 Kebag-Logic
+ *
+ * Use k3-am62-pocketbeagle2-tdm8.dts unless you actually need this.  That tree
+ * runs receive in the transmit clock domain, needs four wires, and touches no
+ * pad the stock PocketBeagle 2 device tree owns.  This one exists for an FPGA
+ * that drives two independent clock pairs - typically because its render and
+ * capture paths sit in different clock domains, or because you want to prove a
+ * direction in isolation during bring-up.
+ *
+ * Wiring
+ * ------
+ *   transmit group (SoC is clock slave on ACLKX/AFSX)
+ *     P2.01  B20  pad 0x1a4  mux 0  MCASP0_ACLKX  <- FPGA BCLK  (TX domain)  in
+ *     P1.04  D20  pad 0x1a8  mux 0  MCASP0_AFSX   <- FPGA FSYNC (TX domain)  in
+ *     P1.02  E18  pad 0x1a0  mux 0  MCASP0_AXR0   -> FPGA DIN  (8 slots out) out
+ *
+ *   receive group (SoC is clock slave on ACLKR/AFSR)
+ *     P1.08  A20  pad 0x1b0  mux 0  MCASP0_ACLKR  <- FPGA BCLK  (RX domain)  in
+ *     P1.06  E19  pad 0x1ac  mux 0  MCASP0_AFSR   <- FPGA FSYNC (RX domain)  in
+ *     P2.03  B18  pad 0x19c  mux 0  MCASP0_AXR1   <- FPGA DOUT (8 slots in)  in
+ *
+ *   P1.15 / P1.16 / P1.22 / P2.15 / P2.21                                    GND
+ *
+ * What it costs: P1.06 and P1.08 are MAIN_UART1 RXD/TXD
+ * -----------------------------------------------------
+ * k3-am62-pocketbeagle2.dts declares main_uart1 with status = "reserved" and
+ * bootph-pre-ram over pads 0x194/0x198/0x1ac/0x1b0.  "reserved" keeps Linux
+ * from probing it, so Linux never muxes those pads - but bootph-pre-ram means
+ * U-Boot does, and on AM62x MAIN_UART1 is the port TI's device-manager
+ * firmware conventionally uses for its trace output.  &main_uart1 is disabled
+ * below so nothing in Linux re-muxes P1.06/P1.08 behind our back, but that
+ * cannot stop firmware that already owns the pad.
+ *
+ *   ==> Scope P1.08 before you connect the FPGA's receive bit clock to it.
+ *       If anything is driving it, that is UART1_TXD, an output, and the FPGA
+ *       would be driving into it.  Use the four-wire synchronous tree instead.
+ *
+ * P1.06 is UART1_RXD, an input, so it is harmless either way; P1.08 is the one
+ * to check.
+ *
+ * Two balls per header pin: see the header of the synchronous tree.  P1.06
+ * adds one more partner to park (AD18 RGMII1_TD3, pad 0x140); P1.08 is the
+ * rare single-ball pin and needs none.
+ */
+
+#include "k3-am62-pocketbeagle2.dts"
+
+/ {
+	model = "BeagleBoard.org PocketBeagle 2 + Kebag-Logic TDM8 8x8 (McASP0, async RX clocks)";
+
+	tdm8_codec: tdm8-codec {
+		compatible = "kebag-logic,tdm8-dummy";
+		#sound-dai-cells = <0>;
+		status = "okay";
+	};
+
+	sound_tdm8: sound-tdm8 {
+		compatible = "simple-audio-card";
+		simple-audio-card,name = "TDM8";
+		simple-audio-card,format = "dsp_a";
+		/* the FPGA owns both clock pairs */
+		simple-audio-card,bitclock-master = <&tdm8_codec_dai>;
+		simple-audio-card,frame-master = <&tdm8_codec_dai>;
+
+		simple-audio-card,cpu {
+			sound-dai = <&mcasp0>;
+			dai-tdm-slot-num = <8>;
+			dai-tdm-slot-width = <32>;
+		};
+
+		tdm8_codec_dai: simple-audio-card,codec {
+			sound-dai = <&tdm8_codec>;
+			dai-tdm-slot-num = <8>;
+			dai-tdm-slot-width = <32>;
+		};
+	};
+};
+
+&main_pmx0 {
+	main_mcasp0_tdm8_async_pins_default: main-mcasp0-tdm8-async-default-pins {
+		pinctrl-single,pins = <
+			AM62X_IOPAD(0x01a4, PIN_INPUT, 0)  /* (B20) MCASP0_ACLKX  in   P2.01 */
+			AM62X_IOPAD(0x01a8, PIN_INPUT, 0)  /* (D20) MCASP0_AFSX   in   P1.04 */
+			AM62X_IOPAD(0x01a0, PIN_OUTPUT, 0) /* (E18) MCASP0_AXR0   out  P1.02 */
+			AM62X_IOPAD(0x01b0, PIN_INPUT, 0)  /* (A20) MCASP0_ACLKR  in   P1.08 */
+			AM62X_IOPAD(0x01ac, PIN_INPUT, 0)  /* (E19) MCASP0_AFSR   in   P1.06 */
+			AM62X_IOPAD(0x019c, PIN_INPUT, 0)  /* (B18) MCASP0_AXR1   in   P2.03 */
+		>;
+	};
+
+	main_mcasp0_tdm8_async_partner_park_pins: main-mcasp0-tdm8-async-partner-park-pins {
+		pinctrl-single,pins = <
+			AM62X_IOPAD(0x0164, PIN_INPUT, 7) /* (AA19) GPIO0_87  P1.02, was RGMII2_TX_CTL */
+			AM62X_IOPAD(0x016c, PIN_INPUT, 7) /* (Y18)  GPIO0_89  P1.04, was RGMII2_TD0 */
+			AM62X_IOPAD(0x0160, PIN_INPUT, 7) /* (AD24) GPIO0_86  P2.01, was MDIO0_MDC */
+			AM62X_IOPAD(0x015c, PIN_INPUT, 7) /* (AB22) GPIO0_85  P2.03, was MDIO0_MDIO */
+			AM62X_IOPAD(0x0140, PIN_INPUT, 7) /* (AD18) GPIO0_78  P1.06, was RGMII1_TD3 */
+		>;
+	};
+};
+
+/* P1.06 / P1.08 are MAIN_UART1 RXD/TXD - see the firmware note in the header */
+&main_uart1 {
+	status = "disabled";
+};
+
+&mcasp0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&main_mcasp0_tdm8_async_pins_default
+		     &main_mcasp0_tdm8_async_partner_park_pins>;
+
+	#sound-dai-cells = <0>;
+
+	op-mode = <0>;			/* DAVINCI_MCASP_IIS_MODE (not DIT) */
+	tdm-slots = <8>;
+
+	/* receive runs on ACLKR/AFSR, which is what ti,async-mode selects */
+	ti,async-mode;
+
+	/* 0 = inactive, 1 = TX, 2 = RX.  AXR0 transmits, AXR1 receives. */
+	serial-dir = <
+		1 2 0 0
+		0 0 0 0
+		0 0 0 0
+		0 0 0 0
+	>;
+	tx-num-evt = <32>;
+	rx-num-evt = <32>;
+	status = "okay";
+};

@@ -1,0 +1,166 @@
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
+/*
+ * TDM8 (8 in / 8 out) FULL DUPLEX on McASP0 for the BeagleBoard.org
+ * PocketBeagle 2 (AM6254, quad Cortex-A53), bridged to the UAC2 gadget.
+ *
+ * SPDX-FileCopyrightText: Copyright (c) 2026 Kebag-Logic
+ *
+ * Why this board is the easy one
+ * -----------------------------
+ * On the SK-AM62B-P1 a full-duplex TDM8 link cannot be made from header pins
+ * alone: a McASP transmit section is always clocked from its own ACLKX/AFSX,
+ * and no transmit frame sync ball reaches any SK header, so every SK duplex
+ * tree (k3-am625-sk-tdm8-ospi.dts, -split.dts) has to solder onto the OSPI
+ * flash pads.  PocketBeagle 2 brings a whole McASP0 out to P1/P2:
+ *
+ *   MCASP0_AXR0   E18   P1.02        MCASP0_ACLKX  B20   P2.01
+ *   MCASP0_AFSX   D20   P1.04        MCASP0_AXR1   B18   P2.03
+ *   MCASP0_AFSR   E19   P1.06
+ *   MCASP0_ACLKR  A20   P1.08
+ *   MCASP0_AXR3   B19   P1.10
+ *   MCASP0_AXR2   A19   P1.12
+ *
+ * (PocketBeagle 2 SRM rev A1, §4.2 "Cape Header Connectors", all mux MODE 0.)
+ *
+ * So the whole link is four jumper wires onto pre-soldered headers.  No
+ * soldering, no FET switch, no flash given up, and - see the conflict list
+ * below - not one pad that the stock PocketBeagle 2 device tree already owns.
+ *
+ * Wiring
+ * ------
+ *   P2.01  B20  pad 0x1a4  mux 0  MCASP0_ACLKX  <- FPGA BCLK  12.288 MHz  in
+ *   P1.04  D20  pad 0x1a8  mux 0  MCASP0_AFSX   <- FPGA FSYNC 48 kHz      in
+ *   P1.02  E18  pad 0x1a0  mux 0  MCASP0_AXR0   -> FPGA DIN  (8 slots out) out
+ *   P2.03  B18  pad 0x19c  mux 0  MCASP0_AXR1   <- FPGA DOUT (8 slots in)  in
+ *   P1.15 / P1.16 / P1.22 / P2.15 / P2.21                                  GND
+ *
+ * 8 slots x 32 bits x 48 kHz = 12.288 MHz, which is the BCLK the FPGA already
+ * drives on the MYIR and SK links.  The FPGA is bit-clock and frame master;
+ * nothing on the AM62x side can force the rate.
+ *
+ * Receive is left in the transmit clock domain (no "ti,async-mode"), so both
+ * directions share the one BCLK/FSYNC pair and the link is four wires instead
+ * of six.  If your FPGA insists on a separate receive clock pair, use
+ * k3-am62-pocketbeagle2-tdm8-async.dts - it costs P1.06 and P1.08, which are
+ * MAIN_UART1 RXD/TXD.
+ *
+ * Conflicts with the stock tree: none
+ * ----------------------------------
+ * k3-am62-pocketbeagle2.dts muxes 0x194/0x198/0x1ac/0x1b0 for main_uart1
+ * (status = "reserved", bootph-pre-ram), which is why the four pads picked
+ * here are deliberately the other four: 0x19c, 0x1a0, 0x1a4 and 0x1a8 appear
+ * in no pinctrl group of the stock tree.  main_uart1, the LEDs, main_uart6
+ * (the JST-SH console), the microSD and both USB ports are untouched, so this
+ * tree boots and consoles exactly like the stock one.
+ *
+ * Two balls per header pin
+ * ------------------------
+ * PocketBeagle 2 keeps the classic PocketBeagle 36-pin headers by tying two
+ * SoC balls to one header pin on much of P1/P2 (SRM §4.2: "the 2nd BALL row is
+ * the pin number on the processor for a second processor pin connected to the
+ * same pin on the expansion header").  All four pins this tree uses are such
+ * pins, and the partner ball is a CPSW/MDIO function that PocketBeagle 2 has
+ * no connector for:
+ *
+ *   P1.02  E18 MCASP0_AXR0  + AA19 RGMII2_TX_CTL   pad 0x164
+ *   P1.04  D20 MCASP0_AFSX  + Y18  RGMII2_TD0      pad 0x16c
+ *   P2.01  B20 MCASP0_ACLKX + AD24 MDIO0_MDC       pad 0x160
+ *   P2.03  B18 MCASP0_AXR1  + AB22 MDIO0_MDIO      pad 0x15c
+ *
+ * The FPGA drives those partner balls whether we like it or not, so the
+ * partners are parked at mux 7 (GPIO) below.  A GPIO that nobody claims stays
+ * an input, which is what keeps the pad off the net; PIN_INPUT then leaves the
+ * receiver on so the line can still be read back with gpioget while debugging.
+ * Without this, a pad left at its reset mux could drive against the FPGA.
+ */
+
+#include "k3-am62-pocketbeagle2.dts"
+
+/ {
+	model = "BeagleBoard.org PocketBeagle 2 + Kebag-Logic TDM8 8x8 (McASP0 on P1/P2)";
+
+	tdm8_codec: tdm8-codec {
+		compatible = "kebag-logic,tdm8-dummy";
+		#sound-dai-cells = <0>;
+		status = "okay";
+	};
+
+	sound_tdm8: sound-tdm8 {
+		compatible = "simple-audio-card";
+		simple-audio-card,name = "TDM8";
+		/*
+		 * dsp_a: 1-BCLK-wide frame sync, slot 0 one BCLK after the FSYNC
+		 * edge, MSB first.  "dsp_b" if the FPGA puts slot 0 on the edge;
+		 * add simple-audio-card,frame-inversion if FSYNC is active low.
+		 */
+		simple-audio-card,format = "dsp_a";
+		/* both at the codec DAI => the FPGA is bit-clock and frame master */
+		simple-audio-card,bitclock-master = <&tdm8_codec_dai>;
+		simple-audio-card,frame-master = <&tdm8_codec_dai>;
+
+		simple-audio-card,cpu {
+			sound-dai = <&mcasp0>;
+			dai-tdm-slot-num = <8>;
+			dai-tdm-slot-width = <32>;
+		};
+
+		tdm8_codec_dai: simple-audio-card,codec {
+			sound-dai = <&tdm8_codec>;
+			dai-tdm-slot-num = <8>;
+			dai-tdm-slot-width = <32>;
+		};
+	};
+};
+
+&main_pmx0 {
+	main_mcasp0_tdm8_pins_default: main-mcasp0-tdm8-default-pins {
+		pinctrl-single,pins = <
+			AM62X_IOPAD(0x01a4, PIN_INPUT, 0)  /* (B20) MCASP0_ACLKX  in   P2.01 */
+			AM62X_IOPAD(0x01a8, PIN_INPUT, 0)  /* (D20) MCASP0_AFSX   in   P1.04 */
+			AM62X_IOPAD(0x01a0, PIN_OUTPUT, 0) /* (E18) MCASP0_AXR0   out  P1.02 */
+			AM62X_IOPAD(0x019c, PIN_INPUT, 0)  /* (B18) MCASP0_AXR1   in   P2.03 */
+		>;
+	};
+
+	/* the second SoC ball on each of those four header pins - see the header */
+	main_mcasp0_tdm8_partner_park_pins: main-mcasp0-tdm8-partner-park-pins {
+		pinctrl-single,pins = <
+			AM62X_IOPAD(0x0164, PIN_INPUT, 7) /* (AA19) GPIO0_87  P1.02, was RGMII2_TX_CTL */
+			AM62X_IOPAD(0x016c, PIN_INPUT, 7) /* (Y18)  GPIO0_89  P1.04, was RGMII2_TD0 */
+			AM62X_IOPAD(0x0160, PIN_INPUT, 7) /* (AD24) GPIO0_86  P2.01, was MDIO0_MDC */
+			AM62X_IOPAD(0x015c, PIN_INPUT, 7) /* (AB22) GPIO0_85  P2.03, was MDIO0_MDIO */
+		>;
+	};
+};
+
+&mcasp0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&main_mcasp0_tdm8_pins_default
+		     &main_mcasp0_tdm8_partner_park_pins>;
+
+	/*
+	 * k3-am62-main.dtsi does not give the McASPs #sound-dai-cells - on the
+	 * SK it arrives via k3-am62x-sk-common.dtsi.  PocketBeagle 2 has no
+	 * audio node at all, so set it here or simple-audio-card cannot
+	 * reference &mcasp0.
+	 */
+	#sound-dai-cells = <0>;
+
+	op-mode = <0>;			/* DAVINCI_MCASP_IIS_MODE (not DIT) */
+	tdm-slots = <8>;
+
+	/* 0 = inactive, 1 = TX, 2 = RX.  AXR0 transmits, AXR1 receives. */
+	serial-dir = <
+		1 2 0 0
+		0 0 0 0
+		0 0 0 0
+		0 0 0 0
+	>;
+	tx-num-evt = <32>;
+	rx-num-evt = <32>;
+	/*
+	 * No "ti,async-mode": receive stays in the transmit clock domain, so
+	 * both directions share BCLK/FSYNC and only four wires are needed.
+	 */
+	status = "okay";
+};
