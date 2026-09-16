@@ -1,0 +1,134 @@
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
+/*
+ * TDM8 (8 in / 8 out) FULL DUPLEX on McASP1 for the TI SK-AM62B-P1, taken off
+ * the OSPI0 bus plus one 40-pin-header pin, bridged to the UAC2 gadget.
+ *
+ * SPDX-FileCopyrightText: Copyright (c) 2026 Kebag-Logic
+ *
+ * Why this variant exists
+ * -----------------------
+ * A McASP transmit section is always clocked from its own ACLKX/AFSX pins, and
+ * per the AM625 datasheet (SPRSP58C tables 5-35..5-37) the ALW balls able to
+ * carry a transmit frame sync are:
+ *
+ *   MCASP0_AFSX  D20
+ *   MCASP1_AFSX  B23, J22, U23
+ *   MCASP2_AFSX  A15, AD21, T22
+ *
+ * None of those is on any expansion header of this board:
+ *   J3  (40-pin, PEC20DAAN)  balls K24 K22 E15 C15 B20 E19 L21 L23 V25 K25 B13
+ *                            B14 E24 A14 A13 C13 A16 B16 N20 L24 M22 E18 A19
+ *                            B18 B19 A20  - no match
+ *   J9  (28-pin MCU header)  MCU domain only; AM62x has no MCU-domain McASP
+ *   J10 (20-pin PRU header)  pins 13-20 = GPMC0_AD0..AD7 = MCASP2_AXR4..AXR11,
+ *                            i.e. eight data lanes and no clocks at all
+ *   J15 USB debug connector (FT4232HL), no SoC GPIO
+ *
+ * So full duplex needs pads that are not on a header.  Of the two candidates -
+ * the audio bus behind the TCA6424 FET switch, and the OSPI0 flash bus - the
+ * OSPI0 one is much cleaner: this board boots from the microSD, so disabling
+ * &ospi0 hands the pads over outright.  No FET switch, no expander lines, no
+ * codec held in reset.
+ *
+ * Wiring: three wires on the OSPI0 flash pins, one on the 40-pin header.
+ *
+ *   OSPI0_D6  H25  pad 0x024 mux2  MCASP1_ACLKX  <- FPGA BCLK  12.288 MHz
+ *   OSPI0_D7  J22  pad 0x028 mux2  MCASP1_AFSX   <- FPGA FSYNC 48 kHz
+ *   OSPI0_D5  J25  pad 0x020 mux2  MCASP1_AXR0   -> FPGA DIN   (8 slots out)
+ *   J3 pin 15 L23  pad 0x084 mux2  MCASP1_AXR2   <- FPGA DOUT  (8 slots in)
+ *   J3-6/9/14/20/25/30/34                        GND
+ *
+ * D5, D6 and D7 are adjacent pins of the OSPI NOR flash.  If you would rather
+ * keep all four on one package, MCASP1_AXR2 is also on OSPI0_CSn2 (H21, pad
+ * 0x034 mux4); and MCASP1_AXR1 sits on OSPI0_D4 (J23, pad 0x01c mux2) if a
+ * second lane is ever wanted.
+ *
+ * Trade-off: the OSPI NOR flash is gone while this tree is booted.  Nothing in
+ * this BSP boots from it - see README.tdm8-sk-am62b.md.
+ */
+
+#include "k3-am625-sk.dts"
+
+/ {
+	model = "Texas Instruments AM625 SK + Kebag-Logic TDM8 8x8 (McASP1 on OSPI0 + J3-15)";
+
+	tdm8_codec: tdm8-codec {
+		compatible = "kebag-logic,tdm8-dummy";
+		#sound-dai-cells = <0>;
+		status = "okay";
+	};
+
+	sound_tdm8: sound-tdm8 {
+		compatible = "simple-audio-card";
+		simple-audio-card,name = "TDM8";
+		/*
+		 * dsp_a: 1-BCLK-wide frame sync, slot 0 one BCLK after the FSYNC
+		 * edge, MSB first.  "dsp_b" if the FPGA puts slot 0 on the edge;
+		 * add simple-audio-card,frame-inversion if FSYNC is active low.
+		 */
+		simple-audio-card,format = "dsp_a";
+		/* both at the codec DAI => the FPGA is bit-clock and frame master */
+		simple-audio-card,bitclock-master = <&tdm8_codec_dai>;
+		simple-audio-card,frame-master = <&tdm8_codec_dai>;
+
+		simple-audio-card,cpu {
+			sound-dai = <&mcasp1>;
+			dai-tdm-slot-num = <8>;
+			dai-tdm-slot-width = <32>;
+		};
+
+		tdm8_codec_dai: simple-audio-card,codec {
+			sound-dai = <&tdm8_codec>;
+			dai-tdm-slot-num = <8>;
+			dai-tdm-slot-width = <32>;
+		};
+	};
+};
+
+&main_pmx0 {
+	main_mcasp1_tdm8_ospi_pins_default: main-mcasp1-tdm8-ospi-default-pins {
+		pinctrl-single,pins = <
+			AM62X_IOPAD(0x0024, PIN_INPUT, 2)  /* (H25) OSPI0_D6.MCASP1_ACLKX       in  */
+			AM62X_IOPAD(0x0028, PIN_INPUT, 2)  /* (J22) OSPI0_D7.MCASP1_AFSX        in  */
+			AM62X_IOPAD(0x0020, PIN_OUTPUT, 2) /* (J25) OSPI0_D5.MCASP1_AXR0        out */
+			AM62X_IOPAD(0x0084, PIN_INPUT, 2)  /* (L23) GPMC0_ADVn_ALE.MCASP1_AXR2  in   J3-15 */
+		>;
+	};
+};
+
+/* the flash owns D4-D7; this board boots from the microSD, so hand them over */
+&ospi0 {
+	status = "disabled";
+};
+
+/* mcasp1 belongs to exactly one card; the 2-channel on-board one steps aside */
+&codec_audio {
+	status = "disabled";
+};
+
+&mcasp1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&main_mcasp1_tdm8_ospi_pins_default>;
+
+	op-mode = <0>;			/* DAVINCI_MCASP_IIS_MODE (not DIT) */
+	tdm-slots = <8>;
+
+	/* 0 = inactive, 1 = TX, 2 = RX.  AXR0 transmits, AXR2 receives. */
+	serial-dir = <
+		1 0 2 0
+		0 0 0 0
+		0 0 0 0
+		0 0 0 0
+	>;
+	tx-num-evt = <32>;
+	rx-num-evt = <32>;
+	/*
+	 * No "ti,async-mode": receive stays in the transmit clock domain, so
+	 * both directions share BCLK/FSYNC and only four wires are needed.
+	 */
+	status = "okay";
+};
+
+&usb0 {
+	dr_mode = "peripheral";
+};
