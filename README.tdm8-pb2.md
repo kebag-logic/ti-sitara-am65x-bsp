@@ -54,14 +54,7 @@ make -C ../buildroot O=$PWD/../buildroot-pb2 \
 make -C ../buildroot O=$PWD/../buildroot-pb2 BR2_JLEVEL=32
 
 # ---- 6. the microSD image  (needs sudo) -------------------------------------
-BOOTSRC=res/spare-sd-pb2/boot \
-UBOUT=u-boot-pb/out_bp2 \
-R5=u-boot-pb/out_bp2/r5/tiboot3-am62x-hs-fs-evm.bin \
-TISPL=u-boot-pb/out_bp2/a53/tispl.bin \
-UB=u-boot-pb/out_bp2/a53/u-boot.img \
-KIMG_NAME=Image-7.1.0-tdm8-pb2.gz \
-ROOTTAR=../buildroot-pb2/images/rootfs.tar.gz \
-  ./build-spare-sd.sh res/spare-sd-pb2/pocketbeagle2-tdm8.img
+./build-tdm8-uac2-pb2.sh sdimage
 
 # ---- 7. flash ---------------------------------------------------------------
 sudo dd if=res/spare-sd-pb2/pocketbeagle2-tdm8.img of=/dev/sdX bs=4M conv=fsync status=progress
@@ -85,9 +78,9 @@ belongs below:
 * **`O=` in step 5 is not optional.** One Buildroot checkout serves three
   boards; building in `../buildroot` itself overwrites the MYIR `.config`.
   Images then land in `<O>/images/`, *not* `<O>/output/images/`. (§5.5)
-* **Every variable in step 6 is required.** `build-spare-sd.sh` defaults all of
-  them to the MYIR GP chain, and `TISPL`/`UB` sit in the same directory as the
-  `*_unsigned` twins you must not flash on HS-FS. (§5.6)
+* **Use `sdimage`, not `build-spare-sd.sh` directly.** Every default in that
+  script points at the MYIR GP chain, and `TISPL`/`UB` share a directory with
+  the `*_unsigned` twins you must not flash on HS-FS. (§5.6) (§5.6)
 
 `BR2_JLEVEL=32` is only needed on a very-high-core-count host: glibc's `manual/`
 build races at `-j128` and dies with an empty `libc.info`. Drop it otherwise.
@@ -270,6 +263,9 @@ only for an FPGA whose two directions are in different clock domains.
 | `br2-external/board/bb-pocketbeagle2/` | `post-build.sh` (default `KL_MODDIR=.kstage-tdm8-pb2/lib/modules`) plus this board's `etc/tdm8/tdm8.env`, `etc/network/interfaces` and `root/.ssh/authorized_keys`. |
 | `br2-external/configs/bb_pocketbeagle2_avb_defconfig` | Buildroot config. Mirrors the SK one minus `ethtool` (no Ethernet), with a 1 G rootfs for a 512 MB board. |
 | `res/uboot/check-bootloader.sh` | Verifies a built K3 chain is the variant you meant and that the real TI firmware is inside it. Board-independent: `SOC`/`VARIANT`/`FW` cover the SK and MYIR too. |
+| `res/uboot/fix-pb2-uart6-bootph.sh` | Gives the A53 SPL a working console: adds the `bootph-all` that the upstream board DT puts on `&main_uart6` but not on its pinmux group. |
+| `res/uboot/fix-pb2-kernel-comp.sh` | Adds `kernel_comp_addr_r` / `kernel_comp_size` to the board env so `booti` can unpack a gzipped `Image`. |
+| `res/uboot/pb2-console-on-p1.sh` | `on`/`off`. Moves the A53 U-Boot console to `main_uart0` (P1.30/P1.32) so the whole boot log lands on one wire. |
 
 Shared with the other two boards, unchanged: `res/tdm8/kl-tdm8-dummy.c`,
 `res/tdm8/apply-tdm8-kernel.sh`, `res/kl-tdm8-uac2.config`,
@@ -417,6 +413,46 @@ passes for a certificate signed with any key. In practice that means:
 * **Nothing gets fused.** Going to HS-SE would mean burning your own MPK hash,
   which is one-way and would immediately invalidate the demo key above.
 
+### The console, and why it is on the header
+
+Stock PocketBeagle 2 splits its boot log across two UARTs, which makes bring-up
+much harder than it needs to be:
+
+| Stage | UART | Where | tty |
+|---|---|---|---|
+| R5 SPL → TF-A → OP-TEE | `main_uart0` | **P1.30** TXD / **P1.32** RXD | `ttyS3` |
+| A53 SPL → U-Boot → Linux | `main_uart6` | JST-SH 3-pin | `ttyS2` |
+
+The handover is the `INFO: Entry point address = 0x80080000` line. Watch only
+the header and the boot appears to die there; watch only the JST-SH and you see
+nothing until late — and, before `fix-pb2-uart6-bootph.sh`, nothing at all.
+
+This BSP puts **everything on `main_uart0`**, the header pins, at 115200:
+
+| | Set by |
+|---|---|
+| R5 SPL, TF-A, OP-TEE | already there — `k3-am6232-r5-pocketbeagle2.dts` |
+| A53 SPL, U-Boot | `res/uboot/pb2-console-on-p1.sh` |
+| kernel + earlycon | `DEFAULT_APPEND` in `build-tdm8-uac2-pb2.sh` |
+| login prompt | `BR2_TARGET_GENERIC_GETTY_PORT="console"` + `..._BAUDRATE_115200` |
+
+```
+console=ttyS2,115200n8 console=ttyS3,115200n8 earlycon=ns16550a,mmio32,0x02800000,115200n8 ...
+```
+
+Both ports are listed so kernel output still reaches the JST-SH; the **last**
+`console=` owns `/dev/console` and therefore the login, so `ttyS3` wins. The
+getty is `"console"` rather than a fixed tty, so it follows without this having
+to be set in two places. Every rate is explicit — nothing inherits a divisor
+from whatever the previous stage left behind.
+
+Wire it up: **P1.30** → your adapter's RX, **P1.32** → its TX, ground on P1.15,
+P1.16 or P1.22, 3.3 V only. To go back to the JST-SH, swap the two `console=`
+terms, set `earlycon` to `0x02860000`, and run `pb2-console-on-p1.sh off`.
+
+None of these pins clash with the TDM8 link on P2.01 / P1.04 / P1.02 / P2.03, so
+console and FPGA cable can stay connected together.
+
 ### Verify the chain before it reaches a card
 
 Two failure modes here are both silent, and the second is the easy one to hit.
@@ -525,14 +561,27 @@ In order: TF-A `bl31.bin` → R5 U-Boot (`tiboot3-am62x-hs-fs-evm.bin`) → OP-T
 both U-Boot invocations — that is what keeps the fake-blob trap above from
 firing.
 
-Before building, `build.sh` runs two host-compatibility fixes against whichever
-U-Boot tree the board selected. Both are idempotent and both no-op on a tree
-that does not need them:
+Before building, `build.sh` patches the U-Boot tree the board selected. All of
+these are idempotent and all no-op on a tree that does not need them.
+
+Host-compatibility, run for every board:
 
 | | For |
 |---|---|
 | `res/uboot/fix-pylibfdt-swig.sh` | SWIG ≥ 4.3, which dropped the Python 2 macros U-Boot's vendored pylibfdt still uses |
 | `res/uboot/fix-binman-pkg-resources.sh` | setuptools ≥ 81, which removed `pkg_resources`; binman ≤ v2025.07 imports it. See `README.prereq.md` §3.2 |
+
+PocketBeagle 2 only, run when the argument is `PB2`:
+
+| | For |
+|---|---|
+| `res/uboot/fix-pb2-uart6-bootph.sh` | The A53 SPL's console **pinmux group** has no `bootph-*`, only the `&main_uart6` node does, so `fdtgrep` drops it from the SPL device tree and the SPL prints into a UART whose pads were never muxed |
+| `res/uboot/fix-pb2-kernel-comp.sh` | `booti` refuses a gzipped `Image` without `kernel_comp_addr_r` / `kernel_comp_size`, which the board env does not set |
+| `res/uboot/pb2-console-on-p1.sh` | Puts the A53 stages on `main_uart0` so the whole boot log is on one wire. `on` by default; `PB2_CONSOLE_ON_P1=off ./build.sh PB2` keeps the stock split |
+
+`build.sh` ends by checking that `tiboot3*.bin`, `tispl.bin` and `u-boot.img`
+actually exist, and exits non-zero if not — binman failures do not abort the
+make, so without that check a broken build reports success.
 
 `build.sh` ends by checking that `tiboot3*.bin`, `tispl.bin` and `u-boot.img`
 actually exist, and exits non-zero if not — binman failures do not abort the
@@ -587,6 +636,17 @@ tar tzf ../buildroot-pb2/images/rootfs.tar.gz |
 #### 6. The microSD image
 
 ```sh
+./build-tdm8-uac2-pb2.sh sdimage [out.img]
+```
+
+Needs `sudo` for `losetup`/`mount`/`mkfs`. Default output is
+`res/spare-sd-pb2/pocketbeagle2-tdm8.img`; `ROOTTAR=` overrides the rootfs.
+
+It wraps `build-spare-sd.sh`, whose every default points at the **MYIR GP**
+chain, and checks each input exists before starting — naming what is missing
+rather than reporting a default path you never asked for. Equivalent by hand:
+
+```sh
 BOOTSRC=res/spare-sd-pb2/boot \
 UBOUT=u-boot-pb/out_bp2 \
 R5=u-boot-pb/out_bp2/r5/tiboot3-am62x-hs-fs-evm.bin \
@@ -597,12 +657,12 @@ ROOTTAR=../buildroot-pb2/images/rootfs.tar.gz \
   ./build-spare-sd.sh res/spare-sd-pb2/pocketbeagle2-tdm8.img
 ```
 
-`./build-tdm8-uac2-pb2.sh bootloader` prints the `UBOUT`/`R5`/`TISPL`/`UB` block
-ready to paste. Name all four explicitly rather than leaving them to default:
-`build-spare-sd.sh` defaults them to the **MYIR GP** chain, and `TISPL`/`UB` sit
-next to `tispl.bin_unsigned` / `u-boot.img_unsigned` in the same directory.
-`ROOTTAR` is not optional either — without it the script falls back to the MYIR
-board snapshot. This step needs `sudo` for `losetup`/`mount`.
+Don't. Seven assignments across seven continuation lines is one dropped line
+away from a card built out of another board's bootloader, and `TISPL`/`UB` sit
+in the same directory as the `*_unsigned` twins that must not go on HS-FS. If
+one assignment goes missing the failure names a path you never typed, e.g.
+`missing input: .../res/spare-sd/boot/Image-....gz` when only `BOOTSRC` is
+lost — that `res/spare-sd/` is the MYIR default reasserting itself.
 
 #### Skipping the bootloader entirely
 
@@ -623,6 +683,12 @@ The card comes out MBR p1 = FAT32 (`tiboot3.bin`, `tispl.bin`, `u-boot.img`,
 are all MYIR-specific.
 
 ### Verify, then flash
+
+The image is **sparse**: `truncate -s` creates the full extent but only written
+parts get blocks, so `du -h` reports ~190M for a 1.6G image. `ls -lh` and
+`du -h --apparent-size` give the real size, which is what `dd` writes and what
+the card has to hold. `build-spare-sd.sh` prints both. Copy it with
+`cp --sparse=always` or `rsync -S` or the holes become 1.4 GB of real zeros.
 
 ```sh
 IMG=res/spare-sd-pb2/pocketbeagle2-tdm8.img
@@ -724,6 +790,9 @@ Everything in `README.tdm8-uac2.md` §9 applies. Board-specific additions:
 | No `UAC2Gadget` card | `cat /sys/kernel/config/usb_gadget/g/UDC` should read `31000000.usb`. If `/sys/class/udc` is empty the Type-C port is not in device role |
 | Board unreachable over ssh after a deploy | `usb0` is the only link. `TDM8_ECM=no`, a UDC that did not bind, or a host that renumbered the ECM interface — fall back to the JST-SH console |
 | Board does not reach its rootfs | `MMC_SDHCI_AM654`, `REGULATOR_GPIO`, `MFD_TPS65219` and `GPIO_DAVINCI` must be `=y`; `config` checks all four |
+| Silent right after `Entry point address = 0x80080000` | the console moved to the other UART. Either watch the JST-SH, or build with `pb2-console-on-p1.sh on` (the default) and watch P1.30 |
+| `kernel_comp_addr_r or kernel_comp_size is not provided!`, every label `err=-14` | `fix-pb2-kernel-comp.sh` was not applied — `booti` cannot unpack a gzipped `Image` without them |
+| `missing input: .../res/spare-sd/boot/Image-....gz` | `res/spare-sd/` is the **MYIR** default: a variable did not reach `build-spare-sd.sh`. Use `./build-tdm8-uac2-pb2.sh sdimage` instead of calling it by hand |
 | Card is completely dead — no UART output at all | wrong or empty `tiboot3.bin`. The ROM rejects it before the console exists. Run `./build-tdm8-uac2-pb2.sh bootloader` |
 | U-Boot SPL starts, then nothing | signed/unsigned mismatch further up: `tispl.bin_unsigned` or `u-boot.img_unsigned` on HS-FS silicon |
 | Banner says `GP` or `HS-SE`, not `HS-FS` | not a stock PocketBeagle 2 rev A1. Set `UB_VARIANT` to match and re-check; on HS-SE the in-tree demo key will not authenticate |

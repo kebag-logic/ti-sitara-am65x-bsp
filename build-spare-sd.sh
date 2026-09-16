@@ -86,4 +86,12 @@ sudo tar -C "$MR" -xzf "$ROOTTAR"
 sudo sync; sudo umount "$MR"; rmdir "$MR"
 sudo losetup -d "$LOOP"; trap - EXIT
 
-echo "built $OUT ($(du -h "$OUT" | cut -f1)); flash: sudo dd if=$OUT of=/dev/sdX bs=4M conv=fsync status=progress"
+# `du` without --apparent-size reports ALLOCATED blocks, and this image is
+# sparse - truncate -s creates the full extent but only the written parts get
+# blocks, so a 1.6G card image commonly shows as ~190M. Report both, because
+# the number that matters for "will this fit on the card" and for how long dd
+# takes is the apparent one.
+echo "built $OUT"
+echo "  image size  $(du -h --apparent-size "$OUT" | cut -f1)  <- card must be at least this big; dd writes all of it"
+echo "  on disk     $(du -h "$OUT" | cut -f1)  <- sparse file, holes cost nothing until copied without --sparse"
+echo "  flash: sudo dd if=$OUT of=/dev/sdX bs=4M conv=fsync status=progress"

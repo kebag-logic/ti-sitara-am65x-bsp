@@ -15,6 +15,10 @@
 /.kstage-tdm8-pb2/
 /res/spare-sd/
 /res/spare-sd-sk/
+# PocketBeagle 2: the staged boot/ tree IS tracked (see the commit "PB2: prepare the work for the TDM8 to usb bridge"), but the
+# 1.6 GB card image build-spare-sd.sh writes next to it is not. It is sparse, so
+# `du` under-reports it as ~190M - do not be fooled into adding it.
+/res/spare-sd-pb2/*.img
 /res/sd-boot-backup/
 
 # generated bootchooser script (built from res/ab/boot.cmd)
