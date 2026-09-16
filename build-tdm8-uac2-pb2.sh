@@ -78,21 +78,29 @@ TDM8_DEFAULT_LABEL="${TDM8_DEFAULT_LABEL:-tdm8}"
 #   main_uart6  ttyS2  0x02860000  JST-SH 3-pin            A53 U-Boot, Linux
 #
 # res/uboot/pb2-console-on-p1.sh moves the A53 U-Boot stages onto main_uart0;
-# this puts the kernel there too, so the whole boot lands on one wire.  BOTH are
-# listed so kernel output still appears on the JST-SH as well - the LAST
-# console= is the one that owns /dev/console and therefore the login prompt, so
-# ttyS3 wins.  earlycon points at main_uart0 for the same reason, and carries an
-# explicit ,115200n8 so the earliest printks do not depend on whatever divisor
-# U-Boot happened to leave in the UART.  Swap the two
-# console= terms (and the earlycon base to 0x02860000) to put it back on the
-# JST-SH.
+# this puts the kernel there too, so the ENTIRE boot - ROM through login - is on
+# one wire.
+#
+# Deliberately a SINGLE console=.  Listing ttyS2 as well made the kernel log to
+# both ports, which sounds harmless but means /dev/console fans out to two
+# devices and the preferred console owning its input side depends on
+# registration order.  One console, one owner, no ambiguity.  To put it on the
+# JST-SH instead use console=ttyS2,115200n8 with earlycon base 0x02860000, and
+# change BR2_TARGET_GENERIC_GETTY_PORT in the Buildroot defconfig to match.
+#
+# earlycon carries an explicit ,115200n8 so the earliest printks do not depend
+# on whatever divisor U-Boot left in the register.  no-console-suspend keeps the
+# console alive across a suspend; the port is not runtime-idled in either case,
+# because 8250_omap sets an autosuspend delay of -1 for a node with no serdev
+# children (8250_omap.c: "prevent an unsafe default policy with lossy characters
+# on wake-up").
 #
 # root: sdhci1 is the only MMC host the board enables (there is no eMMC) - but
 # it is NOT mmcblk0.  The board's aliases node says "mmc1 = &sdhci1", and
 # mmc_alloc_host() takes host->index straight from of_alias_get_id(np, "mmc"),
 # so the microSD comes up as mmcblk1 no matter that it is the only host.
 # U-Boot agrees: the PB2 env sets mmcdev=1 / bootpart=1:2.
-DEFAULT_APPEND="console=ttyS2,115200n8 console=ttyS3,115200n8 earlycon=ns16550a,mmio32,0x02800000,115200n8 root=/dev/mmcblk1p2 ro rootfstype=ext4 rootwait net.ifnames=0"
+DEFAULT_APPEND="console=ttyS3,115200n8 earlycon=ns16550a,mmio32,0x02800000,115200n8 no-console-suspend root=/dev/mmcblk1p2 ro rootfstype=ext4 rootwait net.ifnames=0"
 CROSS="${CROSS_COMPILE:-aarch64-linux-gnu-}"
 # LOCALVERSION= (set but empty) stops setlocalversion appending "+" for an
 # out-of-tag tree, so the release is exactly 7.1.0-tdm8-pb2 on every rebuild.

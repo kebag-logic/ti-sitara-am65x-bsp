@@ -14,7 +14,12 @@ BR2_PACKAGE_BASH=y
 # main_uart0 (P1.30/P1.32) is ttyS3 - and the build script puts the kernel on
 # ttyS3 so the whole boot log lands on one wire. "console" keeps the login
 # prompt on the same port without this file having to know which it is.
-BR2_TARGET_GENERIC_GETTY_PORT="console"
+# ttyS3 = main_uart0 = P1.30/P1.32, fixed by "serial3 = &main_uart0" in the
+# board aliases, so this is deterministic rather than a guess. Deliberately a
+# real tty and not "console": /dev/console fans out to every console= on the
+# cmdline and its input side depends on which one ends up CON_CONSDEV, which is
+# more indirection than a login prompt needs.
+BR2_TARGET_GENERIC_GETTY_PORT="ttyS3"
 # Explicit rather than BR2_TARGET_GENERIC_GETTY_BAUDRATE_KEEP, which emits
 # "getty -L console 0 vt100" - the 0 means "inherit the console's current
 # termios", so the login prompt silently follows whatever speed the port was

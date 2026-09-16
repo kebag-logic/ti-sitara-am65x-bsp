@@ -434,17 +434,23 @@ This BSP puts **everything on `main_uart0`**, the header pins, at 115200:
 | R5 SPL, TF-A, OP-TEE | already there — `k3-am6232-r5-pocketbeagle2.dts` |
 | A53 SPL, U-Boot | `res/uboot/pb2-console-on-p1.sh` |
 | kernel + earlycon | `DEFAULT_APPEND` in `build-tdm8-uac2-pb2.sh` |
-| login prompt | `BR2_TARGET_GENERIC_GETTY_PORT="console"` + `..._BAUDRATE_115200` |
+| login prompt | `BR2_TARGET_GENERIC_GETTY_PORT="ttyS3"` + `..._BAUDRATE_115200` |
 
 ```
-console=ttyS2,115200n8 console=ttyS3,115200n8 earlycon=ns16550a,mmio32,0x02800000,115200n8 ...
+console=ttyS3,115200n8 earlycon=ns16550a,mmio32,0x02800000,115200n8 no-console-suspend
 ```
 
-Both ports are listed so kernel output still reaches the JST-SH; the **last**
-`console=` owns `/dev/console` and therefore the login, so `ttyS3` wins. The
-getty is `"console"` rather than a fixed tty, so it follows without this having
-to be set in two places. Every rate is explicit — nothing inherits a divisor
-from whatever the previous stage left behind.
+**One** `console=`, on purpose. Listing `ttyS2` as well makes the kernel log to
+both ports — which sounds harmless, but `/dev/console` then fans out to two
+devices and the preferred console that owns its *input* side depends on
+registration order. One console, one owner. The getty is on `ttyS3` for the same
+reason rather than on `console`.
+
+Every rate is explicit — nothing inherits a divisor from whatever the previous
+stage left in the register. `no-console-suspend` keeps the console alive across
+a suspend; the port is not runtime-idled either way, because `8250_omap` sets an
+autosuspend delay of `-1` for a node with no serdev children, deliberately, "to
+prevent an unsafe default policy with lossy characters on wake-up".
 
 Wire it up: **P1.30** → your adapter's RX, **P1.32** → its TX, ground on P1.15,
 P1.16 or P1.22, 3.3 V only. To go back to the JST-SH, swap the two `console=`
