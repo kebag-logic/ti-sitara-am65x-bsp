@@ -1,0 +1,13 @@
+auto lo
+iface lo inet loopback
+
+# SK-AM62B-P1 has two RJ45 ports off CPSW3g: eth0 = cpsw_port1, eth1 = cpsw_port2.
+# usb0 (the ECM leg of the composite gadget) is addressed by S99usb_gadgets, not here.
+auto eth0
+iface eth0 inet dhcp
+
+# eth1 = AVB interface, static (mirrors the MYIR board's role split)
+auto eth1
+iface eth1 inet static
+	address 192.168.1.11
+	netmask 255.255.255.0

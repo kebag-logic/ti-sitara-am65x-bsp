@@ -1,0 +1,123 @@
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
+/*
+ * TDM8 capture (8 in) on McASP0, taken off the SK-AM62B-P1 40-pin user
+ * expansion header J3, bridged to the USB Audio Class 2.0 gadget.
+ *
+ * SPDX-FileCopyrightText: Copyright (c) 2026 Kebag-Logic
+ *
+ * THIS VARIANT IS CAPTURE ONLY - 8 slots FPGA -> board, nothing back.
+ *
+ * Why: with the FPGA as frame master a McASP transmit section needs its frame
+ * sync on the AFSX pin, and MCASP0_AFSX (pad 0x01a8, ball D20) is not routed to
+ * J3 on this board.  The receive section can run off ACLKR/AFSR instead, which
+ * are on J3, so the FPGA -> board direction works in "ti,async-mode".  There is
+ * no register path that feeds the transmit section from ACLKR/AFSR, so the
+ * board -> FPGA direction is simply not available on this connector; use
+ * k3-am625-sk-tdm8.dts (McASP1) for a full 8x8 link.
+ *
+ * Wiring (J3 is the 40-pin RPi-compatible header; see README.tdm8-sk-am62b.md):
+ *
+ *   J3-39  MCASP0_ACLKR  pad 0x01b0 mux0  ball A20  <- FPGA BCLK  12.288 MHz
+ *   J3-12  MCASP0_AFSR   pad 0x01ac mux0  ball E19  <- FPGA FSYNC 48 kHz
+ *   J3-33  MCASP0_AXR0   pad 0x01a0 mux0  ball E18  <- FPGA DOUT  (8 slots in)
+ *   J3-6/9/14/20/25/30/34  GND
+ *
+ * Two on-board owners have to let go of those pads, and one of them matters:
+ *
+ *   - J3-39 / J3-12 are MAIN_UART1 TXD/RXD, which the SK device tree marks
+ *     status = "reserved" with the comment "Main UART1 is used by TIFS
+ *     firmware".  Disabling the node stops Linux reserving them, but if the
+ *     TIFS build on your board really does emit trace there it will keep
+ *     driving J3-39 as an output against the FPGA's BCLK.  Check for TIFS
+ *     traffic on J3-39 before connecting, and put a series resistor in the
+ *     BCLK wire.  See README.tdm8-sk-am62b.md.
+ *   - J3-33 is EHRPWM1_B, owned by &epwm1 in the SK device tree.
+ */
+
+#include "k3-am625-sk.dts"
+
+/ {
+	model = "Texas Instruments AM625 SK + Kebag-Logic TDM8 8-in (McASP0 on J3)";
+
+	tdm8_codec: tdm8-codec {
+		compatible = "kebag-logic,tdm8-dummy";
+		#sound-dai-cells = <0>;
+		status = "okay";
+	};
+
+	sound_tdm8: sound-tdm8 {
+		compatible = "simple-audio-card";
+		simple-audio-card,name = "TDM8";
+		simple-audio-card,format = "dsp_a";
+		/* the FPGA owns BCLK and FSYNC - see k3-am625-sk-tdm8.dts */
+		simple-audio-card,bitclock-master = <&tdm8_codec_dai>;
+		simple-audio-card,frame-master = <&tdm8_codec_dai>;
+
+		simple-audio-card,cpu {
+			sound-dai = <&mcasp0>;
+			dai-tdm-slot-num = <8>;
+			dai-tdm-slot-width = <32>;
+		};
+
+		tdm8_codec_dai: simple-audio-card,codec {
+			sound-dai = <&tdm8_codec>;
+			dai-tdm-slot-num = <8>;
+			dai-tdm-slot-width = <32>;
+		};
+	};
+};
+
+&main_pmx0 {
+	main_mcasp0_tdm8_pins_default: main-mcasp0-tdm8-default-pins {
+		pinctrl-single,pins = <
+			AM62X_IOPAD(0x01b0, PIN_INPUT, 0) /* (A20) MCASP0_ACLKR  in  J3-39 */
+			AM62X_IOPAD(0x01ac, PIN_INPUT, 0) /* (E19) MCASP0_AFSR   in  J3-12 */
+			AM62X_IOPAD(0x01a0, PIN_INPUT, 0) /* (E18) MCASP0_AXR0   in  J3-33 */
+		>;
+	};
+};
+
+/* J3-39 / J3-12: taken back from the TIFS firmware's trace UART */
+&main_uart1 {
+	status = "disabled";
+};
+
+/* J3-33: EHRPWM1_B shares pad 0x01a0 with MCASP0_AXR0 */
+&epwm1 {
+	status = "disabled";
+};
+
+&mcasp0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&main_mcasp0_tdm8_pins_default>;
+
+	#sound-dai-cells = <0>;
+	op-mode = <0>;			/* DAVINCI_MCASP_IIS_MODE (not DIT) */
+	tdm-slots = <8>;
+
+	/*
+	 * ASYNC=1 puts the receive section on ACLKR/AFSR, which is the whole
+	 * point of this variant: those two are on J3 and AFSX is not.
+	 */
+	ti,async-mode;
+
+	/* 0 = inactive, 1 = TX, 2 = RX.  AXR0 receives the 8 input slots. */
+	serial-dir = <
+		2 0 0 0
+		0 0 0 0
+		0 0 0 0
+		0 0 0 0
+	>;
+	tx-num-evt = <32>;
+	rx-num-evt = <32>;
+	status = "okay";
+};
+
+/*
+ * mcasp1 and the on-board AM62x-SKEVM card are untouched here, so the 3.5 mm
+ * jack keeps working alongside the TDM8 capture card.
+ */
+
+&usb0 {
+	dr_mode = "peripheral";
+};
