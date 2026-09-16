@@ -3,11 +3,16 @@
 /trusted-firmware-a/
 /ti-linux-firmware/
 /u-boot-official/
+# BeagleBoard's U-Boot fork, cloned by fetch.sh; only PocketBeagle 2 uses it,
+# because mainline has no board support for it yet (README.tdm8-pb2.md 5.1)
+/u-boot-pb/
 
 # Kernel module staging + large generated/backup artifacts
 /.kstage/
+/.kstage2/
 /.kstage-tdm8/
 /.kstage-tdm8-sk/
+/.kstage-tdm8-pb2/
 /res/spare-sd/
 /res/spare-sd-sk/
 /res/sd-boot-backup/

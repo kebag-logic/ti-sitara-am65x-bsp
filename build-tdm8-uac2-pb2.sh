@@ -73,8 +73,12 @@ TDM8_DEFAULT_LABEL="${TDM8_DEFAULT_LABEL:-tdm8}"
 # console = main_uart6 (the 3-pin JST-SH debug port); k3-am62-pocketbeagle2.dts
 # has stdout-path = &main_uart6 and aliases serial2 = &main_uart6, so it is
 # ttyS2, and k3-am62-main.dtsi puts it at 0x02860000.  sdhci1 is the only MMC
-# host the board enables (no eMMC), so the microSD is mmcblk0.
-DEFAULT_APPEND="console=ttyS2,115200n8 earlycon=ns16550a,mmio32,0x02860000 root=/dev/mmcblk0p2 ro rootfstype=ext4 rootwait net.ifnames=0"
+# host the board enables (there is no eMMC) - but it is NOT mmcblk0.  The
+# board's aliases node says "mmc1 = &sdhci1", and mmc_alloc_host() takes
+# host->index straight from of_alias_get_id(np, "mmc"), so the microSD comes up
+# as mmcblk1 no matter that it is the only host.  U-Boot agrees: the PB2 env
+# sets mmcdev=1 / bootpart=1:2.
+DEFAULT_APPEND="console=ttyS2,115200n8 earlycon=ns16550a,mmio32,0x02860000 root=/dev/mmcblk1p2 ro rootfstype=ext4 rootwait net.ifnames=0"
 CROSS="${CROSS_COMPILE:-aarch64-linux-gnu-}"
 # LOCALVERSION= (set but empty) stops setlocalversion appending "+" for an
 # out-of-tag tree, so the release is exactly 7.1.0-tdm8-pb2 on every rebuild.
@@ -283,7 +287,7 @@ if [ -z "$MNT" ]; then
 	case "$ROOTDEV" in
 	*p[0-9]) BOOTDEV="${ROOTDEV%p[0-9]}p1" ;;
 	*[0-9])  BOOTDEV="${ROOTDEV%[0-9]}1" ;;
-	*)       BOOTDEV=/dev/mmcblk0p1 ;;
+	*)       BOOTDEV=/dev/mmcblk1p1 ;;
 	esac
 	[ -b "$BOOTDEV" ] || { echo "no FAT boot partition found (tried $BOOTDEV)" >&2; exit 1; }
 	MNT=/mnt/bootp; mkdir -p "$MNT"; mount "$BOOTDEV" "$MNT"; UMOUNT=1

@@ -27,6 +27,81 @@ fact, not a device-tree one. `./build-tdm8-uac2-pb2.sh probe` asks a live board.
 
 ---
 
+## 0. The commands, in order
+
+From the BSP root. Steps 1–3 are only for building a whole card; if the board
+already boots, do 4 then `deploy` (bottom of this section).
+
+```sh
+# ---- 1. sources (once) ------------------------------------------------------
+./fetch.sh                      # clones everything; or, on an already-populated
+                                # tree, just the one nothing else needs:
+git clone https://openbeagle.org/beagleboard/u-boot.git \
+    -b v2025.04-rc4-pocketbeagle2 u-boot-pb
+
+# ---- 2. bootloader: TF-A -> R5 SPL -> OP-TEE -> A53 U-Boot (HS-FS) ----------
+./build.sh PB2
+
+# ---- 3. prove the bootloader before it can reach a card ---------------------
+./build-tdm8-uac2-pb2.sh bootloader
+
+# ---- 4. kernel + device trees + modules -------------------------------------
+./build-tdm8-uac2-pb2.sh image
+
+# ---- 5. rootfs  (MUST follow 4: post-build.sh bakes in .kstage-tdm8-pb2) -----
+make -C ../buildroot O=$PWD/../buildroot-pb2 \
+     BR2_EXTERNAL=$PWD/br2-external bb_pocketbeagle2_avb_defconfig
+make -C ../buildroot O=$PWD/../buildroot-pb2 BR2_JLEVEL=32
+
+# ---- 6. the microSD image  (needs sudo) -------------------------------------
+BOOTSRC=res/spare-sd-pb2/boot \
+UBOUT=u-boot-pb/out_bp2 \
+R5=u-boot-pb/out_bp2/r5/tiboot3-am62x-hs-fs-evm.bin \
+TISPL=u-boot-pb/out_bp2/a53/tispl.bin \
+UB=u-boot-pb/out_bp2/a53/u-boot.img \
+KIMG_NAME=Image-7.1.0-tdm8-pb2.gz \
+ROOTTAR=../buildroot-pb2/images/rootfs.tar.gz \
+  ./build-spare-sd.sh res/spare-sd-pb2/pocketbeagle2-tdm8.img
+
+# ---- 7. flash ---------------------------------------------------------------
+sudo dd if=res/spare-sd-pb2/pocketbeagle2-tdm8.img of=/dev/sdX bs=4M conv=fsync status=progress
+```
+
+Already have a booting board? Skip 1, 2, 3 and 6 — this replaces only the
+kernel, the device trees and `extlinux.conf` over ssh, and leaves the bootloader
+chain on the card alone:
+
+```sh
+./build-tdm8-uac2-pb2.sh image
+BOARD=pb2 ./build-tdm8-uac2-pb2.sh deploy
+```
+
+Three things about that list that are not obvious, each explained where it
+belongs below:
+
+* **5 must follow 4.** `post-build.sh` copies `.kstage-tdm8-pb2/lib/modules`
+  into the rootfs as Buildroot assembles it. Run 5 first and you get an image
+  with no TDM8 modules and no warning. (§5.5)
+* **`O=` in step 5 is not optional.** One Buildroot checkout serves three
+  boards; building in `../buildroot` itself overwrites the MYIR `.config`.
+  Images then land in `<O>/images/`, *not* `<O>/output/images/`. (§5.5)
+* **Every variable in step 6 is required.** `build-spare-sd.sh` defaults all of
+  them to the MYIR GP chain, and `TISPL`/`UB` sit in the same directory as the
+  `*_unsigned` twins you must not flash on HS-FS. (§5.6)
+
+`BR2_JLEVEL=32` is only needed on a very-high-core-count host: glibc's `manual/`
+build races at `-j128` and dies with an empty `libc.info`. Drop it otherwise.
+
+Verify after 5, before 6:
+
+```sh
+tar tzf ../buildroot-pb2/images/rootfs.tar.gz |
+  grep -cE 'lib/modules/7\.1\.0-tdm8-pb2/.*(kl-tdm8-dummy|davinci-mcasp|simple-card)|usr/sbin/tdm8-uac2\.sh|etc/tdm8/tdm8\.env|usr/bin/alsaloop'
+# expect 6 or more
+```
+
+---
+
 ## 1. This is the easy board
 
 On the SK-AM62B-P1 a full-duplex TDM8 link cannot be made from header pins at
@@ -69,6 +144,27 @@ that the stock PocketBeagle 2 device tree already owns.
 Receive is left in the transmit clock domain (no `ti,async-mode`), so both
 directions share the one BCLK/FSYNC pair. That is what makes it four wires
 instead of six.
+
+#### Pin-to-pin: PocketBeagle 2 to AX7101 J11 (default tree, full duplex)
+
+The FPGA TDM wires come out on the AX7101's 40-pin "FPGA 40 PIN External IO"
+header **J11** (`sw/litex/platforms/alinx_ax7101.py`, the `tdm` resource). Four
+signals plus ground, capture and render:
+
+| Function | AX7101 J11 pin (ball) | Direction | PocketBeagle 2 pin | PB2 signal |
+|---|---|---|---|---|
+| BCLK 12.288 MHz | **6** (B20) | FPGA -> SoC | **P2.01** | `MCASP0_ACLKX` |
+| FSYNC 48 kHz | **8** (F19) | FPGA -> SoC | **P1.04** | `MCASP0_AFSX` |
+| Data out, render (8 slots) | **5** (A20) | FPGA -> SoC | **P2.03** | `MCASP0_AXR1` (SoC RX) |
+| Data in, capture (8 slots) | **7** (F20) | SoC -> FPGA | **P1.02** | `MCASP0_AXR0` (SoC TX) |
+| GND | **1**, **37**/**38** | shared | **P1.15/16/22**, **P2.15/21** | GND |
+
+Rules, same as the other boards: no power rail between the boards (AX7101 J11.2
+is +5 V, J11.39/40 are +3.3 V; leave PB2 P1.14/P2.23 3V3 unconnected unless the
+FPGA wants a reference); both ends 3.3 V, no level shifter; a 22-33 ohm series
+resistor in the BCLK wire (J11.6 -> P2.01); ribbon <= 15 cm with a ground beside
+each signal. This is the whole link: four signals on pre-soldered headers, no
+solder points, no sacrificed peripheral. The FPGA's `mclk` (J11.3) is unused.
 
 3V3 is on P1.14 and P2.23 if the FPGA side wants a reference; **all expansion
 signals are 3.3 V** and the SRM's warning applies — do not drive any I/O pin
@@ -245,16 +341,21 @@ fallback cmdline, used only when there is nothing to inherit, is derived from
 the stock device tree:
 
 ```
-console=ttyS2,115200n8 earlycon=ns16550a,mmio32,0x02860000 root=/dev/mmcblk0p2 ro rootfstype=ext4 rootwait net.ifnames=0
+console=ttyS2,115200n8 earlycon=ns16550a,mmio32,0x02860000 root=/dev/mmcblk1p2 ro rootfstype=ext4 rootwait net.ifnames=0
 ```
 
 * `ttyS2` — `k3-am62-pocketbeagle2.dts` has `stdout-path = &main_uart6` and
   `aliases { serial2 = &main_uart6; }`, and `k3-am62-main.dtsi` puts `main_uart6`
   at `0x02860000`. That is the 3-pin JST-SH debug port (Raspberry Pi Debug Probe
   compatible), 115200 8N1.
-* `mmcblk0` — `sdhci1` is the only MMC host the board enables. There is no eMMC,
-  so the microSD is the first and only block device. **Check this against your
-  card's own `extlinux.conf` before trusting it.**
+* `mmcblk1` — and the "1" is the part worth spelling out, because `sdhci1` is
+  the *only* MMC host this board enables and it is still not `mmcblk0`. The
+  board's `aliases` node carries `mmc1 = &sdhci1`, and `mmc_alloc_host()` takes
+  `host->index` straight from `of_alias_get_id(np, "mmc")`, so the index is
+  pinned to 1 regardless of probe order. U-Boot's own PocketBeagle 2
+  environment agrees — `board/beagle/pocketbeagle2/pocketbeagle2.env` sets
+  `mmcdev=1` and `bootpart=1:2` — and BeagleBoard's stock images use
+  `mmcblk1` too.
 
 Three labels are written, default `tdm8`:
 
@@ -626,5 +727,5 @@ Everything in `README.tdm8-uac2.md` §9 applies. Board-specific additions:
 | Card is completely dead — no UART output at all | wrong or empty `tiboot3.bin`. The ROM rejects it before the console exists. Run `./build-tdm8-uac2-pb2.sh bootloader` |
 | U-Boot SPL starts, then nothing | signed/unsigned mismatch further up: `tispl.bin_unsigned` or `u-boot.img_unsigned` on HS-FS silicon |
 | Banner says `GP` or `HS-SE`, not `HS-FS` | not a stock PocketBeagle 2 rev A1. Set `UB_VARIANT` to match and re-check; on HS-SE the in-tree demo key will not authenticate |
-| `root=/dev/mmcblk0p2` does not exist | the card's own `extlinux.conf` said something else and there was no `.orig` to inherit from. Fix the `append` line on the console |
+| `root=/dev/mmcblk1p2` does not exist | the card's own `extlinux.conf` said something else and there was no `.orig` to inherit from. Fix the `append` line on the console |
 | Only two cores in `/proc/cpuinfo` | rev A0 / AM6232 board. Everything here still works; the device tree describes four cores on both revisions |
