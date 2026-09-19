@@ -63,7 +63,9 @@ If no parameter is passed, `build.sh` selects MYIR.
   `u-boot.img` each board takes, why HS-FS is secure boot with no encryption and
   no keys of yours, and `res/uboot/check-bootloader.sh` to prove a built chain
   before it reaches a card
-* `README.install-kernel.md` — build + deploy a mainline kernel, with a fallback
+* `README.install-kernel.md` - build + deploy a mainline kernel, with a fallback;
+  also how this BSP's kernel patch series (`res/tdm8/patches/`) is staged into
+  `linux/` by `res/tdm8/apply-tdm8-kernel.sh`, which every kernel build runs
 * `README.avb-am62x.md` — PipeWire AVB / Milan bring-up over `eth1`
 * `README.safe-update.md` — A/B, RAUC and the USB-C DFU brick-net
 * `README.tdm8-uac2.md` — **TDM8 8×8 on McASP1/J11 → USB Audio Class 2.0 gadget**:

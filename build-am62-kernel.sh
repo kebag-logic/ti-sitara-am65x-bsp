@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: MIT
 
 # Build + deploy the MYIR AM62x mainline kernel: reuse the board's own config, cross-compile, deploy via extlinux
-# Usage: build-am62-kernel.sh [fetch|config|build|deploy|all]   env: KVER BOARD JOBS DTB
+# Usage: build-am62-kernel.sh [fetch|shim|config|build|deploy|all]   env: KVER BOARD JOBS DTB
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 KVER="${KVER:-v7.1}"          # latest stable 7.x mainline (6.19-rc became v7.0, then v7.1)
@@ -19,6 +19,13 @@ fetch() {
 	[ -f "$KSRC/Makefile" ] || git clone --depth 1 --branch "$KVER" \
 		https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git "$KSRC"
 }
+
+# res/tdm8/patches/ carries the SoC-level kernel fixes this BSP needs on any
+# AM62x - the BCDMA cyclic-RX one in particular - and the same script stages
+# them for the three TDM8 builds. It brings the TDM8 codec shim along, which
+# costs a plain build nothing: SND_SOC_KL_TDM8_DUMMY is a new symbol, so
+# olddefconfig leaves it off unless a config asks for it.
+shim() { "$HERE/res/tdm8/apply-tdm8-kernel.sh" "$KSRC"; }
 
 config() {
 	# Reuse the board's running config, then adapt it to this kernel version
@@ -71,9 +78,10 @@ REMOTE
 
 case "${1:-all}" in
 	fetch)  fetch ;;
-	config) fetch; config ;;
-	build)  build ;;
+	shim)   fetch; shim ;;
+	config) fetch; shim; config ;;
+	build)  shim; build ;;
 	deploy) deploy ;;
-	all)    fetch; config; build; deploy ;;
-	*) echo "Usage: $0 {fetch|config|build|deploy|all}"; exit 1 ;;
+	all)    fetch; shim; config; build; deploy ;;
+	*) echo "Usage: $0 {fetch|shim|config|build|deploy|all}"; exit 1 ;;
 esac

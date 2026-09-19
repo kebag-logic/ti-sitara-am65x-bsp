@@ -7,7 +7,8 @@ new kernel is added as an extra `extlinux` entry and the original stays as a
 serial-selectable fallback.
 
 > One command does all of it: `./build-am62-kernel.sh all`
-> (steps: `fetch` → `config` → `build` → `deploy`; env: `KVER`, `BOARD`, `JOBS`, `DTB`).
+> (steps: `fetch` -> `shim` -> `config` -> `build` -> `deploy`; env: `KVER`, `BOARD`,
+> `JOBS`, `DTB`).
 
 ## 0. Prerequisites (dev host)
 - aarch64 toolchain `aarch64-linux-gnu-` (gcc 15/16 both fine — build out-of-tree
@@ -24,6 +25,32 @@ renamed `6.19-rc` to `v7.0`, then released `v7.1`).
 git clone --depth 1 --branch v7.1 \
   https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git linux
 ```
+
+### 1.1 Stage this BSP's kernel patches - **not optional**
+
+A freshly cloned `linux/` is pristine mainline and is missing the SoC-level
+fixes this BSP needs on AM62x. Stage them before configuring:
+
+```sh
+./res/tdm8/apply-tdm8-kernel.sh linux
+```
+
+That script applies every `res/tdm8/patches/*.patch` in lexical order and also
+copies in the TDM8 codec shim. The shim is inert here: `SND_SOC_KL_TDM8_DUMMY`
+is a new symbol, so `olddefconfig` in step 2 leaves it off. The patches are
+not. Today's series is one entry,
+`0001-dmaengine-ti-k3-udma-bcdma-cyclic-rx-eop.patch`: without it any cyclic RX
+transfer on the BCDMA (McASP capture in particular) stops after exactly one
+period with `Input/output error`. `README.tdm8-pb2.md` section 3 has the full
+write-up, including a known residue at stream stop.
+
+It is idempotent: an already-applied patch is recognised and skipped, and a
+patch that no longer applies stops with its name rather than half-patching the
+tree. Re-run it freely after a re-clone or a kernel bump. Never edit
+`linux/` by hand and never commit into that submodule; the BSP never does.
+
+`./build-am62-kernel.sh shim` is the same thing via the build script, and the
+`config`, `build` and `all` phases run it for you.
 
 ## 2. Config — **reuse the board's own config**
 Do not hand-write a defconfig; take the exact config the board is running and let

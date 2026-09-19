@@ -1,0 +1,126 @@
+Subject: dmaengine: ti: k3-udma: do not close a packet per period on BCDMA cyclic RX
+
+Symptom
+  An McASP TDM capture over a BCDMA DEV_TO_MEM cyclic channel stops
+  after exactly one period, whatever the period size. The RX channel
+  takes one TR event and one ring completion, then goes quiet while the
+  McASP RX FIFO keeps filling; ALSA times out in wait_for_avail and the
+  application gets EIO.
+
+Root cause
+  Two places make the PDMA close a packet on every period of an RX
+  cyclic transfer: udma_prep_dma_cyclic_tr() sets CPPI5_TR_CSF_EOP on
+  the last TR of each period, and udma_configure_statictr() programs
+  STATIC_TR_Z with a burst count of one period's worth of elements. On
+  DEV_TO_MEM that packet boundary retires the cyclic TR descriptor,
+  which the hardware would otherwise reload forever. Nothing re-arms
+  it: udma_start_desc() pushes the TR descriptor to the ring exactly
+  once, and the only re-arm path, udma_cyclic_packet_elapsed(), is
+  host-descriptor code that would reinterpret the TR descriptor header
+  and index hwdesc[] past its single entry.
+
+Fix
+  Keep EOP and the static burst count for MEM_TO_DEV, where the packet
+  end is what produces the teardown completion message, and drop both
+  on RX. Make udma_cyclic_packet_elapsed() a no-op outside packet mode,
+  so a TR mode cyclic channel can never take the host-descriptor path.
+
+Verified
+  PocketBeagle 2 (AM6254), McASP0 TDM8 capture, kernel 7.1.0-tdm8-pb2:
+
+    arecord -D hw:0,0 -c8 -f S32_LE -r48000 \
+            --period-size=1024 --buffer-size=16384 -d3 /tmp/c.wav
+
+  returns 0 and writes 4608044 bytes (a 44 byte WAV header plus
+  3 s x 48000 frames x 8 ch x 4 bytes), and the RX channel's line in
+  /proc/interrupts advances by about 140 over the run. Without this
+  patch the same command fails with "read error: Input/output error"
+  and that line advances by exactly 1.
+
+Known residue
+  With this patch applied, stopping a capture still logs one pair of
+  lines every time:
+
+    ti-udma 485c0100.dma-controller: chan1 teardown timeout!
+    davinci-mcasp 2b00000.audio-controller: unhandled rx event. rxstat: 0x00000104
+
+  They appear at stream stop only, never while a stream runs, and the
+  next capture still opens and runs to full length, so capture is not
+  affected.
+
+  What the driver source does say: udma_synchronize() waits one second
+  for teardown_completed, which udma_ring_irq_handler() signals only
+  when a teardown completion message (cppi5_desc_is_tdcm()) is popped
+  off the completion ring, and on DMA_DEV_TO_MEM udma_stop() asks the
+  peer PDMA for that teardown. So the warning means no such message
+  arrived in time. The same branch then calls udma_reset_chan(uc,
+  true), a forced reset, which is why the channel is usable again. The
+  McASP line is davinci_mcasp_rx_irq_handler() warning about a status
+  it does not handle: it handles only ROVRN (RXSTAT bit 0), which is
+  clear in 0x104; bit 8 is XRERR and bit 2 has no name in
+  davinci-mcasp.h.
+
+  What it does not say: what produces the teardown completion message
+  for a cyclic RX channel. The comment this patch edits states only
+  that EOP is what produces it for TX. Whether the timeout predates
+  this patch is also unknown, because before it a capture never ran
+  long enough to be stopped normally. The residue is therefore
+  unexplained, and this patch should not be taken as complete.
+
+Upstream status: not submitted
+
+diff --git a/drivers/dma/ti/k3-udma.c b/drivers/dma/ti/k3-udma.c
+index c964ebfcf..f03cd18c3 100644
+--- a/drivers/dma/ti/k3-udma.c
++++ b/drivers/dma/ti/k3-udma.c
+@@ -1043,6 +1043,10 @@ static void udma_cyclic_packet_elapsed(struct udma_chan *uc)
+ 	struct udma_desc *d = uc->desc;
+ 	struct cppi5_host_desc_t *h_desc;
+ 
++	/* TR mode cyclic reloads in hardware and has a single hwdesc */
++	if (!uc->config.pkt_mode)
++		return;
++
+ 	h_desc = d->hwdesc[d->desc_idx].cppi5_desc_vaddr;
+ 	cppi5_hdesc_reset_to_original(h_desc);
+ 	udma_push_to_ring(uc, d->desc_idx);
+@@ -3209,15 +3213,11 @@ static int udma_configure_statictr(struct udma_chan *uc, struct udma_desc *d,
+ 		   uc->config.dir == DMA_DEV_TO_MEM &&
+ 		   uc->cyclic) {
+ 		/*
+-		 * For cyclic mode with BCDMA we have to set EOP in each TR to
+-		 * prevent short packet errors seen on channel teardown. So the
+-		 * PDMA must close the packet after every TR transfer by setting
+-		 * burst count equal to the number of bytes transferred.
++		 * A packet must not be closed per period on RX: the packet end
++		 * retires the infinitely reloading cyclic TR descriptor, which
++		 * is never re-armed, so the transfer stops after period 0.
+ 		 */
+-		struct cppi5_tr_type1_t *tr_req = d->hwdesc[0].tr_req_base;
+-
+-		d->static_tr.bstcnt =
+-			(tr_req->icnt0 * tr_req->icnt1) / dev_width;
++		d->static_tr.bstcnt = 0;
+ 	} else {
+ 		d->static_tr.bstcnt = 0;
+ 	}
+@@ -3524,13 +3524,17 @@ udma_prep_dma_cyclic_tr(struct udma_chan *uc, dma_addr_t buf_addr,
+ 	 * For BCDMA <-> PDMA transfers, the EOP flag needs to be set on the
+ 	 * last TR of a descriptor, to mark the packet as complete.
+ 	 * This is required for getting the teardown completion message in case
+-	 * of TX, and to avoid short-packet error in case of RX.
++	 * of TX.
+ 	 *
+ 	 * As we are in cyclic mode, we do not know which period might be the
+ 	 * last one, so set the flag for each period.
++	 *
++	 * Never on RX: closing a packet per period retires the reloading
++	 * cyclic TR descriptor after period 0 and nothing re-arms it.
+ 	 */
+ 	if (uc->config.ep_type == PSIL_EP_PDMA_XY &&
+-	    uc->ud->match_data->type == DMA_TYPE_BCDMA) {
++	    uc->ud->match_data->type == DMA_TYPE_BCDMA &&
++	    dir == DMA_MEM_TO_DEV) {
+ 		period_csf = CPPI5_TR_CSF_EOP;
+ 	}
+ 

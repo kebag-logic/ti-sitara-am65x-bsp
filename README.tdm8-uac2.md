@@ -171,7 +171,8 @@ sample width — which is what the bridge wants anyway.
 | File | Role |
 |---|---|
 | `res/tdm8/kl-tdm8-dummy.c` | ASoC codec-side DAI shim for a control-less 8-slot TDM peer. Mainline has no generic multichannel equivalent of `linux,spdif-dit`, and ASoC will not build a DAI link without a codec. Compatible `kebag-logic,tdm8-dummy`. |
-| `res/tdm8/apply-tdm8-kernel.sh` | Idempotently copies the shim into `linux/sound/soc/codecs/` and registers it in `Kconfig` + `Makefile`. Survives a re-clone of `linux/`. |
+| `res/tdm8/apply-tdm8-kernel.sh` | Idempotently copies the shim into `linux/sound/soc/codecs/`, registers it in `Kconfig` + `Makefile`, and applies every `res/tdm8/patches/*.patch`. Survives a re-clone of `linux/`. |
+| `res/tdm8/patches/` | SoC-level kernel patches this BSP needs on any AM62x, applied in lexical order by the script above. Currently one: the BCDMA cyclic-RX fix, without which capture dies after one period (below). |
 | `res/tdm8/k3-am625x-myd-6254-tdm8.dtsi` | The device-tree delta: McASP1 pinmux, McASP1 node, the codec node and the `simple-audio-card`. |
 | `res/tdm8/mk-tdm8-dtb.py` | Injects that delta into the **vendor blob** and emits `k3-am625x-myd-6254-tdm8.dtb`. The vendor blob is never modified. |
 | `res/kl-tdm8-uac2.config` | Kernel config fragment. |
@@ -191,6 +192,34 @@ the board-independent gadget/bridge scripts and
 `myir_am62x_avb_defconfig` lists both, board-specific last — **re-run the
 defconfig**, a stale Buildroot `.config` still points at the old single path and
 silently produces a rootfs with no `tdm8-uac2.sh`.
+
+### The BCDMA cyclic-RX kernel patch
+
+`res/tdm8/patches/0001-dmaengine-ti-k3-udma-bcdma-cyclic-rx-eop.patch` is a
+three-hunk fix in `drivers/dma/ti/k3-udma.c`. Without it an 8-channel capture
+dies after exactly one period with `read error: Input/output error`, whatever
+the period size, on every AM62x board in this BSP.
+
+On a BCDMA `DEV_TO_MEM` cyclic channel the driver closed a packet on every
+period - `CPPI5_TR_CSF_EOP` on the last TR of each period, plus a static burst
+count of one period's worth of elements. That packet boundary retires the
+cyclic TR descriptor the hardware would otherwise reload forever, and nothing
+re-arms it. The patch keeps both for `MEM_TO_DEV`, where the packet end is what
+produces the teardown completion message, and drops them on RX.
+
+`res/tdm8/apply-tdm8-kernel.sh` stages it with the codec shim, so every phase
+that builds a kernel applies it first: it is not a manual step, and nothing is
+committed into the `linux` submodule. Proof on the board:
+
+```sh
+arecord -D hw:TDM8,0 -c8 -f S32_LE -r48000 -d3 /tmp/c.wav
+ls -l /tmp/c.wav        # exit 0 and exactly 4608044 bytes
+```
+
+There is a known, unexplained residue: stopping a capture logs one
+`chan<N> teardown timeout!` plus one `unhandled rx event` pair every time, at
+stop only, with capture still restarting normally. `README.tdm8-pb2.md`
+the full write-up, including what the driver source does and does not support.
 
 ### Why a device-tree *injector* and not a `.dtbo` overlay
 
@@ -233,10 +262,11 @@ reads `7.1.0-tdm8` and this kernel's `/lib/modules` never collides with the
 ./build-tdm8-uac2.sh all
 
 # or step by step
-./build-tdm8-uac2.sh shim      # copy kl-tdm8-dummy.c into linux/ + Kconfig/Makefile
+./build-tdm8-uac2.sh shim      # kl-tdm8-dummy.c into linux/ + Kconfig/Makefile,
+                               # and res/tdm8/patches/*.patch into the tree
 ./build-tdm8-uac2.sh config    # board's /proc/config.gz + res/kl-tdm8-uac2.config
 ./build-tdm8-uac2.sh dtb       # vendor blob -> k3-am625x-myd-6254-tdm8.dtb
-./build-tdm8-uac2.sh build     # Image.gz + modules -> .kstage-tdm8/
+./build-tdm8-uac2.sh build     # shim again, then Image.gz + modules -> .kstage-tdm8/
 ./build-tdm8-uac2.sh deploy    # scp + a new extlinux label, originals kept
 ```
 
@@ -279,6 +309,38 @@ This path leaves the rootfs alone. To also get `alsaloop`, `amixer` and
 
 `deploy` in §4 is for iterating on a board you can already `ssh` into. This
 section produces an **image** that comes up with TDM8 working from a cold flash.
+
+### The commands, in order
+
+From the BSP root, and the numbers are the steps below, each of which says what
+it needs, produces and proves. This is the MYIR sequence; `README.tdm8-pb2.md`
+section 5 and `README.tdm8-sk-am62b.md` section 5 carry the other two, which
+build script, the boot staging directory and the bootloader target.
+
+```sh
+# 0. host prerequisites - README.prereq.md, and ./fetch.sh once for the sources
+./build.sh MYIR                              # 1. bootloaders -> u-boot-official/out_myir
+./build-tdm8-uac2.sh image                   # 2. kernel + patches + shim + DTB + modules
+sed -i 's/^TDM8_ENABLE=no/TDM8_ENABLE=yes/' \
+  br2-external/board/myir-am62x/rootfs-overlay/etc/tdm8/tdm8.env   # 3. start at boot
+cd ../buildroot                              # 4. rootfs - MUST follow 2 and 3
+make BR2_EXTERNAL=$(pwd)/../ti-sitara-am65x-bsp/br2-external myir_am62x_avb_defconfig
+make
+cd ../ti-sitara-am65x-bsp
+ROOTTAR=../buildroot/output/images/rootfs.tar.gz \
+KIMG_NAME=Image-7.1.0-tdm8.gz \
+  ./build-spare-sd.sh res/spare-sd/spare-am62x-tdm8.img            # 5. the card image
+sudo dd if=res/spare-sd/spare-am62x-tdm8.img of=/dev/sdX \
+     bs=4M conv=fsync status=progress                              # 6. flash
+```
+
+Step 2 is where the codec shim **and** `res/tdm8/patches/*.patch` reach the
+kernel tree; there is no separate patch step. On the board afterwards:
+
+```sh
+arecord -D hw:TDM8,0 -c8 -f S32_LE -r48000 -d3 /tmp/c.wav
+ls -l /tmp/c.wav        # exit 0 and exactly 4608044 bytes
+```
 
 ### Order matters — read this first
 
@@ -344,6 +406,13 @@ and `out_myir/a53/u-boot.img`, which step 5 copies onto the boot partition.
 ```
 
 `image` is `fetch → shim → config → dtb → build → stage`. It touches no board.
+
+The `shim` phase is where **every** out-of-tree kernel change is staged: the
+codec shim into `sound/soc/codecs/`, and every `res/tdm8/patches/*.patch` into
+the kernel tree, the BCDMA cyclic-RX fix among them (section 3). It is
+a re-clone or a kernel bump costs nothing, and a patch that no longer applies
+stops the build by name. `build` runs it too, so `./build-tdm8-uac2.sh build`
+on its own cannot produce an unpatched `Image.gz`.
 
 | Output | Path | Consumed by |
 |---|---|---|

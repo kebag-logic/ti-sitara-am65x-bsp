@@ -46,6 +46,8 @@ git clone https://openbeagle.org/beagleboard/u-boot.git \
 ./build-tdm8-uac2-pb2.sh bootloader
 
 # ---- 4. kernel + device trees + modules -------------------------------------
+#        stages the codec shim AND res/tdm8/patches/*.patch AND both TDM8 trees
+#        before it configures and builds - none of those is a separate step
 ./build-tdm8-uac2-pb2.sh image
 
 # ---- 5. rootfs  (MUST follow 4: post-build.sh bakes in .kstage-tdm8-pb2) -----
@@ -80,7 +82,7 @@ belongs below:
   Images then land in `<O>/images/`, *not* `<O>/output/images/`. (§5.5)
 * **Use `sdimage`, not `build-spare-sd.sh` directly.** Every default in that
   script points at the MYIR GP chain, and `TISPL`/`UB` share a directory with
-  the `*_unsigned` twins you must not flash on HS-FS. (§5.6) (§5.6)
+  the `*_unsigned` twins you must not flash on HS-FS. (5.6)
 
 `BR2_JLEVEL=32` is only needed on a very-high-core-count host: glibc's `manual/`
 build races at `-j128` and dies with an empty `libc.info`. Drop it otherwise.
@@ -91,6 +93,14 @@ Verify after 5, before 6:
 tar tzf ../buildroot-pb2/images/rootfs.tar.gz |
   grep -cE 'lib/modules/7\.1\.0-tdm8-pb2/.*(kl-tdm8-dummy|davinci-mcasp|simple-card)|usr/sbin/tdm8-uac2\.sh|etc/tdm8/tdm8\.env|usr/bin/alsaloop'
 # expect 6 or more
+```
+
+And on the board once it is up, the one command that proves the capture path
+end to end (see section 3, "The BCDMA cyclic-RX kernel patch", for why):
+
+```sh
+arecord -D hw:0,0 -c8 -f S32_LE -r48000 -d3 /tmp/c.wav
+ls -l /tmp/c.wav        # exit 0 and exactly 4608044 bytes
 ```
 
 ---
@@ -267,9 +277,91 @@ only for an FPGA whose two directions are in different clock domains.
 | `res/uboot/fix-pb2-kernel-comp.sh` | Adds `kernel_comp_addr_r` / `kernel_comp_size` to the board env so `booti` can unpack a gzipped `Image`. |
 | `res/uboot/pb2-console-on-p1.sh` | `on`/`off`. Moves the A53 U-Boot console to `main_uart0` (P1.30/P1.32) so the whole boot log lands on one wire. |
 
-Shared with the other two boards, unchanged: `res/tdm8/kl-tdm8-dummy.c`,
-`res/tdm8/apply-tdm8-kernel.sh`, `res/kl-tdm8-uac2.config`,
-`br2-external/board/common/rootfs-overlay/`.
+Shared with the other two boards: `res/tdm8/kl-tdm8-dummy.c`,
+`res/tdm8/apply-tdm8-kernel.sh`, `res/tdm8/patches/`,
+`res/kl-tdm8-uac2.config`, `br2-external/board/common/rootfs-overlay/`. The
+patches are SoC-level, so all three AM62x boards get them; see below.
+
+### The BCDMA cyclic-RX kernel patch
+
+`res/tdm8/patches/0001-dmaengine-ti-k3-udma-bcdma-cyclic-rx-eop.patch` is a
+three-hunk fix in `drivers/dma/ti/k3-udma.c`, and without it **capture does not
+work on any of these boards**.
+
+**Symptom.** An 8-channel 48 kHz capture dies after exactly one period,
+whatever the period size, with `read error: Input/output error`. The RX
+channel takes one TR event and one ring completion and then goes quiet while
+the McASP RX FIFO keeps filling.
+
+**Root cause.** On a BCDMA `DEV_TO_MEM` cyclic channel the driver closed a
+packet on every period, in two places: `udma_prep_dma_cyclic_tr()` set
+`CPPI5_TR_CSF_EOP` on the last TR of each period, and
+`udma_configure_statictr()` programmed the static burst count to one period's
+worth of elements. That packet boundary retires the cyclic TR descriptor that
+the hardware would otherwise reload forever, and nothing re-arms it: the
+descriptor is pushed to the ring exactly once, and the only re-arm path is
+host-descriptor code a TR mode channel must not take. The patch keeps both for
+`MEM_TO_DEV`, where the packet end is what produces the teardown completion
+message, and drops them on RX.
+
+**It is not a manual step.** `res/tdm8/apply-tdm8-kernel.sh` stages every
+`res/tdm8/patches/*.patch` in lexical order alongside the codec shim, and every
+phase that builds a kernel runs it first, on all three boards. It is
+idempotent: a patch already in the tree is recognised and skipped, and one that
+no longer applies stops the build by name rather than half-patching `linux/`.
+There is nothing to apply by hand and nothing to commit into the `linux`
+submodule.
+
+**Verify on the board.** This is the test, and the byte count is the whole
+answer:
+
+```sh
+arecord -D hw:0,0 -c8 -f S32_LE -r48000 -d3 /tmp/c.wav
+ls -l /tmp/c.wav
+# 4608044 bytes = 44 byte WAV header + 3 s x 48000 frames x 8 ch x 4 bytes
+```
+
+`arecord` must exit 0. A kernel built before this patch fails the same command
+after one period with `read error: Input/output error` and leaves a short file.
+If you want to watch the mechanism rather than the result, diff
+`grep dma-controller /proc/interrupts` across the run: the RX line advances by
+about 140 (3 s x 48000 / 1024) with the patch and by exactly 1 without it.
+
+**Known residue.** With the patch in, *stopping* a capture still logs one pair
+of lines every time:
+
+```
+ti-udma 485c0100.dma-controller: chan1 teardown timeout!
+davinci-mcasp 2b00000.audio-controller: unhandled rx event. rxstat: 0x00000104
+```
+
+They appear at stream stop only, never while a stream runs, and the next
+capture opens and runs to full length, so capture itself is unaffected. What
+the driver source supports: `udma_synchronize()` waits one second for a
+teardown completion message, which `udma_ring_irq_handler()` signals only when
+a TDCM descriptor is popped off the completion ring, and on `DMA_DEV_TO_MEM`
+it is the peer PDMA that `udma_stop()` asks for it; so the warning means none
+arrived in time, and the same branch then forces `udma_reset_chan()`, which is
+why the channel comes back. The McASP line is the RX interrupt handler warning
+about a status it does not handle: it handles only `ROVRN` (RXSTAT bit 0),
+which is clear in `0x104`. What the source does *not* say is what produces the
+teardown completion for a cyclic RX channel at all, and whether the timeout
+predates the patch is unknown, because before it a capture never ran long
+enough to be stopped normally. The residue is unexplained; treat the patch as
+what it is, a bench fix, not finished upstream work.
+
+**`res/spare-sd-pb2/boot/` is older than the fix.** The tracked
+`Image-7.1.0-tdm8-pb2.gz` there is the pre-patch build #4
+(`b7a9c7f8a343a37dd9feb5a1be949508423c4c3e9fd38a9536e5407f469e4d5c`), so a card
+built from it today still shows the one-period failure. Refresh it with the
+existing script, which rebuilds and re-stages in one go:
+
+```sh
+./build-tdm8-uac2-pb2.sh image
+```
+
+Then `sdimage` as usual. Anyone who runs `sdimage` **without** staging first
+builds a card carrying the broken kernel.
 
 ### Ordinary in-tree device trees
 
@@ -314,11 +406,12 @@ BOARD=pb2 ./build-tdm8-uac2-pb2.sh all
 
 # or step by step
 ./build-tdm8-uac2-pb2.sh fetch    # clone linux v7.1 (shared with the other boards)
-./build-tdm8-uac2-pb2.sh shim     # res/tdm8/kl-tdm8-dummy.c -> sound/soc/codecs
+./build-tdm8-uac2-pb2.sh shim     # kl-tdm8-dummy.c -> sound/soc/codecs, and
+                                  # res/tdm8/patches/*.patch -> the kernel tree
 ./build-tdm8-uac2-pb2.sh dts      # both trees -> arch/arm64/boot/dts/ti + Makefile
 ./build-tdm8-uac2-pb2.sh config   # board .config (or arm64 defconfig) + both fragments
 ./build-tdm8-uac2-pb2.sh dtb      # both TDM8 trees + the stock tree -> res/tdm8-pb2/
-./build-tdm8-uac2-pb2.sh build    # Image.gz + modules -> .kstage-tdm8-pb2/
+./build-tdm8-uac2-pb2.sh build    # shim again, then Image.gz + modules -> .kstage-tdm8-pb2/
 ./build-tdm8-uac2-pb2.sh deploy   # scp + rewrite extlinux.conf on the card
 ./build-tdm8-uac2-pb2.sh probe    # what is this board? rev A1/AM6254 or A0/AM6232
 ```
@@ -512,9 +605,13 @@ the card keeps running.
 
 ### The full compile order
 
-Six steps, and the order is not arbitrary — **step 5 must come after step 4**,
-because `post-build.sh` bakes `.kstage-tdm8-pb2/lib/modules` into the rootfs as
-it builds it. Everything else is a dependency of the step below it.
+The numbered procedure, from a fresh clone to a card that captures. The order is
+not arbitrary: **step 5 must come after step 4**, because `post-build.sh` bakes
+`.kstage-tdm8-pb2/lib/modules` into the rootfs as it builds it. Everything else
+is a dependency of the step below it. Each step says what it needs, what it
+produces and how you know it worked. Steps 1, 2, 3, 6 and the `dd` in 7 are only
+for building a whole card; to put a new kernel on a board that already boots, do
+0, 4 and `deploy` (after step 7).
 
 #### 0. Host prerequisites
 
@@ -528,6 +625,15 @@ sudo pacman -S --needed aarch64-linux-gnu-gcc arm-none-linux-gnueabihf-gcc \
 Two `arm` toolchains are in play: `aarch64-linux-gnu-` for the A53 side and
 `arm-none-linux-gnueabihf-` for the R5 wakeup-domain SPL. `build.sh` hardcodes
 both prefixes.
+
+*Needs:* nothing but the host. *Produces:* nothing.
+*Success:*
+
+```sh
+which aarch64-linux-gnu-gcc arm-none-linux-gnueabihf-gcc dtc bc python3 \
+      mformat mkfs.ext4
+grep -qw loop /proc/devices && echo "step 6 will work"
+```
 
 #### 1. Sources
 
@@ -554,6 +660,12 @@ second repo, `github.com/beagleboard/u-boot-pocketbeagle2`, whose newest tag is
 that line. Bumping to it would drop the binman patch below, since upstream fixed
 that in v2025.10. Not done here: the pinned tag is what this BSP has been built
 and documented against, and moving it is a change to make deliberately.
+
+*Needs:* network access and `git`. *Produces:* `ti-linux-firmware/`,
+`optee_os/`, `u-boot-pb/`, `trusted-firmware-a/` and, next to the BSP,
+`../buildroot`. `linux/` is not cloned here: step 4's `fetch` phase does it, on
+its own, into `linux/`.
+*Success:* those directories exist and are non-empty.
 
 #### 2. Bootloader — TFA, R5 SPL, OP-TEE, A53 U-Boot
 
@@ -589,9 +701,11 @@ PocketBeagle 2 only, run when the argument is `PB2`:
 actually exist, and exits non-zero if not — binman failures do not abort the
 make, so without that check a broken build reports success.
 
-`build.sh` ends by checking that `tiboot3*.bin`, `tispl.bin` and `u-boot.img`
-actually exist, and exits non-zero if not — binman failures do not abort the
-make, so without that check a broken build reports success.
+*Needs:* both toolchains from step 0, `u-boot-pb/`, `ti-linux-firmware/`,
+`optee_os/` and `trusted-firmware-a/` from step 1.
+*Produces:* `u-boot-pb/out_bp2/r5/tiboot3-am62x-hs-fs-evm.bin`,
+`u-boot-pb/out_bp2/a53/tispl.bin`, `u-boot-pb/out_bp2/a53/u-boot.img`.
+*Success:* exit 0 and those three files present.
 
 #### 3. Prove the bootloader before it reaches a card
 
@@ -601,6 +715,9 @@ make, so without that check a broken build reports success.
 
 Non-zero exit means do not flash. See the two sections above for what it checks
 and why the build itself cannot be trusted to have failed.
+
+*Needs:* step 2. *Produces:* nothing, it only reads.
+*Success:* exit 0, and the variant it names is `hs-fs`.
 
 #### 4. Kernel, device trees, modules
 
@@ -612,9 +729,35 @@ and why the build itself cannot be trusted to have failed.
 three DTBs and an `extlinux.conf` staged in `res/spare-sd-pb2/boot/`, and modules
 in `.kstage-tdm8-pb2/`. Pass `JOBS=` to override `nproc`.
 
+**This is where every out-of-tree kernel change is staged, and there is no
+other step that does it.** The `shim` phase runs
+`res/tdm8/apply-tdm8-kernel.sh`, which copies `res/tdm8/kl-tdm8-dummy.c` into
+`linux/sound/soc/codecs/` with its `Kconfig`/`Makefile` hooks *and* applies
+every `res/tdm8/patches/*.patch` in lexical order, the BCDMA cyclic-RX fix
+among them (section 3). The `dts` phase does the same for the two PocketBeagle 2
+device trees. All of it is idempotent, so a re-clone of `linux/` or a kernel
+bump costs nothing, and a patch that no longer applies stops the build by name
+instead of half-patching the tree. Nothing here is a manual step and nothing is
+committed into the `linux` submodule.
+
+Every phase of this script that compiles a kernel runs `shim` first, `build`
+included, so `./build-tdm8-uac2-pb2.sh build` on its own cannot produce an
+unpatched `Image.gz` either.
+
 All three TDM8 boards share `./linux` and each rewrites `linux/.config` in its
 `config` phase, so **this step discards the SK's or MYIR's kernel config**. Run
 one board through to the end before starting another.
+
+*Needs:* the aarch64 toolchain, `dtc`, `bc`, `python3`; a network for the first
+`fetch`. A live board on `BOARD=` is optional: `config` pulls its
+`/proc/config.gz` when it can and falls back to `arm64 defconfig`.
+*Produces:* `linux/arch/arm64/boot/Image.gz`, `res/tdm8-pb2/*.dtb`,
+`res/spare-sd-pb2/boot/{Image-7.1.0-tdm8-pb2.gz,ti/*.dtb,extlinux/extlinux.conf}`,
+`.kstage-tdm8-pb2/lib/modules/7.1.0-tdm8-pb2/`.
+*Success:* exit 0; the run prints `patch: applied ...` or
+`patch: ... already applied` for each patch, then `staged into
+res/spare-sd-pb2/boot:`. The `build` phase also `ls -l`s the codec module, so a
+missing `snd-soc-kl-tdm8-dummy.ko` fails the step rather than passing quietly.
 
 #### 5. Rootfs
 
@@ -638,6 +781,11 @@ tar tzf ../buildroot-pb2/images/rootfs.tar.gz |
   grep -cE 'lib/modules/7\.1\.0-tdm8-pb2/.*(kl-tdm8-dummy|davinci-mcasp|simple-card)|usr/sbin/tdm8-uac2\.sh|etc/tdm8/tdm8\.env|usr/bin/alsaloop'
 # expect 6 or more
 ```
+
+*Needs:* step 4 finished, because `post-build.sh` copies
+`.kstage-tdm8-pb2/lib/modules` in as Buildroot assembles the image.
+*Produces:* `../buildroot-pb2/images/rootfs.tar.gz`.
+*Success:* the `grep -c` above prints 6 or more.
 
 #### 6. The microSD image
 
@@ -670,10 +818,45 @@ one assignment goes missing the failure names a path you never typed, e.g.
 `missing input: .../res/spare-sd/boot/Image-....gz` when only `BOOTSRC` is
 lost — that `res/spare-sd/` is the MYIR default reasserting itself.
 
+*Needs:* steps 2, 4 and 5, and `sudo`, `mtools`, `dosfstools`, `e2fsprogs`,
+`util-linux` with a loadable `loop` module (`README.prereq.md` section 5).
+*Produces:* `res/spare-sd-pb2/pocketbeagle2-tdm8.img`, a sparse 1.6 G MBR image.
+*Success:* exit 0; the script prints the apparent and on-disk sizes, and lists
+what it put in each partition. Anything missing is named before it starts.
+
+#### 7. Flash, boot and prove the capture path
+
+```sh
+sudo dd if=res/spare-sd-pb2/pocketbeagle2-tdm8.img of=/dev/sdX bs=4M \
+        conv=fsync status=progress
+sync
+```
+
+`/dev/sdX` is the **card**, not a partition; find it with `lsblk`. Copying the
+image around first needs `cp --sparse=always` or `rsync -S`, or the holes turn
+into 1.4 GB of real zeros.
+
+Then boot the card, pick the `tdm8` label (it is the default), and on the
+board:
+
+```sh
+uname -r                                   # 7.1.0-tdm8-pb2
+cat /proc/asound/cards                     # 0 TDM8, 1 UAC2Gadget
+
+arecord -D hw:0,0 -c8 -f S32_LE -r48000 -d3 /tmp/c.wav
+ls -l /tmp/c.wav
+```
+
+*Needs:* a card reader, or an already-booting board plus `deploy` (below).
+*Success:* `arecord` exits 0 and `/tmp/c.wav` is exactly **4608044** bytes. A
+short file, or `read error: Input/output error` after one period, means the
+kernel on the card predates the BCDMA cyclic-RX patch (section 3) - that card was
+built from a `res/spare-sd-pb2/boot/` that step 4 never refreshed.
+
 #### Skipping the bootloader entirely
 
-Steps 1, 2, 3 and 6 are only needed if you are building a whole card. To put a
-new kernel on a board that already boots, do steps 0 and 4 and then:
+Steps 1, 2, 3, 6 and the `dd` in 7 are only needed if you are building a whole
+card. To put a new kernel on a board that already boots, do steps 0 and 4, then:
 
 ```sh
 BOARD=pb2 ./build-tdm8-uac2-pb2.sh deploy
@@ -759,6 +942,11 @@ arecord -D hw:TDM8,0 -c 8 -f S32_LE -r 48000 -d 2 /tmp/tdm8.wav
 lsusb -v -d 1d6b:0104 | grep -E 'bNrChannels|bSubframeSize|tSamFreq|bmAttributes'
 ```
 
+A capture that ends after one period with `read error: Input/output error` is
+not a wiring fault: that is the BCDMA cyclic-RX bug, and the kernel is missing
+`res/tdm8/patches/0001-dmaengine-ti-k3-udma-bcdma-cyclic-rx-eop.patch` (section 3).
+The 3 s form there, which must return 4608044 bytes, settles it either way.
+
 A one-slot rotation in the captured channels means `dsp_a` ↔ `dsp_b`; an all-zero
 capture with healthy framing means FSYNC polarity
 (`simple-audio-card,frame-inversion`).
@@ -786,6 +974,8 @@ Everything in `README.tdm8-uac2.md` §9 applies. Board-specific additions:
 
 | Symptom | Cause |
 |---|---|
+| `arecord` dies after exactly one period with `read error: Input/output error` | the kernel predates `res/tdm8/patches/0001-dmaengine-ti-k3-udma-bcdma-cyclic-rx-eop.patch` (section 3). Re-run `./build-tdm8-uac2-pb2.sh image` and redeploy; the staged `res/spare-sd-pb2/boot/` image is older than the fix |
+| `chan1 teardown timeout!` + `unhandled rx event. rxstat: 0x00000104` at every capture stop | known residue of that patch (section 3). Stop-time only, capture still restarts and runs to full length |
 | No `TDM8` card at all | the `notdm8` label was selected — check `cat /proc/device-tree/model` and the booted `fdt` |
 | `TDM8` card exists, every open blocks | FPGA not driving BCLK/FSYNC. McASP is the slave; it will not advance a frame on its own |
 | Capture all zeros, playback silent, framing healthy | FSYNC polarity, or `dsp_a` vs `dsp_b` — see §6 |

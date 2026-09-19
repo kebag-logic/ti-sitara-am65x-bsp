@@ -61,6 +61,10 @@ PROVEN:
 NOT YET VALIDATED (data path FPGA -> board):
 - FPGA -> board capture (`arecord -D hw:TDM8 ...`) returns exactly one 2048-frame
   buffer of ZEROS, then `read error: Input/output error`, every time.
+  RESOLVED 2026-09-17: the one-buffer-then-EIO half is a k3-udma BCDMA cyclic-RX
+  bug, now fixed by a tracked patch the build scripts stage; see the 2026-09-17
+  update at the end of this file. The ZEROS half is a separate question and is
+  still item 2 below.
 - DOUT is silent even when noise is fed into DIN: with no AAF stream bound and no
   active fabric loopback, the FPGA renders nothing, so AXR2 carries no signal to
   distinguish "wire good, nothing to send" from "AXR2 not landing".
@@ -77,10 +81,11 @@ NOT YET VALIDATED (data path FPGA -> board):
 2. Drive a KNOWN non-zero, framed signal on FPGA DOUT so AXR2 can be proven:
    bind an AAF stream (needs #360 merged + a controller + talker) or enable a
    fabric loopback / test pattern. Then the first captured buffer shows it.
-3. Characterize the RX `Input/output error`: /dev/mem is locked (CONFIG_STRICT_DEVMEM),
-   so the McASP RXSTAT is not readable from userspace. A scope on AXR2 (J11-17) and
-   AFSX confirms whether AXR2 carries valid framed data. TX works on the same
-   clocks, so the error is specific to the AXR2 receive path.
+3. ~~Characterize the RX `Input/output error`~~ DONE 2026-09-17: it was
+   `drivers/dma/ti/k3-udma.c`, not the McASP and not the AXR2 wire. See the
+   2026-09-17 update at the end of this file. What remains of this item is only
+   to re-run the 3 s `arecord` on the MYiR with a kernel built from this BSP,
+   which is a build-and-boot, not an investigation.
 
 ## Notes
 
@@ -121,5 +126,72 @@ A `devmem` access to a McASP register while the peripheral is runtime-PM suspend
 Reproduce standalone (internal loopback, no FPGA), then bisect the RX period/DMA
 path: try `plughw` vs `hw`, explicit `--period-size`/`--buffer-size` that are
 multiples of `rx-num-evt`x`channels`, and compare the RX AFIFO status (RFIFOSTS)
-against TX during a sustained capture. The fix (an AFIFO/`num-evt`, period, or DMA
-property) then lands in this BSP's McASP node.
+against TX during a sustained capture.
+
+**Answered on 2026-09-17, see the update below.** It was not an AFIFO,
+`num-evt` or period property and it does not live in the McASP node at all: it
+was the k3-udma driver. The line above is kept as the record of what was tried.
+
+## Update 2026-09-17 (RESOLVED: it was k3-udma, not the McASP)
+
+The one-buffer-then-`Input/output error` above is fixed by
+`res/tdm8/patches/0001-dmaengine-ti-k3-udma-bcdma-cyclic-rx-eop.patch`, a
+three-hunk change in `drivers/dma/ti/k3-udma.c`. It is a **tracked patch that
+`res/tdm8/apply-tdm8-kernel.sh` stages automatically**, so every kernel built
+from this BSP carries it; there is nothing to apply by hand, and nothing was
+committed into the `linux` submodule.
+
+Root cause: on a BCDMA `DEV_TO_MEM` **cyclic** channel the driver closed a
+packet on every period, in two places - `CPPI5_TR_CSF_EOP` on the last TR of
+each period in `udma_prep_dma_cyclic_tr()`, and a static burst count of one
+period's worth of elements in `udma_configure_statictr()`. That packet boundary
+retires the cyclic TR descriptor the hardware would otherwise reload forever,
+and nothing re-arms it: the descriptor is pushed to the ring once, and the only
+re-arm path is host-descriptor code a TR mode channel must not take. So the
+channel takes exactly one TR event and one ring completion and then stops -
+precisely the signature recorded above, including the fact that it reproduced
+with the McASP's internal digital loopback and no FPGA at all, because the
+fault was never on the wire.
+
+Proven on the **PocketBeagle 2** (AM6254, McASP0, kernel `7.1.0-tdm8-pb2` build
+`#5`):
+
+```sh
+arecord -D hw:0,0 -c8 -f S32_LE -r48000 \
+        --period-size=1024 --buffer-size=16384 -d3 /tmp/c.wav
+```
+
+exits 0 and writes **4608044** bytes (44 byte WAV header + 3 s x 48000 frames x
+8 ch x 4 bytes), and the RX line in `grep dma-controller /proc/interrupts`
+advances by about 140 across the run instead of by exactly 1.
+
+The MYiR result above has **not** been re-measured since; what is established
+is that the defect is in the shared AM62x BCDMA path rather than in either
+board's McASP node, and that the MYiR symptom (one buffer, then EIO, reproduced
+under internal loopback) is the same signature. Re-running the arecord above on
+the MYiR with a kernel built from this BSP is the outstanding confirmation.
+
+### Known residue of the fix
+
+With the patch applied, **stopping** a capture still logs one pair of lines
+every time:
+
+```
+ti-udma 485c0100.dma-controller: chan1 teardown timeout!
+davinci-mcasp 2b00000.audio-controller: unhandled rx event. rxstat: 0x00000104
+```
+
+At stream stop only, never while a stream runs, and the next capture still
+opens and runs to full length, so capture is unaffected. What the driver source
+supports: `udma_synchronize()` waits one second for a teardown completion
+message, which `udma_ring_irq_handler()` signals only when a TDCM descriptor is
+popped off the completion ring, and on `DMA_DEV_TO_MEM` it is the peer PDMA
+that `udma_stop()` asks for it - so the warning means none arrived in time, and
+the same branch then forces `udma_reset_chan()`, which is why the channel comes
+back. The McASP line is the RX interrupt handler warning about a status it does
+not handle: it handles only `ROVRN` (RXSTAT bit 0), which is clear in `0x104`.
+What the source does not say is what produces the teardown completion for a
+cyclic RX channel at all. Whether the timeout predates the fix is unknown,
+because before it a capture never ran long enough to be stopped normally. The
+residue is unexplained and the patch is a bench fix, not finished upstream
+work.

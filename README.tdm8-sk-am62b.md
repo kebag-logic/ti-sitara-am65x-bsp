@@ -301,8 +301,35 @@ reason it can receive at all.
 | `build.sh` | New `SK` target: `am62x_evm_{r5,a53}_defconfig` → `u-boot-official/out_sk/`. |
 | `build-spare-sd.sh` | Gained `BOOTSRC` / `UBOUT` / `R5_NAME` / `R5` / `TISPL` / `UB` overrides. MYIR defaults unchanged. |
 
-Shared with the MYIR board, unchanged: `res/tdm8/kl-tdm8-dummy.c`,
-`res/tdm8/apply-tdm8-kernel.sh`, `res/kl-tdm8-uac2.config`.
+Shared with the MYIR board: `res/tdm8/kl-tdm8-dummy.c`,
+`res/tdm8/apply-tdm8-kernel.sh`, `res/tdm8/patches/`, `res/kl-tdm8-uac2.config`.
+
+### The BCDMA cyclic-RX kernel patch
+
+`res/tdm8/patches/0001-dmaengine-ti-k3-udma-bcdma-cyclic-rx-eop.patch` is a
+three-hunk fix in `drivers/dma/ti/k3-udma.c`, and it applies to this board for
+the same reason it applies to the other two: the SoC, not the wiring. Without
+it an 8-channel capture dies after exactly one period with
+`read error: Input/output error`, whatever the period size.
+
+On a BCDMA `DEV_TO_MEM` cyclic channel the driver closed a packet on every
+period, which retires the cyclic TR descriptor the hardware would otherwise
+reload forever, and nothing re-arms it. The patch keeps that behaviour for
+`MEM_TO_DEV` and drops it on RX.
+
+`res/tdm8/apply-tdm8-kernel.sh` stages it with the codec shim, so the `shim`
+phase of `build-tdm8-uac2-sk.sh` applies it and every kernel-building phase
+runs `shim` first. It is not a manual step, and nothing is committed into the
+`linux` submodule. Proof on the board:
+
+```sh
+arecord -D hw:TDM8,0 -c8 -f S32_LE -r48000 -d3 /tmp/c.wav
+ls -l /tmp/c.wav        # exit 0 and exactly 4608044 bytes
+```
+
+Known residue: stopping a capture logs one `chan<N> teardown timeout!` plus one
+`unhandled rx event` pair every time, at stop only, with capture still
+restarting normally. `README.tdm8-pb2.md` section 3 has the full write-up.
 
 ### No device-tree injector here
 
@@ -340,11 +367,12 @@ apart.
 BOARD=sk ./build-tdm8-uac2-sk.sh all
 
 # or step by step
-./build-tdm8-uac2-sk.sh shim     # kl-tdm8-dummy.c into linux/ + Kconfig/Makefile
+./build-tdm8-uac2-sk.sh shim     # kl-tdm8-dummy.c into linux/ + Kconfig/Makefile,
+                                 # and res/tdm8/patches/*.patch into the tree
 ./build-tdm8-uac2-sk.sh dts      # both SK .dts into linux/ + ti/Makefile
 ./build-tdm8-uac2-sk.sh config   # arm64 defconfig + the two fragments
 ./build-tdm8-uac2-sk.sh dtb      # tdm8, tdm8-j3 and stock SK dtbs -> res/tdm8-sk/
-./build-tdm8-uac2-sk.sh build    # Image.gz + modules -> .kstage-tdm8-sk/
+./build-tdm8-uac2-sk.sh build    # shim again, then Image.gz + modules -> .kstage-tdm8-sk/
 ./build-tdm8-uac2-sk.sh deploy   # scp + a new extlinux menu, originals kept
 ```
 
@@ -381,6 +409,38 @@ with these substitutions:
 | `myir_am62x_avb_defconfig` | `ti_sk_am62b_avb_defconfig` |
 | `tiboot3-am62x-gp-myc-am62x.bin` | `tiboot3-am62x-hs-fs-evm.bin` |
 | kernel release `7.1.0-tdm8` | `7.1.0-tdm8-sk` |
+
+### The commands, in order
+
+From the BSP root. The numbers are the steps below; `README.tdm8-uac2.md`
+section 5 has the same list for the MYIR board and `README.tdm8-pb2.md`
+PocketBeagle 2.
+
+```sh
+# 0. host prerequisites - README.prereq.md, and ./fetch.sh once for the sources
+./build.sh SK                                # 1. bootloaders -> u-boot-official/out_sk
+./build-tdm8-uac2-sk.sh image                # 2. kernel + patches + shim + DTBs + modules
+sed -i 's/^TDM8_ENABLE=no/TDM8_ENABLE=yes/' \
+  br2-external/board/ti-sk-am62b/rootfs-overlay/etc/tdm8/tdm8.env  # 3. start at boot
+# 4. rootfs - MUST follow 2 and 3
+make -C ../buildroot O=$PWD/../buildroot-sk \
+     BR2_EXTERNAL=$PWD/br2-external ti_sk_am62b_avb_defconfig
+make -C ../buildroot O=$PWD/../buildroot-sk
+BOOTSRC=res/spare-sd-sk/boot UBOUT=u-boot-official/out_sk \
+R5_NAME=tiboot3-am62x-hs-fs-evm.bin KIMG_NAME=Image-7.1.0-tdm8-sk.gz \
+ROOTTAR=../buildroot-sk/images/rootfs.tar.gz \
+  ./build-spare-sd.sh res/spare-sd-sk/sk-am62b-tdm8.img            # 5. the card image
+sudo dd if=res/spare-sd-sk/sk-am62b-tdm8.img of=/dev/sdX \
+     bs=4M conv=fsync status=progress                              # 6. flash
+```
+
+Step 2 is where the codec shim **and** `res/tdm8/patches/*.patch` reach the
+kernel tree; there is no separate patch step. On the board afterwards:
+
+```sh
+arecord -D hw:TDM8,0 -c8 -f S32_LE -r48000 -d3 /tmp/c.wav
+ls -l /tmp/c.wav        # exit 0 and exactly 4608044 bytes
+```
 
 ### Step 0 — host prerequisites
 

@@ -85,6 +85,15 @@ net recovers) before it is trusted; nothing risky touches the golden SD first.
   `rauc install` to the inactive slot, reboot, confirm the slot switched, `rauc status
   mark-good`; the prior slot stays as the fallback (safe). Test: install a bad slot →
   boot-loop reverts to the prior slot.
+- **Kernel provenance for both P2 paths.** `build-spare-sd-ab.sh` and
+  `build-rauc-bundle.sh` do not build a kernel: they copy whatever
+  `linux/arch/arm64/boot/Image` happens to be (`KIMG=` overrides it). So the
+  Image must have come from a build that staged this BSP's kernel patch series,
+  i.e. `./build-am62-kernel.sh build` or `./build-tdm8-uac2*.sh image|build`,
+  all of which run `res/tdm8/apply-tdm8-kernel.sh` first. A hand-run `make` in
+  `linux/` on a fresh clone produces an Image without those patches, and the
+  A/B card or bundle will carry it without complaint. See
+  `README.install-kernel.md` section 1.1.
 - **P3 (firmware A/B via FWU) — builds 2026-06-15, NOT flashed:** a **separate**
   `configs/myc_am62x_a53_fwu_defconfig` (`#include`s the base + `EFI_CAPSULE_ON_DISK`,
   `EFI_CAPSULE_FIRMWARE_RAW`, `FWU_MULTI_BANK_UPDATE`, `FWU_MDATA`+`FWU_MDATA_GPT_BLK`,

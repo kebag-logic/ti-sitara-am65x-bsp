@@ -183,7 +183,7 @@ fetch)  fetch ;;
 shim)   fetch; shim ;;
 config) fetch; shim; config ;;
 dtb)    dtb ;;
-build)  build ;;
+build)  shim; build ;;
 stage)  stage ;;
 deploy) deploy ;;
 all)    fetch; shim; config; dtb; build; deploy ;;

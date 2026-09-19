@@ -254,7 +254,7 @@ shim)   fetch; shim ;;
 dts)    fetch; dts ;;
 config) fetch; shim; dts; config ;;
 dtb)    dtb ;;
-build)  build ;;
+build)  shim; build ;;
 stage)  stage ;;
 deploy) deploy ;;
 all)    fetch; shim; dts; config; dtb; build; deploy ;;
