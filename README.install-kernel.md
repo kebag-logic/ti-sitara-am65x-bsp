@@ -39,10 +39,10 @@ That script applies every `res/tdm8/patches/*.patch` in lexical order and also
 copies in the TDM8 codec shim. The shim is inert here: `SND_SOC_KL_TDM8_DUMMY`
 is a new symbol, so `olddefconfig` in step 2 leaves it off. The patches are
 not. Today's series is one entry,
-`0001-dmaengine-ti-k3-udma-bcdma-cyclic-rx-eop.patch`: without it any cyclic RX
+`0001-dmaengine-ti-k3-udma-count-bcdma-cyclic-rx-static-tr-z-in-bursts.patch`: without it any cyclic RX
 transfer on the BCDMA (McASP capture in particular) stops after exactly one
 period with `Input/output error`. `README.tdm8-pb2.md` section 3 has the full
-write-up, including a known residue at stream stop.
+write-up, including why the earlier EOP-off workaround was replaced.
 
 It is idempotent: an already-applied patch is recognised and skipped, and a
 patch that no longer applies stops with its name rather than half-patching the

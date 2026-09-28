@@ -284,8 +284,8 @@ patches are SoC-level, so all three AM62x boards get them; see below.
 
 ### The BCDMA cyclic-RX kernel patch
 
-`res/tdm8/patches/0001-dmaengine-ti-k3-udma-bcdma-cyclic-rx-eop.patch` is a
-three-hunk fix in `drivers/dma/ti/k3-udma.c`, and without it **capture does not
+`res/tdm8/patches/0001-dmaengine-ti-k3-udma-count-bcdma-cyclic-rx-static-tr-z-in-bursts.patch` is a
+fix in `drivers/dma/ti/k3-udma.c`, and without it **capture does not
 work on any of these boards**.
 
 **Symptom.** An 8-channel 48 kHz capture dies after exactly one period,
@@ -293,16 +293,22 @@ whatever the period size, with `read error: Input/output error`. The RX
 channel takes one TR event and one ring completion and then goes quiet while
 the McASP RX FIFO keeps filling.
 
-**Root cause.** On a BCDMA `DEV_TO_MEM` cyclic channel the driver closed a
-packet on every period, in two places: `udma_prep_dma_cyclic_tr()` set
-`CPPI5_TR_CSF_EOP` on the last TR of each period, and
-`udma_configure_statictr()` programmed the static burst count to one period's
-worth of elements. That packet boundary retires the cyclic TR descriptor that
-the hardware would otherwise reload forever, and nothing re-arms it: the
-descriptor is pushed to the ring exactly once, and the only re-arm path is
-host-descriptor code a TR mode channel must not take. The patch keeps both for
-`MEM_TO_DEV`, where the packet end is what produces the teardown completion
-message, and drops them on RX.
+**Root cause.** On a BCDMA `DEV_TO_MEM` cyclic channel the upstream driver programs the PDMA
+static TR Z (`BSTCNT`) in elements, but the PDMA counts it in bursts of `elcnt`
+elements. The two agree only while `elcnt` is 1. These boards set
+`rx-num-evt = <32>`, so McASP asks for 32-word bursts, the PDMA closes a packet
+only every 32 periods while every period's last TR carries EOP, and the cyclic
+TR descriptor retires after the first period. The patch computes Z per period
+in bursts, as the packet-mode branch already does, and keeps EOP on every RX
+period: that is what lets a BCDMA RX channel finish a teardown.
+
+The first version of this fix (kernel build `#5`, 2026-09-17) took EOP off RX
+instead. Capture ran, but every capture stop then timed out in
+`udma_synchronize()` (`chan<N> teardown timeout!`) and fell back to the hard
+channel reset. The alsaloop bridge restarts capture on every xrun, and on the
+PocketBeagle 2 that left CPU 0 in an interrupt livelock (RCU stall) seconds
+after the bridge started. This version (build `#6`, 2026-09-28) ran the bridge
+for 30 minutes with one teardown completion per capture stop and no stall.
 
 **It is not a manual step.** `res/tdm8/apply-tdm8-kernel.sh` stages every
 `res/tdm8/patches/*.patch` in lexical order alongside the codec shim, and every
@@ -327,28 +333,10 @@ If you want to watch the mechanism rather than the result, diff
 `grep dma-controller /proc/interrupts` across the run: the RX line advances by
 about 140 (3 s x 48000 / 1024) with the patch and by exactly 1 without it.
 
-**Known residue.** With the patch in, *stopping* a capture still logs one pair
-of lines every time:
-
-```
-ti-udma 485c0100.dma-controller: chan1 teardown timeout!
-davinci-mcasp 2b00000.audio-controller: unhandled rx event. rxstat: 0x00000104
-```
-
-They appear at stream stop only, never while a stream runs, and the next
-capture opens and runs to full length, so capture itself is unaffected. What
-the driver source supports: `udma_synchronize()` waits one second for a
-teardown completion message, which `udma_ring_irq_handler()` signals only when
-a TDCM descriptor is popped off the completion ring, and on `DMA_DEV_TO_MEM`
-it is the peer PDMA that `udma_stop()` asks for it; so the warning means none
-arrived in time, and the same branch then forces `udma_reset_chan()`, which is
-why the channel comes back. The McASP line is the RX interrupt handler warning
-about a status it does not handle: it handles only `ROVRN` (RXSTAT bit 0),
-which is clear in `0x104`. What the source does *not* say is what produces the
-teardown completion for a cyclic RX channel at all, and whether the timeout
-predates the patch is unknown, because before it a capture never ran long
-enough to be stopped normally. The residue is unexplained; treat the patch as
-what it is, a bench fix, not finished upstream work.
+**No stop-time residue.** With this version a capture stop completes its
+teardown. A `chan<N> teardown timeout!` at stop, or an RCU stall on CPU 0 soon
+after the bridge starts, means the kernel still carries the build `#5`
+workaround: rebuild from the current `res/tdm8/patches/` and redeploy.
 
 **`res/spare-sd-pb2/boot/` is older than the fix.** The tracked
 `Image-7.1.0-tdm8-pb2.gz` there is the pre-patch build #4
@@ -944,7 +932,7 @@ lsusb -v -d 1d6b:0104 | grep -E 'bNrChannels|bSubframeSize|tSamFreq|bmAttributes
 
 A capture that ends after one period with `read error: Input/output error` is
 not a wiring fault: that is the BCDMA cyclic-RX bug, and the kernel is missing
-`res/tdm8/patches/0001-dmaengine-ti-k3-udma-bcdma-cyclic-rx-eop.patch` (section 3).
+`res/tdm8/patches/0001-dmaengine-ti-k3-udma-count-bcdma-cyclic-rx-static-tr-z-in-bursts.patch` (section 3).
 The 3 s form there, which must return 4608044 bytes, settles it either way.
 
 A one-slot rotation in the captured channels means `dsp_a` ↔ `dsp_b`; an all-zero
@@ -974,8 +962,8 @@ Everything in `README.tdm8-uac2.md` §9 applies. Board-specific additions:
 
 | Symptom | Cause |
 |---|---|
-| `arecord` dies after exactly one period with `read error: Input/output error` | the kernel predates `res/tdm8/patches/0001-dmaengine-ti-k3-udma-bcdma-cyclic-rx-eop.patch` (section 3). Re-run `./build-tdm8-uac2-pb2.sh image` and redeploy; the staged `res/spare-sd-pb2/boot/` image is older than the fix |
-| `chan1 teardown timeout!` + `unhandled rx event. rxstat: 0x00000104` at every capture stop | known residue of that patch (section 3). Stop-time only, capture still restarts and runs to full length |
+| `arecord` dies after exactly one period with `read error: Input/output error` | the kernel predates `res/tdm8/patches/0001-dmaengine-ti-k3-udma-count-bcdma-cyclic-rx-static-tr-z-in-bursts.patch` (section 3). Re-run `./build-tdm8-uac2-pb2.sh image` and redeploy; the staged `res/spare-sd-pb2/boot/` image is older than the fix |
+| `chan1 teardown timeout!` + `unhandled rx event. rxstat: 0x00000104` at every capture stop, or an RCU stall on CPU 0 seconds after the bridge starts | the kernel carries the build `#5` workaround (EOP taken off RX). Rebuild from the current `res/tdm8/patches/` and redeploy (section 3) |
 | No `TDM8` card at all | the `notdm8` label was selected — check `cat /proc/device-tree/model` and the booted `fdt` |
 | `TDM8` card exists, every open blocks | FPGA not driving BCLK/FSYNC. McASP is the slave; it will not advance a frame on its own |
 | Capture all zeros, playback silent, framing healthy | FSYNC polarity, or `dsp_a` vs `dsp_b` — see §6 |

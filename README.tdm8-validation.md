@@ -134,9 +134,11 @@ was the k3-udma driver. The line above is kept as the record of what was tried.
 
 ## Update 2026-09-17 (RESOLVED: it was k3-udma, not the McASP)
 
-The one-buffer-then-`Input/output error` above is fixed by
-`res/tdm8/patches/0001-dmaengine-ti-k3-udma-bcdma-cyclic-rx-eop.patch`, a
-three-hunk change in `drivers/dma/ti/k3-udma.c`. It is a **tracked patch that
+The one-buffer-then-`Input/output error` above was fixed on 2026-09-17 by a
+three-hunk change in `drivers/dma/ti/k3-udma.c` (kernel build `#5`). That
+version was replaced on 2026-09-28 by
+`res/tdm8/patches/0001-dmaengine-ti-k3-udma-count-bcdma-cyclic-rx-static-tr-z-in-bursts.patch`;
+see the 2026-09-28 update below. It is a **tracked patch that
 `res/tdm8/apply-tdm8-kernel.sh` stages automatically**, so every kernel built
 from this BSP carries it; there is nothing to apply by hand, and nothing was
 committed into the `linux` submodule.
@@ -171,7 +173,17 @@ board's McASP node, and that the MYiR symptom (one buffer, then EIO, reproduced
 under internal loopback) is the same signature. Re-running the arecord above on
 the MYiR with a kernel built from this BSP is the outstanding confirmation.
 
-### Known residue of the fix
+### Update 2026-09-28: the stop-time residue was the defect
+
+The residue described next belonged to the build `#5` version, which took EOP
+off RX. With the alsaloop bridge restarting capture on every xrun, each stop's
+teardown timeout and hard channel reset eventually left CPU 0 in an interrupt
+livelock (RCU stall) on the PocketBeagle 2. The replacement patch keeps EOP on
+RX and counts the PDMA static TR Z in bursts (`rx-num-evt = <32>`), so the
+teardown completes: build `#6` ran the bridge for 30 minutes with no stall and
+no teardown timeout. The text below is kept as the build `#5` record.
+
+### Known residue of the fix (build `#5`, superseded)
 
 With the patch applied, **stopping** a capture still logs one pair of lines
 every time:

@@ -1,0 +1,64 @@
+Subject: dmaengine: ti: k3-udma: count BCDMA cyclic RX static TR Z in bursts
+
+The PDMA static TR Z (BSTCNT) counts bursts of elcnt elements.
+udma_configure_statictr() already computes it that way for packet mode
+and for non-cyclic TR mode, but the BCDMA cyclic DEV_TO_MEM branch uses
+the element count of TR0, icnt0 * icnt1 / dev_width.  Both agree only
+while elcnt is 1, which is what the mainline boards get from a McASP
+without an AFIFO watermark.  With rx-num-evt = <32> McASP asks for a
+burst of 32 words, so the PDMA would close a packet only every 32
+periods while every period's last TR carries EOP, and capture stops
+after the first period.
+
+Compute Z per period in bursts, as the branch above does.  Keep EOP on
+every RX period: it is what lets a BCDMA RX channel finish a teardown,
+because BCDMA cannot close the packet itself.  Taking EOP off instead
+(the previous bench workaround) keeps the stream running but makes
+every capture stop time out in udma_synchronize() and fall back to the
+hard channel reset (free and re-request of the channel, its rings and
+its level-triggered ring interrupt), which alsaloop hits on every xrun
+restart.  On a PocketBeagle 2 TDM8 bridge whose alsaloop restarts the
+capture about six times a second, that workaround left CPU 0 in an
+interrupt livelock (RCU stall) within seconds of the bridge starting;
+with this change the same bridge ran for 30 minutes with one teardown
+completion per capture stop and no stall.
+
+Also make udma_cyclic_packet_elapsed() a no-op outside packet mode, so
+a TR mode cyclic channel can never take the host-descriptor path, which
+would reinterpret the TR descriptor header and index hwdesc[] past its
+single entry.
+---
+diff --git a/drivers/dma/ti/k3-udma.c b/drivers/dma/ti/k3-udma.c
+index c964ebfcf..a7e9c24ec 100644
+--- a/drivers/dma/ti/k3-udma.c
++++ b/drivers/dma/ti/k3-udma.c
+@@ -1043,6 +1043,10 @@ static void udma_cyclic_packet_elapsed(struct udma_chan *uc)
+ 	struct udma_desc *d = uc->desc;
+ 	struct cppi5_host_desc_t *h_desc;
+ 
++	/* TR mode cyclic reloads in hardware and has a single hwdesc */
++	if (!uc->config.pkt_mode)
++		return;
++
+ 	h_desc = d->hwdesc[d->desc_idx].cppi5_desc_vaddr;
+ 	cppi5_hdesc_reset_to_original(h_desc);
+ 	udma_push_to_ring(uc, d->desc_idx);
+@@ -3212,12 +3216,13 @@ static int udma_configure_statictr(struct udma_chan *uc, struct udma_desc *d,
+ 		 * For cyclic mode with BCDMA we have to set EOP in each TR to
+ 		 * prevent short packet errors seen on channel teardown. So the
+ 		 * PDMA must close the packet after every TR transfer by setting
+-		 * burst count equal to the number of bytes transferred.
++		 * burst count equal to the number of bursts in one period. Z
++		 * counts bursts of elcnt elements, as in the branch above; with
++		 * elcnt > 1 an element count would close the packet elcnt periods
++		 * after the TR that carries EOP.
+ 		 */
+-		struct cppi5_tr_type1_t *tr_req = d->hwdesc[0].tr_req_base;
+-
+-		d->static_tr.bstcnt =
+-			(tr_req->icnt0 * tr_req->icnt1) / dev_width;
++		d->static_tr.bstcnt = d->residue / d->sglen /
++				      (dev_width * elcnt);
+ 	} else {
+ 		d->static_tr.bstcnt = 0;
+ 	}

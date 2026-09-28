@@ -306,16 +306,28 @@ Shared with the MYIR board: `res/tdm8/kl-tdm8-dummy.c`,
 
 ### The BCDMA cyclic-RX kernel patch
 
-`res/tdm8/patches/0001-dmaengine-ti-k3-udma-bcdma-cyclic-rx-eop.patch` is a
-three-hunk fix in `drivers/dma/ti/k3-udma.c`, and it applies to this board for
+`res/tdm8/patches/0001-dmaengine-ti-k3-udma-count-bcdma-cyclic-rx-static-tr-z-in-bursts.patch` is a
+fix in `drivers/dma/ti/k3-udma.c`, and it applies to this board for
 the same reason it applies to the other two: the SoC, not the wiring. Without
 it an 8-channel capture dies after exactly one period with
 `read error: Input/output error`, whatever the period size.
 
-On a BCDMA `DEV_TO_MEM` cyclic channel the driver closed a packet on every
-period, which retires the cyclic TR descriptor the hardware would otherwise
-reload forever, and nothing re-arms it. The patch keeps that behaviour for
-`MEM_TO_DEV` and drops it on RX.
+On a BCDMA `DEV_TO_MEM` cyclic channel the upstream driver programs the PDMA
+static TR Z (`BSTCNT`) in elements, but the PDMA counts it in bursts of `elcnt`
+elements. The two agree only while `elcnt` is 1. These boards set
+`rx-num-evt = <32>`, so McASP asks for 32-word bursts, the PDMA closes a packet
+only every 32 periods while every period's last TR carries EOP, and the cyclic
+TR descriptor retires after the first period. The patch computes Z per period
+in bursts, as the packet-mode branch already does, and keeps EOP on every RX
+period: that is what lets a BCDMA RX channel finish a teardown.
+
+The first version of this fix (kernel build `#5`, 2026-09-17) took EOP off RX
+instead. Capture ran, but every capture stop then timed out in
+`udma_synchronize()` (`chan<N> teardown timeout!`) and fell back to the hard
+channel reset. The alsaloop bridge restarts capture on every xrun, and on the
+PocketBeagle 2 that left CPU 0 in an interrupt livelock (RCU stall) seconds
+after the bridge started. This version (build `#6`, 2026-09-28) ran the bridge
+for 30 minutes with one teardown completion per capture stop and no stall.
 
 `res/tdm8/apply-tdm8-kernel.sh` stages it with the codec shim, so the `shim`
 phase of `build-tdm8-uac2-sk.sh` applies it and every kernel-building phase
@@ -327,9 +339,10 @@ arecord -D hw:TDM8,0 -c8 -f S32_LE -r48000 -d3 /tmp/c.wav
 ls -l /tmp/c.wav        # exit 0 and exactly 4608044 bytes
 ```
 
-Known residue: stopping a capture logs one `chan<N> teardown timeout!` plus one
-`unhandled rx event` pair every time, at stop only, with capture still
-restarting normally. `README.tdm8-pb2.md` section 3 has the full write-up.
+**No stop-time residue.** With this version a capture stop completes its
+teardown. A `chan<N> teardown timeout!` at stop, or an RCU stall on CPU 0 soon
+after the bridge starts, means the kernel still carries the build `#5`
+workaround: rebuild from the current `res/tdm8/patches/` and redeploy. `README.tdm8-pb2.md` section 3 has the full write-up.
 
 ### No device-tree injector here
 
