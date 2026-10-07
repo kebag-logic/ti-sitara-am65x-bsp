@@ -85,3 +85,31 @@ If no parameter is passed, `build.sh` selects MYIR.
   `ethcap` image
 * `README.tdm8-validation.md` — bench log of the FPGA ↔ McASP1 link: what is
   proven, what is not, and the reproducible procedure
+
+# License
+
+Copyright 2025-2026 Alexandre Malki <alexandremalki89@gmail.com>
+
+Unless a file says otherwise, this repository is licensed under the
+[Apache License 2.0](LICENSE); see also [NOTICE](NOTICE). A file's own
+`SPDX-License-Identifier` header takes precedence:
+
+| Files | License |
+|---|---|
+| build and helper scripts already carrying an `MIT` header (`build-*.sh`, `res/uboot/*.sh`, `res/tdm8*/apply-*.sh`, `tdm8-uac2.sh`, `S05growrootfs`, ...) | MIT, as they were published before this repository had a license |
+| device trees (`res/tdm8-pb2/*.dts`, `res/tdm8-sk/*.dts`) | `GPL-2.0-only OR MIT`, the kernel's device-tree convention |
+| Linux kernel code: `res/tdm8/kl-tdm8-dummy.c`, `res/tdm8/patches/*.patch` | GPL-2.0-only |
+
+Third-party material in this repository is **not** covered by the Apache
+license and keeps its own terms:
+
+* `res/ethernetgadget.pdf` — *USB Ethernet Gadget: A Beginner's Guide*,
+  copyright 2021-2024 its author, CC BY-NC-SA 4.0
+* `res/bootprocess.png`, `sram_layout_R5.png` — screenshots of the U-Boot K3
+  and TI Processor SDK documentation, copyright their owners
+* `res/k3-am625x-myd-6254.dts` — decompiled from MYIR's MYD-YM62X vendor
+  device tree
+
+The `linux` submodule, and the U-Boot, TF-A, OP-TEE, TI firmware and Buildroot
+trees that `fetch.sh` clones, keep their own licenses. So does everything a
+release image is built from; each release's notes list those sources.
