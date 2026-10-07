@@ -241,6 +241,8 @@ neither TDM8 tree has to override it. `&usb1` stays a host and keeps P1.03
 (`USB1_DRVVBUS`), P1.05, P1.07, P1.09 and P1.11.
 
 One consequence worth planning for: **PocketBeagle 2 has no Ethernet at all.**
+(The Kebag-Logic Ethernet Cap adds one, on the same header pins this link
+uses, so a board runs one or the other: see `README.pb2-ethcap.md`.)
 The ECM leg of the composite gadget on `usb0` is the only network path to the
 board, which is why `TDM8_ECM=yes` is not optional here the way it is on the
 other two boards. Turn it off and the 3-pin JST-SH serial console is your only
@@ -271,7 +273,7 @@ only for an FPGA whose two directions are in different clock domains.
 | `res/kl-pb2-am62.config` | Kernel fragment: the PocketBeagle 2 delta on top of `arm64 defconfig` + `res/kl-tdm8-uac2.config`. Pins `CONFIG_LOCALVERSION="-tdm8-pb2"`. |
 | `build-tdm8-uac2-pb2.sh` | `fetch → shim → dts → config → dtb → build → {deploy \| stage}`, plus `probe`. |
 | `br2-external/board/bb-pocketbeagle2/` | `post-build.sh` (default `KL_MODDIR=.kstage-tdm8-pb2/lib/modules`) plus this board's `etc/tdm8/tdm8.env`, `etc/network/interfaces` and `root/.ssh/authorized_keys`. |
-| `br2-external/configs/bb_pocketbeagle2_avb_defconfig` | Buildroot config. Mirrors the SK one minus `ethtool` (no Ethernet), with a 1 G rootfs for a 512 MB board. |
+| `br2-external/configs/bb_pocketbeagle2_avb_defconfig` | Buildroot config. Mirrors the SK one, plus `iperf3` for the Ethernet Cap, with a 1 G rootfs for a 512 MB board. |
 | `res/uboot/check-bootloader.sh` | Verifies a built K3 chain is the variant you meant and that the real TI firmware is inside it. Board-independent: `SOC`/`VARIANT`/`FW` cover the SK and MYIR too. |
 | `res/uboot/fix-pb2-uart6-bootph.sh` | Gives the A53 SPL a working console: adds the `bootph-all` that the upstream board DT puts on `&main_uart6` but not on its pinmux group. |
 | `res/uboot/fix-pb2-kernel-comp.sh` | Adds `kernel_comp_addr_r` / `kernel_comp_size` to the board env so `booti` can unpack a gzipped `Image`. |
@@ -338,18 +340,18 @@ teardown. A `chan<N> teardown timeout!` at stop, or an RCU stall on CPU 0 soon
 after the bridge starts, means the kernel still carries the build `#5`
 workaround: rebuild from the current `res/tdm8/patches/` and redeploy.
 
-**`res/spare-sd-pb2/boot/` is older than the fix.** The tracked
-`Image-7.1.0-tdm8-pb2.gz` there is the pre-patch build #4
-(`b7a9c7f8a343a37dd9feb5a1be949508423c4c3e9fd38a9536e5407f469e4d5c`), so a card
-built from it today still shows the one-period failure. Refresh it with the
-existing script, which rebuilds and re-stages in one go:
+**`res/spare-sd-pb2/boot/` carries the fix.** The tracked
+`Image-7.1.0-tdm8-pb2.gz` there was restaged on 2026-10-07 from a tree with this
+patch applied (`sha256 2f8029da5e4a4a56955fd9b12118331a73512dd6196eef7f6d5bbee38f847e33`),
+together with the Ethernet Cap device tree (`README.pb2-ethcap.md`). Cards built
+from earlier checkouts of that directory carried the pre-patch build #4. Any
+rebuild re-stages it in one go:
 
 ```sh
 ./build-tdm8-uac2-pb2.sh image
 ```
 
-Then `sdimage` as usual. Anyone who runs `sdimage` **without** staging first
-builds a card carrying the broken kernel.
+Then `sdimage` as usual.
 
 ### Ordinary in-tree device trees
 
@@ -434,18 +436,19 @@ console=ttyS2,115200n8 earlycon=ns16550a,mmio32,0x02860000 root=/dev/mmcblk1p2 r
   `mmcdev=1` and `bootpart=1:2` — and BeagleBoard's stock images use
   `mmcblk1` too.
 
-Three labels are written, default `tdm8`:
+Four labels are written, default `tdm8`:
 
 | Label | Tree |
 |---|---|
 | `tdm8` | `k3-am62-pocketbeagle2-tdm8.dtb` — 8×8, four wires |
 | `tdm8-async` | `k3-am62-pocketbeagle2-tdm8-async.dtb` — 8×8, separate RX clocks |
 | `notdm8` | stock `k3-am62-pocketbeagle2.dtb` — same kernel, TDM8 off |
+| `ethcap` | `k3-am62-pocketbeagle2-ethcap.dtb` — Ethernet Cap on RGMII2, TDM8 off (`README.pb2-ethcap.md`) |
 
 `notdm8` is the point of this arrangement: it isolates a TDM8 device-tree
 problem from a kernel problem without reflashing anything. Set
-`TDM8_DEFAULT_LABEL=tdm8-async` to change what boots when nobody touches the
-console.
+`PB2_DEFAULT_LABEL=tdm8-async` (the old name `TDM8_DEFAULT_LABEL` still works)
+to change what boots when nobody touches the console.
 
 ---
 
@@ -962,7 +965,7 @@ Everything in `README.tdm8-uac2.md` §9 applies. Board-specific additions:
 
 | Symptom | Cause |
 |---|---|
-| `arecord` dies after exactly one period with `read error: Input/output error` | the kernel predates `res/tdm8/patches/0001-dmaengine-ti-k3-udma-count-bcdma-cyclic-rx-static-tr-z-in-bursts.patch` (section 3). Re-run `./build-tdm8-uac2-pb2.sh image` and redeploy; the staged `res/spare-sd-pb2/boot/` image is older than the fix |
+| `arecord` dies after exactly one period with `read error: Input/output error` | the kernel predates `res/tdm8/patches/0001-dmaengine-ti-k3-udma-count-bcdma-cyclic-rx-static-tr-z-in-bursts.patch` (section 3). Re-run `./build-tdm8-uac2-pb2.sh image` and redeploy; a card built from a pre-2026-10-07 `res/spare-sd-pb2/boot/` carries the old build #4 |
 | `chan1 teardown timeout!` + `unhandled rx event. rxstat: 0x00000104` at every capture stop, or an RCU stall on CPU 0 seconds after the bridge starts | the kernel carries the build `#5` workaround (EOP taken off RX). Rebuild from the current `res/tdm8/patches/` and redeploy (section 3) |
 | No `TDM8` card at all | the `notdm8` label was selected — check `cat /proc/device-tree/model` and the booted `fdt` |
 | `TDM8` card exists, every open blocks | FPGA not driving BCLK/FSYNC. McASP is the slave; it will not advance a frame on its own |

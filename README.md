@@ -79,5 +79,9 @@ If no parameter is passed, `build.sh` selects MYIR.
   (AM6254, quad A53): the board that brings a whole McASP0 out to P1/P2, so the
   8×8 duplex link is four jumper wires and no soldering — header/ball/pad
   tables, the two-balls-per-header-pin trap, and its build path
+* `README.pb2-ethcap.md` — **the PocketBeagle 2 with the Kebag-Logic Ethernet
+  Cap rev B**: DP83867IR on CPSW3G port 2 (RGMII2) as `eth0`, with the CPTS PTP
+  clock and the TSN qdiscs; the header-pin map, the device tree, and the
+  `ethcap` image
 * `README.tdm8-validation.md` — bench log of the FPGA ↔ McASP1 link: what is
   proven, what is not, and the reproducible procedure
