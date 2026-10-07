@@ -23,6 +23,26 @@ chmod 0644 "$TARGET_DIR/etc/tdm8/tdm8.env" 2>/dev/null || true
 chmod 0700 "$TARGET_DIR/root/.ssh" 2>/dev/null || true
 chmod 0600 "$TARGET_DIR/root/.ssh/authorized_keys" 2>/dev/null || true
 
+# ssh password login, as well as keys. root is the only account, and OpenSSH's
+# default "PermitRootLogin prohibit-password" refuses its password even though
+# PasswordAuthentication defaults to yes, so both are set explicitly. The
+# password is BR2_TARGET_GENERIC_ROOT_PASSWD. sshd takes the first value it
+# reads, so each stock "#Keyword ..." line is turned into the active one in
+# place rather than appending a second one after it. Idempotent.
+SSHD_CONFIG="$TARGET_DIR/etc/ssh/sshd_config"
+if [ -f "$SSHD_CONFIG" ]; then
+	for kv in "PermitRootLogin yes" "PasswordAuthentication yes"; do
+		k=${kv%% *}
+		if grep -qE "^#?[[:space:]]*$k[[:space:]]" "$SSHD_CONFIG"; then
+			sed -i -E "0,/^#?[[:space:]]*$k[[:space:]].*/s//$kv/" "$SSHD_CONFIG"
+		else
+			echo "$kv" >> "$SSHD_CONFIG"
+		fi
+		grep -q "^$kv\$" "$SSHD_CONFIG" || { echo "post-build: could not set '$kv'" >&2; exit 1; }
+	done
+	echo "post-build: sshd allows password login (PermitRootLogin yes, PasswordAuthentication yes)"
+fi
+
 # Kernel modules. KL_MODDIR is a <...>/lib/modules directory holding one or more
 # <kernelrelease> trees produced by `make modules_install INSTALL_MOD_PATH=...`.
 # Default: the PocketBeagle 2 TDM8 kernel's staging dir, so
