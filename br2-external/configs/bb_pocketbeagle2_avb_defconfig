@@ -51,8 +51,13 @@ BR2_PACKAGE_USBUTILS=y
 BR2_PACKAGE_MMC_UTILS=y
 BR2_PACKAGE_E2FSPROGS=y
 BR2_PACKAGE_RT_TESTS=y
-# No ethtool here: PocketBeagle 2 has no Ethernet controller. ssh arrives over
-# the ECM leg of the USB-C gadget (usb0), which ethtool has nothing to say about.
+# The bare board has no Ethernet, but with the Kebag-Logic Ethernet Cap and
+# k3-am62-pocketbeagle2-ethcap.dtb it has eth0 (DP83867 on CPSW3G port 2).
+# ethtool shows the PHY link, the CPTS PTP clock (ethtool -T eth0) and the
+# MAC/PHY counters; iperf3 is the 1000 Mb/s check the cap's rev B handover asks
+# for on the shared RGMII pins.
+BR2_PACKAGE_ETHTOOL=y
+BR2_PACKAGE_IPERF3=y
 # 512 MB of DDR, so the rootfs is sized well under the SK's 2G.
 BR2_TARGET_ROOTFS_EXT2=y
 BR2_TARGET_ROOTFS_EXT2_4=y

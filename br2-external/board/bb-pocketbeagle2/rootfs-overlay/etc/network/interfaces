@@ -1,8 +1,18 @@
 auto lo
 iface lo inet loopback
 
-# PocketBeagle 2 has no Ethernet controller and no RJ45. The only network
-# interface is usb0 - the ECM leg of the composite UAC2+ECM gadget on the USB-C
-# port - and that one is addressed by S99usb_gadgets from TDM8_USB0_IP in
-# /etc/tdm8/tdm8.env, not from here. Adding an "auto usb0" stanza here would
-# race the gadget: usb0 does not exist until configfs binds the UDC.
+# usb0 - the ECM leg of the composite UAC2+ECM gadget on the USB-C port - is
+# addressed by S99usb_gadgets from TDM8_USB0_IP in /etc/tdm8/tdm8.env, not from
+# here. Adding an "auto usb0" stanza here would race the gadget: usb0 does not
+# exist until configfs binds the UDC.
+
+# eth0 exists only with the Kebag-Logic Ethernet Cap fitted and the "ethcap"
+# boot label (k3-am62-pocketbeagle2-ethcap.dtb): DP83867 on CPSW3G port 2.
+# Static, on the bench AVB subnet the other boards use (.10 MYIR, .11 SK), so
+# the board is reachable without a DHCP server. On any other boot label eth0 is
+# absent and S40network reports this one stanza as failed; nothing else breaks.
+# For DHCP instead: "iface eth0 inet dhcp" and drop the address/netmask lines.
+auto eth0
+iface eth0 inet static
+	address 192.168.1.12
+	netmask 255.255.255.0
