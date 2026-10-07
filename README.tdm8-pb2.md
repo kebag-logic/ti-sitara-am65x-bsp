@@ -272,7 +272,7 @@ only for an FPGA whose two directions are in different clock domains.
 | `res/tdm8-pb2/apply-tdm8-pb2-dts.sh` | Idempotently copies both into `linux/arch/arm64/boot/dts/ti/` and registers them in that `Makefile`. |
 | `res/kl-pb2-am62.config` | Kernel fragment: the PocketBeagle 2 delta on top of `arm64 defconfig` + `res/kl-tdm8-uac2.config`. Pins `CONFIG_LOCALVERSION="-tdm8-pb2"`. |
 | `build-tdm8-uac2-pb2.sh` | `fetch → shim → dts → config → dtb → build → {deploy \| stage}`, plus `probe`. |
-| `br2-external/board/bb-pocketbeagle2/` | `post-build.sh` (default `KL_MODDIR=.kstage-tdm8-pb2/lib/modules`) plus this board's `etc/tdm8/tdm8.env`, `etc/network/interfaces` and `root/.ssh/authorized_keys`. |
+| `br2-external/board/bb-pocketbeagle2/` | `post-build.sh` (default `KL_MODDIR=.kstage-tdm8-pb2/lib/modules`) plus this board's `etc/tdm8/tdm8.env`, `etc/network/interfaces`, `etc/init.d/S05growrootfs` (first boot grows `/` to the whole card) and `root/.ssh/authorized_keys`. |
 | `br2-external/configs/bb_pocketbeagle2_avb_defconfig` | Buildroot config. Mirrors the SK one, plus `iperf3` for the Ethernet Cap, with a 1 G rootfs for a 512 MB board. |
 | `res/uboot/check-bootloader.sh` | Verifies a built K3 chain is the variant you meant and that the real TI firmware is inside it. Board-independent: `SOC`/`VARIANT`/`FW` cover the SK and MYIR too. |
 | `res/uboot/fix-pb2-uart6-bootph.sh` | Gives the A53 SPL a working console: adds the `bootph-all` that the upstream board DT puts on `&main_uart6` but not on its pinmux group. |
@@ -861,6 +861,21 @@ The card comes out MBR p1 = FAT32 (`tiboot3.bin`, `tispl.bin`, `u-boot.img`,
 (`build-spare-sd-ab.sh`) and the RAUC bundle are **not** ported to this board;
 `res/ab/boot.cmd`, the MYIR `fw_env.config` offsets and `etc/rauc/system.conf`
 are all MYIR-specific.
+
+**First boot fills the card.** The image is 1.6 G whatever the card size.
+`/etc/init.d/S05growrootfs` moves the end of p2 to the end of the card
+(`sfdisk -N 2`, keeping its start), tells the running kernel (`partx -u`) and
+grows the mounted ext4 online (`resize2fs`), all on the first boot and with no
+reboot. Expect a few extra seconds on that boot, and
+`growrootfs: done: <size> on /, <free> free` on the console. It finds the root partition
+from `/proc/self/mountinfo` and only grows the last partition on the card. It
+writes `/etc/growrootfs.done` once every step has succeeded, so an interrupted
+first boot finishes on the next one. To grow again after copying the card to a
+bigger one:
+
+```sh
+rm /etc/growrootfs.done && /etc/init.d/S05growrootfs start
+```
 
 ### Verify, then flash
 
