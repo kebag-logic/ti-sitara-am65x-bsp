@@ -13,7 +13,7 @@ TARGET_DIR="$1"
 HERE=$(cd "$(dirname "$0")" && pwd)
 BSP=$(cd "$HERE/../../.." && pwd)          # .../ti-sitara-am65x-bsp
 
-for f in etc/init.d/S99usb_gadgets \
+for f in etc/init.d/S99usb_gadgets etc/init.d/S05growrootfs \
 	root/setup_gadgets.sh root/remove_usb.sh usr/sbin/tdm8-uac2.sh; do
 	chmod 0755 "$TARGET_DIR/$f" 2>/dev/null || true
 done

@@ -1,0 +1,110 @@
+#!/bin/sh
+
+# SPDX-FileCopyrightText: Copyright (c) 2026 Kebag-Logic
+# SPDX-License-Identifier: MIT
+
+# First boot: grow the root partition to the end of the microSD card, then the
+# ext4 filesystem on it to the end of the partition.
+#
+# build-spare-sd.sh writes a 1.6 G image (300 M FAT boot + ~1.3 G rootfs), so
+# whatever the card is bigger than that sits unallocated behind the rootfs.
+# This takes it, without a reboot:
+#
+#   sfdisk -N <n>   moves the end of the root partition to the end of the card
+#                   (the start is kept); --no-reread because / is mounted from
+#                   that disk, --no-tell-kernel because partx does that next
+#   partx -u        tells the running kernel the partition's new size
+#                   (BLKPG resize, which is allowed on a mounted partition)
+#   resize2fs       grows ext4 online, while it stays mounted read-write on /
+#
+# The root device is read from /proc/self/mountinfo and sysfs, not assumed
+# (on this board it comes out as mmcblk1p2).  The partition is grown only if it
+# is the last one on the card and at least 1 MiB is free behind it; a GPT
+# card first gets its backup header moved to the new end of the disk.
+#
+# Every step is idempotent, and /etc/growrootfs.done is written only once all
+# of them succeed, so a boot interrupted halfway simply finishes the job on the
+# next one.  To grow again (e.g. after dd'ing this card onto a bigger one):
+#
+#   rm /etc/growrootfs.done && /etc/init.d/S05growrootfs start
+#
+# Runs after inittab's "mount -o remount,rw /" and "mount -a" (/sys), before
+# anything else writes to the card in earnest.  Online resize2fs needs / to be
+# read-write; it is by then.
+#
+# GROWROOTFS_MNT (default /) exists so the script can be exercised on a
+# loop-mounted copy of the card image from the build host.
+
+MNT=${GROWROOTFS_MNT:-/}
+DONE="${MNT%/}/etc/growrootfs.done"
+
+log() { echo "growrootfs: $*"; }
+
+grow() {
+	local majmin fstype part disk pname pnum start size total p label
+
+	# the block device $MNT is mounted from, as major:minor, and its fs type
+	majmin=$(awk -v m="$MNT" '$5 == m { print $3; exit }' /proc/self/mountinfo)
+	fstype=$(awk -v m="$MNT" '$5 == m { for (i = 7; i <= NF; i++) if ($i == "-") { print $(i + 1); exit } }' /proc/self/mountinfo)
+	part=$(readlink -f "/sys/dev/block/$majmin" 2>/dev/null)
+	if [ -z "$majmin" ] || [ ! -f "$part/partition" ]; then
+		log "$MNT is not on a disk partition ($majmin), nothing to grow"
+		return 0
+	fi
+	disk=$(basename "$(dirname "$part")")     # mmcblk1
+	pname=$(basename "$part")                  # mmcblk1p2
+	pnum=$(cat "$part/partition")              # 2
+	start=$(cat "$part/start")                 # sysfs counts 512-byte sectors
+	size=$(cat "$part/size")
+	total=$(cat "/sys/block/$disk/size")
+
+	# only the last partition can take the space behind it
+	for p in /sys/block/"$disk"/"$disk"*; do
+		[ -f "$p/start" ] || continue
+		if [ "$(cat "$p/start")" -gt "$start" ]; then
+			log "$pname is not the last partition on $disk, leaving the table alone"
+			total=0
+		fi
+	done
+
+	if [ "$total" -gt $((start + size + 2048)) ]; then
+		log "growing /dev/$pname from $((size / 2048)) MiB to the end of /dev/$disk ($((total / 2048)) MiB card)"
+		label=$(sfdisk --dump "/dev/$disk" 2>/dev/null | awk '$1 == "label:" { print $2 }')
+		if [ "$label" = gpt ]; then
+			sfdisk --no-reread --no-tell-kernel -q --relocate gpt-bak-std "/dev/$disk" || return 1
+		fi
+		echo ", +" | sfdisk --no-reread --no-tell-kernel -q -N "$pnum" "/dev/$disk" || return 1
+		partx -u -n "$pnum" "/dev/$disk" || return 1
+		log "/dev/$pname is now $(( $(cat "$part/size") / 2048 )) MiB"
+	fi
+
+	case "$fstype" in
+	ext2|ext3|ext4)
+		log "growing the $fstype filesystem on /dev/$pname (online)"
+		resize2fs "/dev/$pname" || return 1
+		;;
+	*)
+		log "$fstype on $MNT: no online resize for it, partition grown only"
+		;;
+	esac
+}
+
+case "$1" in
+start)
+	[ -e "$DONE" ] && exit 0
+	if grow; then
+		touch "$DONE"
+		sync
+		log "done: $(df -h "$MNT" | awk 'NR == 2 { print $2 " on " $6 ", " $4 " free" }')"
+	else
+		log "FAILED - / keeps its current size; this runs again on the next boot"
+	fi
+	;;
+stop)
+	;;
+*)
+	echo "Usage: $0 {start|stop}"
+	exit 1
+	;;
+esac
+exit 0

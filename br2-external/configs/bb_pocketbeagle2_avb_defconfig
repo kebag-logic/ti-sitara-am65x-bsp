@@ -50,6 +50,12 @@ BR2_PACKAGE_OPENSSH=y
 BR2_PACKAGE_USBUTILS=y
 BR2_PACKAGE_MMC_UTILS=y
 BR2_PACKAGE_E2FSPROGS=y
+# First boot grows / to the whole card (/etc/init.d/S05growrootfs): sfdisk
+# moves the end of the root partition, partx tells the running kernel, and
+# resize2fs grows the mounted ext4. None of the three is in BusyBox.
+BR2_PACKAGE_UTIL_LINUX_BINARIES=y
+BR2_PACKAGE_UTIL_LINUX_PARTX=y
+BR2_PACKAGE_E2FSPROGS_RESIZE2FS=y
 BR2_PACKAGE_RT_TESTS=y
 # The bare board has no Ethernet, but with the Kebag-Logic Ethernet Cap and
 # k3-am62-pocketbeagle2-ethcap.dtb it has eth0 (DP83867 on CPSW3G port 2).
