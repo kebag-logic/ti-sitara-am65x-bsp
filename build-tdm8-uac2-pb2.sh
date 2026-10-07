@@ -24,6 +24,15 @@
 # a bad TDM8 tree is one serial-console keystroke away from a working boot.
 # See README.tdm8-pb2.md.
 #
+# A fourth tree is for the Kebag-Logic PocketBeagle 2 Ethernet Cap (rev B):
+#
+#   k3-am62-pocketbeagle2-ethcap.dtb      DP83867IR on CPSW3G port 2 -> eth0
+#
+# The cap's RGMII2/MDIO lines sit on P1.02/P1.04/P2.01/P2.03, the TDM8 pins, so
+# a board runs either the cap or the TDM8 link, never both.  All four trees go
+# on every card; PB2_DEFAULT_LABEL=ethcap makes the cap's the one that boots.
+# See README.pb2-ethcap.md.
+#
 # This script does not BUILD a bootloader - `./build.sh PB2` does that, from
 # BeagleBoard's U-Boot fork (fetch.sh clones openbeagle.org/beagleboard/u-boot
 # branch v2025.04-rc4-pocketbeagle2 into u-boot-pb/) into u-boot-pb/out_bp2/.
@@ -48,7 +57,7 @@
 #        probe      = ask a live board what it is (rev A1/AM6254 vs rev A0/AM6232)
 #        bootloader = verify u-boot-pb/out_bp2 is a complete HS-FS chain
 #        sdimage    = build the microSD image (wraps build-spare-sd.sh; needs sudo)
-# Env:   KVER BOARD JOBS CROSS_COMPILE TDM8_DEFAULT_LABEL UBOUT_PB2 UB_VARIANT
+# Env:   KVER BOARD JOBS CROSS_COMPILE PB2_DEFAULT_LABEL UBOUT_PB2 UB_VARIANT
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 KVER="${KVER:-v7.1}"
@@ -58,6 +67,7 @@ KSRC="$HERE/linux"
 DTB_NAME="k3-am62-pocketbeagle2-tdm8"             # McASP0 8x8, 4 wires on P1/P2
 DTB_ASYNC_NAME="k3-am62-pocketbeagle2-tdm8-async" # same + separate RX clocks
 DTB_STOCK="k3-am62-pocketbeagle2"                 # untouched mainline tree, the fallback
+DTB_ETHCAP_NAME="k3-am62-pocketbeagle2-ethcap"    # Kebag-Logic Ethernet Cap rev B, eth0
 OUTDIR="$HERE/res/tdm8-pb2"
 STAGE="$HERE/.kstage-tdm8-pb2"
 BOOTDIR="$HERE/res/spare-sd-pb2/boot"
@@ -67,10 +77,15 @@ BOOTDIR="$HERE/res/spare-sd-pb2/boot"
 UBOUT_PB2="${UBOUT_PB2:-$HERE/u-boot-pb/out_bp2}"
 UB_VARIANT="${UB_VARIANT:-hs-fs}"
 # Which label the boot menu selects on its own.  "tdm8" is the four-wire
-# synchronous tree; set TDM8_DEFAULT_LABEL=tdm8-async on a board whose FPGA
-# drives two clock pairs.  Either way the other labels stay in the menu, so
-# this only changes what happens when nobody touches the console.
-TDM8_DEFAULT_LABEL="${TDM8_DEFAULT_LABEL:-tdm8}"
+# synchronous tree; "tdm8-async" is for an FPGA that drives two clock pairs;
+# "ethcap" is for a board wearing the Ethernet Cap.  Every label stays in the
+# menu, so this only changes what happens when nobody touches the console.
+# TDM8_DEFAULT_LABEL is the old name and still works.
+PB2_DEFAULT_LABEL="${PB2_DEFAULT_LABEL:-${TDM8_DEFAULT_LABEL:-tdm8}}"
+case "$PB2_DEFAULT_LABEL" in
+tdm8|tdm8-async|notdm8|ethcap) ;;
+*) echo "PB2_DEFAULT_LABEL=$PB2_DEFAULT_LABEL: not one of tdm8 tdm8-async notdm8 ethcap" >&2; exit 1 ;;
+esac
 # Console.  PocketBeagle 2 splits its boot log across two UARTs out of the box,
 # which makes bring-up painful:
 #
@@ -148,15 +163,23 @@ config() {
 	         CONFIG_GPIO_DAVINCI; do
 		grep -q "^$s=y" "$KSRC/.config" || { echo "$s must be =y (microSD power path)" >&2; exit 1; }
 	done
+	# the Ethernet Cap: eth0, its PHY, and the PTP clock / TSN offloads
+	for s in CONFIG_TI_K3_AM65_CPSW_NUSS CONFIG_TI_DAVINCI_MDIO CONFIG_PHY_TI_GMII_SEL \
+	         CONFIG_DP83867_PHY CONFIG_TI_K3_AM65_CPTS CONFIG_TI_AM65_CPSW_QOS; do
+		grep -q "^$s=y" "$KSRC/.config" || { echo "$s must be =y (Ethernet Cap)" >&2; exit 1; }
+	done
 }
 
-# Build both TDM8 trees plus the stock tree used by the fallback entry.
+# Build both TDM8 trees, the Ethernet Cap tree, and the stock tree used by the
+# fallback entry.
 dtb() {
 	[ -f "$KSRC/.config" ] || { echo "run '$0 config' first" >&2; exit 1; }
-	[ -f "$KSRC/arch/arm64/boot/dts/ti/$DTB_NAME.dts" ] || { echo "run '$0 dts' first" >&2; exit 1; }
-	M "ti/$DTB_NAME.dtb" "ti/$DTB_ASYNC_NAME.dtb" "ti/$DTB_STOCK.dtb"
+	for d in "$DTB_NAME" "$DTB_ETHCAP_NAME"; do
+		[ -f "$KSRC/arch/arm64/boot/dts/ti/$d.dts" ] || { echo "run '$0 dts' first" >&2; exit 1; }
+	done
+	M "ti/$DTB_NAME.dtb" "ti/$DTB_ASYNC_NAME.dtb" "ti/$DTB_STOCK.dtb" "ti/$DTB_ETHCAP_NAME.dtb"
 	mkdir -p "$OUTDIR"
-	for d in "$DTB_NAME" "$DTB_ASYNC_NAME" "$DTB_STOCK"; do
+	for d in "$DTB_NAME" "$DTB_ASYNC_NAME" "$DTB_STOCK" "$DTB_ETHCAP_NAME"; do
 		cp "$KSRC/arch/arm64/boot/dts/ti/$d.dtb" "$OUTDIR/$d.dtb"
 	done
 	ls -l "$OUTDIR"/*.dtb
@@ -176,14 +199,14 @@ build() {
 stage() {
 	local rel append existing
 	rel=$(M -s kernelrelease)
-	for d in "$DTB_NAME" "$DTB_ASYNC_NAME" "$DTB_STOCK"; do
+	for d in "$DTB_NAME" "$DTB_ASYNC_NAME" "$DTB_STOCK" "$DTB_ETHCAP_NAME"; do
 		[ -f "$OUTDIR/$d.dtb" ] || { echo "run '$0 dtb' first" >&2; exit 1; }
 	done
 	[ -f "$KSRC/arch/arm64/boot/Image.gz" ] || { echo "run '$0 build' first" >&2; exit 1; }
 
 	mkdir -p "$BOOTDIR/ti" "$BOOTDIR/extlinux"
 	cp "$KSRC/arch/arm64/boot/Image.gz" "$BOOTDIR/Image-$rel.gz"
-	for d in "$DTB_NAME" "$DTB_ASYNC_NAME" "$DTB_STOCK"; do
+	for d in "$DTB_NAME" "$DTB_ASYNC_NAME" "$DTB_STOCK" "$DTB_ETHCAP_NAME"; do
 		cp "$OUTDIR/$d.dtb" "$BOOTDIR/ti/$d.dtb"
 	done
 
@@ -197,14 +220,14 @@ stage() {
 	[ -n "$append" ] || append="$DEFAULT_APPEND"
 
 	# everything from the first "label" onward, minus labels we own
-	existing=$(awk '/^label /{ keep = ($2 != "tdm8" && $2 != "tdm8-async" && $2 != "notdm8") } keep' \
+	existing=$(awk '/^label /{ keep = ($2 != "tdm8" && $2 != "tdm8-async" && $2 != "notdm8" && $2 != "ethcap") } keep' \
 		"$BOOTDIR/extlinux/extlinux.conf" 2>/dev/null || true)
 
 	{
-		echo "menu title PocketBeagle 2 microSD (TDM8 -> UAC2)"
+		echo "menu title PocketBeagle 2 microSD (TDM8 -> UAC2 / Ethernet Cap)"
 		echo "timeout 30"
 		echo "prompt 1"
-		echo "default $TDM8_DEFAULT_LABEL"
+		echo "default $PB2_DEFAULT_LABEL"
 		echo "label tdm8"
 		echo "    menu label Linux $rel + TDM8 8x8 on McASP0 (P2.01/P1.04/P1.02/P2.03)"
 		echo "    kernel /Image-$rel.gz"
@@ -225,14 +248,21 @@ stage() {
 		echo "    fdtdir /"
 		echo "    fdt /ti/$DTB_STOCK.dtb"
 		echo "    append $append"
+		# the cap's RGMII2/MDIO lines are the TDM8 pins: this one or a tdm8 one
+		echo "label ethcap"
+		echo "    menu label Linux $rel + Kebag-Logic Ethernet Cap rev B (DP83867 on RGMII2, eth0)"
+		echo "    kernel /Image-$rel.gz"
+		echo "    fdtdir /"
+		echo "    fdt /ti/$DTB_ETHCAP_NAME.dtb"
+		echo "    append $append"
 		[ -n "$existing" ] && echo "$existing"
 	} > "$BOOTDIR/extlinux/extlinux.conf.new"
 	mv "$BOOTDIR/extlinux/extlinux.conf.new" "$BOOTDIR/extlinux/extlinux.conf"
 
 	echo "staged into $BOOTDIR:"
 	echo "  Image-$rel.gz"
-	echo "  ti/$DTB_NAME.dtb  ti/$DTB_ASYNC_NAME.dtb  ti/$DTB_STOCK.dtb"
-	echo "  extlinux/extlinux.conf  (default=$TDM8_DEFAULT_LABEL; kept: $(echo "$existing" | grep -c '^label ') pre-existing label(s))"
+	echo "  ti/$DTB_NAME.dtb  ti/$DTB_ASYNC_NAME.dtb  ti/$DTB_STOCK.dtb  ti/$DTB_ETHCAP_NAME.dtb"
+	echo "  extlinux/extlinux.conf  (default=$PB2_DEFAULT_LABEL; kept: $(echo "$existing" | grep -c '^label ') pre-existing label(s))"
 	echo
 	echo "The bootloaders come from BeagleBoard's U-Boot fork, not u-boot-official."
 	echo "PocketBeagle 2 is HS-FS: signed, not encrypted, no customer keys fused."
@@ -297,7 +327,12 @@ bootloader() {
 sdimage() {
 	local rel out roottar r5
 	rel=$(M -s kernelrelease)
-	out="${1:-$HERE/res/spare-sd-pb2/pocketbeagle2-tdm8.img}"
+	# named after the label the staged extlinux.conf boots: pocketbeagle2-tdm8.img,
+	# pocketbeagle2-ethcap.img, ...  so a cap card and a TDM8 card never overwrite
+	# each other
+	local label
+	label=$(awk '$1 == "default" { print $2; exit }' "$BOOTDIR/extlinux/extlinux.conf" 2>/dev/null || true)
+	out="${1:-$HERE/res/spare-sd-pb2/pocketbeagle2-${label:-tdm8}.img}"
 	roottar="${ROOTTAR:-$HERE/../buildroot-pb2/images/rootfs.tar.gz}"
 	r5="$UBOUT_PB2/r5/tiboot3-am62x-$UB_VARIANT-evm.bin"
 
@@ -319,7 +354,7 @@ sdimage() {
 	fi
 
 	echo "building $out"
-	echo "  boot     $BOOTDIR (Image-$rel.gz)"
+	echo "  boot     $BOOTDIR (Image-$rel.gz, default label ${label:-?})"
 	echo "  chain    $UB_VARIANT: $(basename "$r5"), tispl.bin, u-boot.img"
 	echo "  rootfs   $roottar"
 	BOOTSRC="$BOOTDIR" \
@@ -334,16 +369,18 @@ sdimage() {
 
 deploy() {
 	local rel; rel=$(M -s kernelrelease)
-	for d in "$DTB_NAME" "$DTB_ASYNC_NAME" "$DTB_STOCK"; do
+	for d in "$DTB_NAME" "$DTB_ASYNC_NAME" "$DTB_STOCK" "$DTB_ETHCAP_NAME"; do
 		[ -f "$OUTDIR/$d.dtb" ] || { echo "run '$0 dtb' first" >&2; exit 1; }
 	done
 	[ -d "$STAGE/lib/modules/$rel" ] || { echo "run '$0 build' first" >&2; exit 1; }
 	tar -C "$STAGE/lib/modules" -czf /tmp/kmods-"$rel".tgz "$rel"
 	scp "$KSRC/arch/arm64/boot/Image.gz" "$BOARD":/tmp/Image-"$rel".gz
 	scp /tmp/kmods-"$rel".tgz "$BOARD":/tmp/
-	scp "$OUTDIR/$DTB_NAME.dtb" "$OUTDIR/$DTB_ASYNC_NAME.dtb" "$OUTDIR/$DTB_STOCK.dtb" "$BOARD":/tmp/
+	scp "$OUTDIR/$DTB_NAME.dtb" "$OUTDIR/$DTB_ASYNC_NAME.dtb" "$OUTDIR/$DTB_STOCK.dtb" \
+	    "$OUTDIR/$DTB_ETHCAP_NAME.dtb" "$BOARD":/tmp/
 	ssh "$BOARD" "rel='$rel' DTB='$DTB_NAME' DTB_ASYNC='$DTB_ASYNC_NAME' DTB_STOCK='$DTB_STOCK' \
-		DEFAULT_LABEL='$TDM8_DEFAULT_LABEL' DEFAULT_APPEND='$DEFAULT_APPEND' sh -s" <<'REMOTE'
+		DTB_ETHCAP='$DTB_ETHCAP_NAME' \
+		DEFAULT_LABEL='$PB2_DEFAULT_LABEL' DEFAULT_APPEND='$DEFAULT_APPEND' sh -s" <<'REMOTE'
 set -e
 # the board's tar may be BusyBox (no -z); modules go to a versioned dir so kernels coexist
 gzip -dc /tmp/kmods-"$rel".tgz | tar -C /lib/modules -xf -
@@ -368,7 +405,7 @@ echo "boot partition: $MNT"
 
 mkdir -p "$MNT/ti" "$MNT/extlinux"
 cp /tmp/Image-"$rel".gz "$MNT/Image-$rel.gz"
-for d in "$DTB" "$DTB_ASYNC" "$DTB_STOCK"; do cp /tmp/"$d".dtb "$MNT/ti/$d.dtb"; done
+for d in "$DTB" "$DTB_ASYNC" "$DTB_STOCK" "$DTB_ETHCAP"; do cp /tmp/"$d".dtb "$MNT/ti/$d.dtb"; done
 
 # keep one pristine copy of whatever shipped on the card, and inherit its
 # cmdline so a board with a different root= keeps booting
@@ -378,7 +415,7 @@ A=$(grep -m1 'append' "$MNT/extlinux/extlinux.conf.orig" 2>/dev/null | sed 's/^[
 [ -n "$A" ] || A="$DEFAULT_APPEND"
 
 cat > "$MNT/extlinux/extlinux.conf" <<EXL
-menu title PocketBeagle 2 microSD (TDM8 -> UAC2)
+menu title PocketBeagle 2 microSD (TDM8 -> UAC2 / Ethernet Cap)
 timeout 30
 prompt 1
 default $DEFAULT_LABEL
@@ -400,10 +437,16 @@ label notdm8
     fdtdir /
     fdt /ti/$DTB_STOCK.dtb
     append $A
+label ethcap
+    menu label Linux $rel + Kebag-Logic Ethernet Cap rev B (DP83867 on RGMII2, eth0)
+    kernel /Image-$rel.gz
+    fdtdir /
+    fdt /ti/$DTB_ETHCAP.dtb
+    append $A
 EXL
 sync
 [ -n "$UMOUNT" ] && umount "$MNT"
-echo "deployed $rel + $DTB.dtb / $DTB_ASYNC.dtb / $DTB_STOCK.dtb"
+echo "deployed $rel + $DTB.dtb / $DTB_ASYNC.dtb / $DTB_STOCK.dtb / $DTB_ETHCAP.dtb (default $DEFAULT_LABEL)"
 echo "cmdline in use: $A"
 echo "enable the bridge with: sed -i 's/^TDM8_ENABLE=no/TDM8_ENABLE=yes/' /etc/tdm8/tdm8.env"
 echo "then reboot; the serial console can still pick 'notdm8'"
