@@ -3,8 +3,9 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 Kebag-Logic
 # SPDX-License-Identifier: MIT
 
-# Drop the PocketBeagle 2 TDM8 device trees into a kernel source tree and
-# register them in arch/arm64/boot/dts/ti/Makefile.  Idempotent: safe to re-run
+# Drop the PocketBeagle 2 device trees - the two TDM8 trees and the Kebag-Logic
+# Ethernet Cap tree - into a kernel source tree and register them in
+# arch/arm64/boot/dts/ti/Makefile.  Idempotent: safe to re-run
 # after `build-tdm8-uac2-pb2.sh fetch` re-clones ./linux, and after a kernel bump.
 #
 # Like the SK trees and unlike the MYIR one, these are ordinary in-tree sources:
@@ -16,11 +17,11 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 KSRC=${1:-$(cd "$HERE/../.." && pwd)/linux}
 TI="$KSRC/arch/arm64/boot/dts/ti"
 
-DTS_LIST="k3-am62-pocketbeagle2-tdm8 k3-am62-pocketbeagle2-tdm8-async"
+DTS_LIST="k3-am62-pocketbeagle2-tdm8 k3-am62-pocketbeagle2-tdm8-async k3-am62-pocketbeagle2-ethcap"
 
 [ -f "$KSRC/Makefile" ] || { echo "not a kernel tree: $KSRC" >&2; exit 1; }
 [ -f "$TI/k3-am62-pocketbeagle2.dts" ] || {
-	echo "$TI/k3-am62-pocketbeagle2.dts missing - the TDM8 device trees #include it." >&2
+	echo "$TI/k3-am62-pocketbeagle2.dts missing - every tree here #includes it." >&2
 	echo "It is present in v7.1, the tag this BSP pins; bump KVER if this tree is older." >&2
 	exit 1
 }
@@ -46,4 +47,4 @@ for d in $DTS_LIST; do
 	echo "Makefile: added $d.dtb"
 done
 
-echo "TDM8 PocketBeagle 2 device trees applied to $KSRC"
+echo "PocketBeagle 2 device trees applied to $KSRC"
