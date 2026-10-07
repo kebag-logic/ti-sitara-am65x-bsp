@@ -23,12 +23,12 @@ cap adds.
 
 ## Prebuilt image
 
-The [`pb2-ethcap-2026.10.07`](https://github.com/kebag-logic/ti-sitara-am65x-bsp/releases/tag/pb2-ethcap-2026.10.07)
+The [`pb2-ethcap-2026.10.07-r2`](https://github.com/kebag-logic/ti-sitara-am65x-bsp/releases/tag/pb2-ethcap-2026.10.07-r2)
 release carries the card this file describes, xz-compressed:
 
 ```sh
 sha256sum -c SHA256SUMS --ignore-missing
-xzcat pocketbeagle2-ethcap-2026.10.07.img.xz |
+xzcat pocketbeagle2-ethcap-2026.10.07-r2.img.xz |
   sudo dd of=/dev/sdX bs=4M conv=fsync status=progress
 ```
 
@@ -67,7 +67,7 @@ BOARD=pb2 PB2_DEFAULT_LABEL=ethcap ./build-tdm8-uac2-pb2.sh deploy
 Then log in:
 
 ```sh
-ssh root@192.168.1.12          # over the cap; password = BR2_TARGET_GENERIC_ROOT_PASSWD
+ssh root@192.168.1.12          # over the cap; password "root" (BR2_TARGET_GENERIC_ROOT_PASSWD)
 ssh root@192.168.7.12          # over USB-C (ECM), still there
 ```
 
@@ -249,8 +249,7 @@ ptp4l -i eth0 -2 -m --tx_timestamp_timeout=20   # gPTP needs an AVB switch or pe
 | `br2-external/board/bb-pocketbeagle2/rootfs-overlay/etc/network/interfaces` | `eth0` static `192.168.1.12/24`, the bench AVB subnet (`.10` MYIR, `.11` SK) |
 | `br2-external/board/bb-pocketbeagle2/post-build.sh` | sshd: `PermitRootLogin yes`, `PasswordAuthentication yes` |
 
-**SSH password login.** root logs in with the password from
-`BR2_TARGET_GENERIC_ROOT_PASSWD`, as well as with the keys in
-`/root/.ssh/authorized_keys`. That password is in this repository in plain
-text, and `eth0` puts the board on a real network. Change it before the board
-leaves the bench.
+**SSH password login.** root logs in with the password `root`
+(`BR2_TARGET_GENERIC_ROOT_PASSWD`), as well as with the keys in
+`/root/.ssh/authorized_keys`. Everyone knows that password, and `eth0` puts the
+board on a real network: run `passwd` before the board leaves the bench.
