@@ -21,6 +21,22 @@ cap adds.
 
 ---
 
+## Prebuilt image
+
+The [`pb2-ethcap-2026.10.07`](https://github.com/kebag-logic/ti-sitara-am65x-bsp/releases/tag/pb2-ethcap-2026.10.07)
+release carries the card this file describes, xz-compressed:
+
+```sh
+sha256sum -c SHA256SUMS --ignore-missing
+xzcat pocketbeagle2-ethcap-2026.10.07.img.xz |
+  sudo dd of=/dev/sdX bs=4M conv=fsync status=progress
+```
+
+The first boot grows `/` to the whole card (`README.tdm8-pb2.md` §5,
+"First boot fills the card"). Then log in as below.
+
+---
+
 ## 0. The commands, in order
 
 From the BSP root. Steps 1–3 of `README.tdm8-pb2.md` §0 (sources, `./build.sh
