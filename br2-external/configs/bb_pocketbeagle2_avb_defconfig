@@ -68,6 +68,8 @@ BR2_PACKAGE_IPERF3=y
 # cyclictest must hold its bound, and tcpdump captures AVTP on the board itself.
 BR2_PACKAGE_STRESS_NG=y
 BR2_PACKAGE_TCPDUMP=y
+# taskset and chrt, to place the validation's load and measurements
+BR2_PACKAGE_UTIL_LINUX_SCHEDUTILS=y
 # The USB-to-Milan bridge (README.pb2-tsn.md, path A): milan-ctrld, the Milan
 # control plane, built from milan-linux/ and milan-fpga at milan-fpga.pin
 BR2_PACKAGE_MILAN_BRIDGE=y
