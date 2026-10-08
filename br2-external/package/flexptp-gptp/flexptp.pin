@@ -3,4 +3,4 @@
 # readable by sh and make. Moving the pin is a reviewed change: rerun the
 # fork's conformance suite (tests/conformance/run.sh) at the new revision.
 FLEXPTP_REPO=https://github.com/kebag-logic/flexPTP
-FLEXPTP_REV=f985615c99d2669007568bde4c40e62e66e4010d
+FLEXPTP_REV=d116d3dfe8e69c98e380a777420606204342ce0a
