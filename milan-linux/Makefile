@@ -38,7 +38,7 @@ CTRLD_OBJS := $(addprefix $(O)/,$(notdir $(CTRLD_SRCS:.c=.o)))
 MEDIAD_SRCS := src/milan_mediad.c src/talker.c src/listener.c src/aaf.c src/servo.c src/gptp_time.c src/audio_alsa.c \
 	src/audio_sim.c src/datapath.c src/media.c src/shmblk.c
 MEDIAD_OBJS := $(addprefix $(O)/,$(notdir $(MEDIAD_SRCS:.c=.o)))
-DP_OBJS := $(addprefix $(O)/,milan_dp.o datapath.o media.o shmblk.o)
+DP_OBJS := $(addprefix $(O)/,milan_dp.o datapath.o media.o shmblk.o gptp_shm.o)
 
 all: $(O)/milan-ctrld $(O)/milan-mediad $(O)/milan-dp $(O)/milan-gptp-watch
 

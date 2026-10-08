@@ -3,18 +3,70 @@
 //
 // milan_dp.c - print the datapath block (datapath.h) as key=value lines, so
 // a shell, a test or a person can see what the control plane told the media
-// plane.
+// plane; or, with -g, flexptpd's gPTP status block (gptp_shm.h).
 //
 // usage: milan-dp [datapath block] [media block]
+//        milan-dp -g [gPTP status block, flexptpd.eth0]
 
 #define _GNU_SOURCE
 #include <stdio.h>
+#include <string.h>
 
 #include "datapath.h"
+#include "gptp_shm.h"
 #include "media.h"
+
+static const char *const PORT_STATES[] = {
+	"INITIALIZING", "LISTENING", "PRE_MASTER", "MASTER", "SLAVE",
+	"PASSIVE", "UNCALIBRATED", "FAULTY", "DISABLED",
+};
+
+static int print_gptp(const char *name)
+{
+	struct gptp_shm g;
+	if (gptp_shm_open(&g, name) != 0) {
+		fprintf(stderr, "milan-dp: bad status block name %s\n", name);
+		return 1;
+	}
+
+	struct gptp_status s;
+	if (!gptp_shm_read(&g, &s)) {
+		fprintf(stderr, "milan-dp: no gPTP status block %s (is flexptpd running?)\n", name);
+		return 1;
+	}
+
+	const char *state = s.port_state < sizeof PORT_STATES / sizeof PORT_STATES[0] ? PORT_STATES[s.port_state] : "?";
+
+	printf("port_state=%s\nlink_up=%u\nas_capable=%u\nis_measuring_delay=%u\ndomain=%u\n",
+	       state, s.link_up, s.as_capable, s.is_measuring_delay, s.domain);
+	printf("gm_present=%u\nlocked=%u\nown_identity=%016llx\ngm_identity=%016llx\n",
+	       s.gm_present, s.locked, (unsigned long long)s.own_identity, (unsigned long long)s.gm_identity);
+	printf("gm_priority1=%u\ngm_clock_class=%u\ngm_clock_accuracy=0x%02x\ngm_variance=0x%04x\ngm_priority2=%u\n",
+	       s.gm_priority1, s.gm_clock_class, s.gm_clock_accuracy, s.gm_variance, s.gm_priority2);
+	printf("steps_removed=%u\ngm_time_base_indicator=%u\ngm_changes=%u\n",
+	       s.steps_removed, s.gm_time_base_indicator, s.gm_changes);
+	printf("mean_link_delay_ns=%lld\nneighbor_rate_ratio=%.9f\nrate_ratio=%.9f\ntime_error_ns=%lld\ntuning_ppb=%.3f\n",
+	       (long long)s.mean_link_delay_ns, s.neighbor_rate_ratio, s.rate_ratio, (long long)s.time_error_ns,
+	       s.tuning_ppb);
+	printf("log_sync_interval=%d\nlog_pdelay_interval=%d\nlog_announce_interval=%d\n",
+	       s.log_sync_interval, s.log_pdelay_interval, s.log_announce_interval);
+	printf("sync_rx=%u\nsync_timeouts=%u\nannounce_rx=%u\nannounce_timeouts=%u\npdelay_lost=%u\n"
+	       "pdelay_multiple=%u\nsignaling_rx=%u\ntx_timestamps_lost=%u\n",
+	       s.sync_rx, s.sync_timeouts, s.announce_rx, s.announce_timeouts, s.pdelay_lost, s.pdelay_multiple,
+	       s.signaling_rx, s.tx_timestamps_lost);
+	printf("rsync_enabled=%u\nrsync_domain=%u\nrsync_interval_us=%u\nrsync_sent=%u\nupdates=%u\n",
+	       s.rsync_enabled, s.rsync_domain, s.rsync_interval_us, s.rsync_sent, s.updates);
+
+	gptp_shm_close(&g);
+	return 0;
+}
 
 int main(int argc, char **argv)
 {
+	if (argc > 1 && strcmp(argv[1], "-g") == 0) {
+		return print_gptp(argc > 2 ? argv[2] : "flexptpd.eth0");
+	}
+
 	const char *name = argc > 1 ? argv[1] : MILAN_DP_NAME;
 	const struct milan_dp *dp = milan_dp_open(name);
 	if (dp == NULL) {
