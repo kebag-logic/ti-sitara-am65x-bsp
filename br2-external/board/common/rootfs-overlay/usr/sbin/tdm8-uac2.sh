@@ -51,6 +51,11 @@ TDM8_LATENCY_US=${TDM8_LATENCY_US:-8000}
 TDM8_WAIT_CARDS=${TDM8_WAIT_CARDS:-20}
 TDM8_REQ_NUMBER=${TDM8_REQ_NUMBER:-4}
 TDM8_FB_MAX=${TDM8_FB_MAX:-5}
+# empty = let f_uac2 pick the high-speed bInterval (1 = one packet per 125 us)
+TDM8_HS_BINT=${TDM8_HS_BINT:-}
+TDM8_PRODUCT=${TDM8_PRODUCT:-"AM62x TDM8 ${TDM8_CHANNELS}x${TDM8_CHANNELS} UAC2"}
+TDM8_FUNCTION_NAME=${TDM8_FUNCTION_NAME:-"KL TDM8 ${TDM8_CHANNELS}x${TDM8_CHANNELS}"}
+TDM8_CONFIG_NAME=${TDM8_CONFIG_NAME:-"TDM8 ${TDM8_CHANNELS}ch @ ${TDM8_RATE} Hz"}
 TDM8_ECM=${TDM8_ECM:-yes}
 TDM8_USB0_IP=${TDM8_USB0_IP:-192.168.7.10/24}
 TDM8_ECM_DEV_ADDR=${TDM8_ECM_DEV_ADDR:-6a:65:62:6f:6f:00}
@@ -153,7 +158,7 @@ gadget_up() {
 
 	mkdir -p "$G/strings/0x409"
 	echo "Kebag-Logic"                            > "$G/strings/0x409/manufacturer"
-	echo "AM62x TDM8 ${TDM8_CHANNELS}x${TDM8_CHANNELS} UAC2" > "$G/strings/0x409/product"
+	echo "$TDM8_PRODUCT"                          > "$G/strings/0x409/product"
 	echo "0001"                                   > "$G/strings/0x409/serialnumber"
 
 	f=$G/functions/uac2.0
@@ -168,8 +173,13 @@ gadget_up() {
 	if [ -e "$f/c_sync" ];     then echo async              > "$f/c_sync";     fi
 	if [ -e "$f/fb_max" ];     then echo "$TDM8_FB_MAX"     > "$f/fb_max";     fi
 	if [ -e "$f/req_number" ]; then echo "$TDM8_REQ_NUMBER" > "$f/req_number"; fi
+	if [ -n "$TDM8_HS_BINT" ]; then
+		[ -e "$f/p_hs_bint" ] || die "this f_uac2 has no p_hs_bint/c_hs_bint (TDM8_HS_BINT=$TDM8_HS_BINT)"
+		echo "$TDM8_HS_BINT" > "$f/p_hs_bint"
+		echo "$TDM8_HS_BINT" > "$f/c_hs_bint"
+	fi
 	if [ -e "$f/function_name" ]; then
-		echo "KL TDM8 ${TDM8_CHANNELS}x${TDM8_CHANNELS}" > "$f/function_name"
+		echo "$TDM8_FUNCTION_NAME" > "$f/function_name"
 	fi
 
 	if [ "$TDM8_ECM" = yes ]; then
@@ -179,7 +189,7 @@ gadget_up() {
 	fi
 
 	mkdir -p "$G/configs/c.1/strings/0x409"
-	echo "TDM8 ${TDM8_CHANNELS}ch @ ${TDM8_RATE} Hz" > "$G/configs/c.1/strings/0x409/configuration"
+	echo "$TDM8_CONFIG_NAME" > "$G/configs/c.1/strings/0x409/configuration"
 	echo 250 > "$G/configs/c.1/MaxPower"
 	ln -sf "$f" "$G/configs/c.1/"
 	if [ "$TDM8_ECM" = yes ]; then ln -sf "$G/functions/ecm.usb0" "$G/configs/c.1/"; fi
@@ -195,6 +205,12 @@ gadget_up() {
 	echo "tdm8-uac2: gadget bound to $udc" \
 	     "(p_chmask=$p_chmask c_chmask=$c_chmask, dir=$TDM8_DIRECTION," \
 	     "${TDM8_RATE} Hz, ${ssize}-byte samples, OUT sync=async)"
+	# what the queued IN requests hold, the USB share of the board -> host latency
+	if [ -n "$TDM8_HS_BINT" ]; then
+		echo "tdm8-uac2: bInterval $TDM8_HS_BINT ($((125 << (TDM8_HS_BINT - 1))) us packets)," \
+		     "$TDM8_REQ_NUMBER requests queued per direction:" \
+		     "$((TDM8_REQ_NUMBER * (125 << (TDM8_HS_BINT - 1)))) us of USB buffering"
+	fi
 }
 
 # ---------------------------------------------------------------- bridge ----
@@ -278,7 +294,8 @@ status() {
 	if [ -d "$G" ]; then
 		echo "UDC:        $(cat "$G/UDC" 2>/dev/null)"
 		echo "functions:  $(ls "$G/functions" 2>/dev/null | tr '\n' ' ')"
-		for a in p_chmask c_chmask p_srate c_srate p_ssize c_ssize c_sync fb_max req_number; do
+		for a in p_chmask c_chmask p_srate c_srate p_ssize c_ssize c_sync fb_max req_number \
+		         p_hs_bint c_hs_bint; do
 			if [ -e "$G/functions/uac2.0/$a" ]; then
 				echo "uac2.$a = $(cat "$G/functions/uac2.0/$a")"
 			fi

@@ -2,16 +2,31 @@
 
 # Bring up the USB gadget on the OTG port (usb0 = mgmt/ssh link) at boot.
 #
-# Two shapes, selected by TDM8_ENABLE in /etc/tdm8/tdm8.env:
-#   yes -> TDM8 8x8 UAC2 + ECM, plus the alsaloop bridge to the McASP1 TDM link
-#   no  -> the plain composite gadget the safe-update/RAUC flow has always used
+# Three shapes:
+#   AVB gadget -> when /etc/avb/avb.env names AVB_GADGET_ENV and AVB_INTERFACE
+#                 exists (the PocketBeagle 2 under its "ethcap" label): the UAC2 +
+#                 ECM gadget built from that profile, no alsaloop bridge, since the
+#                 Milan media plane owns the PCMs
+#   TDM8_ENABLE=yes in /etc/tdm8/tdm8.env -> TDM8 8x8 UAC2 + ECM, plus the alsaloop
+#                 bridge to the McASP TDM link
+#   otherwise  -> the plain composite gadget the safe-update/RAUC flow has always used
 TDM8_ENV=/etc/tdm8/tdm8.env
 TDM8_ENABLE=no
 [ -r "$TDM8_ENV" ] && . "$TDM8_ENV"
+AVB_INTERFACE=
+AVB_GADGET_ENV=
+[ -r /etc/avb/avb.env ] && . /etc/avb/avb.env
+
+avb_gadget() {
+	[ -n "$AVB_GADGET_ENV" ] && [ -r "$AVB_GADGET_ENV" ] &&
+		[ -n "$AVB_INTERFACE" ] && [ -d "/sys/class/net/$AVB_INTERFACE" ]
+}
 
 case "$1" in
 start)
-	if [ "$TDM8_ENABLE" = yes ]; then
+	if avb_gadget; then
+		TDM8_ENV="$AVB_GADGET_ENV" /usr/sbin/tdm8-uac2.sh gadget-up || exit 1
+	elif [ "$TDM8_ENABLE" = yes ]; then
 		/usr/sbin/tdm8-uac2.sh gadget-up || exit 1
 		# the bridge waits for both ALSA cards, so park it in the
 		# background instead of stalling the rest of the boot on the FPGA
@@ -22,7 +37,9 @@ start)
 	exit 0
 	;;
 stop)
-	if [ "$TDM8_ENABLE" = yes ]; then
+	if avb_gadget; then
+		TDM8_ENV="$AVB_GADGET_ENV" /usr/sbin/tdm8-uac2.sh gadget-down
+	elif [ "$TDM8_ENABLE" = yes ]; then
 		/usr/sbin/tdm8-uac2.sh down
 	else
 		/root/remove_usb.sh
