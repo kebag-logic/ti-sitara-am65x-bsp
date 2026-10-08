@@ -177,13 +177,13 @@ static void report(const struct milan_media_talker *t, const struct milan_media_
 	}
 	say(LOG_INFO,
 	    "talker %s%s stream %016llx -> %012llx | PDUs %llu underruns %llu overruns %llu late %llu send errors %llu "
-	    "| level %d..%d avg %.2f (target %d) pitch %u | worst send delay %d ns | gPTP corr %lld ns residual %lld ns",
+	    "| level %d..%d avg %.2f (target %d) pitch %u | worst send delay %d ns | gPTP rate %+.3f ppm residual %lld ns",
 	    t->active ? "active" : "idle", t->locked ? ", locked" : "", (unsigned long long)t->stream_id,
 	    (unsigned long long)t->dest_mac, (unsigned long long)t->frames_tx, (unsigned long long)t->underruns,
 	    (unsigned long long)t->overruns, (unsigned long long)t->late, (unsigned long long)t->send_errors,
 	    t->level_min == INT32_MAX ? 0 : t->level_min, t->level_max == INT32_MIN ? 0 : t->level_max,
 	    t->level_avg_milli / 1000.0, t->level_target, t->pitch, t->late_max_ns,
-	    (long long)atomic_load(&clk->corr_ns), (long long)clk->residual_ns);
+	    (clk->model.rate - 1.0) * 1e6, (long long)clk->residual_ns);
 }
 
 int main(int argc, char **argv)
@@ -322,7 +322,7 @@ int main(int argc, char **argv)
 			listener_report(&ls, &l);
 		}
 		milan_media_begin(media);
-		media->gptp_corr_ns = atomic_load(&clk.corr_ns);
+		media->gptp_rate_ppb = (int64_t)((clk.model.rate - 1.0) * 1e9);
 		media->gptp_residual_ns = clk.residual_ns;
 		media->gptp_calibrated = clk.calibrated;
 		media->talker = t;

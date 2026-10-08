@@ -56,25 +56,26 @@
 static struct {
 	const char *ifname;
 	const char *entity_path;
-	const char *ptp_server;
-	const char *ptp_local;
+	const char *gptp_shm;           // flexptpd's status block, NULL for none
 	const char *dp_name;
 	const char *journal;            // the saved-state journal file, NULL for none
 	uint16_t vlan;
-	unsigned ptp_poll_ms;
+	unsigned gptp_poll_ms;
 	bool use_syslog;
 	bool no_srp;
 	int verbose;
 } opt = {
 	.ifname = "eth0",
 	.entity_path = "/etc/milan/entity.conf",
-	.ptp_server = "/var/run/ptp4lro",
-	.ptp_local = "/var/run/milan-ctrld.ptp",
+	.gptp_shm = NULL,               // "flexptpd.<interface>" unless -g says otherwise
 	.dp_name = MILAN_DP_NAME,
 	.journal = "/var/lib/milan/journal.bin",
 	.vlan = DEFAULT_VLAN,
-	.ptp_poll_ms = 250u,
+	.gptp_poll_ms = 100u,
 };
+
+static bool gptp_none;                  // -g none: no gPTP plane
+static char gptp_default[64];
 
 // sinks whose talker attribute the no-SRP mode owes the ACMP core, delivered
 // from the main loop: a port never calls back into a core (milan-fpga #678)
@@ -340,8 +341,7 @@ static void usage(FILE *to)
 		"usage: milan-ctrld [options]\n"
 		"  -i IFACE   AVB interface (eth0)\n"
 		"  -e FILE    entity description (/etc/milan/entity.conf)\n"
-		"  -p PATH    ptp4l read-only management socket (/var/run/ptp4lro), \"none\" for no gPTP\n"
-		"  -l PATH    our socket for ptp4l's replies (/var/run/milan-ctrld.ptp)\n"
+		"  -g NAME    flexptpd's gPTP status block, a shm_open() name (flexptpd.IFACE), \"none\" for no gPTP\n"
 		"  -d NAME    datapath block, a shm_open() name (" MILAN_DP_NAME ")\n"
 		"  -N FILE    saved-state journal (/var/lib/milan/journal.bin), \"none\" for none\n"
 		"  -V VID     VLAN of the talker's streams (2)\n"
@@ -354,12 +354,14 @@ static void usage(FILE *to)
 static int parse(int argc, char **argv)
 {
 	int c;
-	while ((c = getopt(argc, argv, "i:e:p:l:d:N:V:nsvh")) != -1) {
+	while ((c = getopt(argc, argv, "i:e:g:d:N:V:nsvh")) != -1) {
 		switch (c) {
 		case 'i': opt.ifname = optarg; break;
 		case 'e': opt.entity_path = optarg; break;
-		case 'p': opt.ptp_server = strcmp(optarg, "none") == 0 ? NULL : optarg; break;
-		case 'l': opt.ptp_local = optarg; break;
+		case 'g':
+			gptp_none = strcmp(optarg, "none") == 0;
+			opt.gptp_shm = gptp_none ? NULL : optarg;
+			break;
 		case 'd': opt.dp_name = optarg; break;
 		case 'N': opt.journal = strcmp(optarg, "none") == 0 ? NULL : optarg; break;
 		case 'V': opt.vlan = (uint16_t)strtoul(optarg, NULL, 0); break;
@@ -462,12 +464,16 @@ int main(int argc, char **argv)
 	if (entity_conf_load(&econf, opt.entity_path) != 0) {
 		return 1;
 	}
+	// flexptpd's block is named after the interface it runs on
+	if (opt.gptp_shm == NULL && !gptp_none) {
+		snprintf(gptp_default, sizeof gptp_default, "flexptpd.%s", opt.ifname);
+		opt.gptp_shm = gptp_default;
+	}
+
 	struct softfab_config fcfg = {
 		.ifname = opt.ifname,
-		.ptp_server = opt.ptp_server,
-		.ptp_local = opt.ptp_local,
-		.ptp_transport_specific = 1u,
-		.ptp_poll_ms = opt.ptp_poll_ms,
+		.gptp_shm = opt.gptp_shm,
+		.gptp_poll_ms = opt.gptp_poll_ms,
 	};
 	if (softfab_open(&fab, &fcfg) != 0) {
 		return 1;

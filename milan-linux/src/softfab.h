@@ -21,10 +21,10 @@
 //   timer bank, TICK             the model's millisecond clock, advanced to
 //                                CLOCK_MONOTONIC on every wake
 //   link level                   rtnetlink link messages (IFF_RUNNING)
-//   gPTP plane                   ptp4l's read-only management socket,
-//                                TIME_STATUS_NP polled for the grandmaster
-//   interrupt and sleep          epoll on the socket, netlink and ptp4l, with
-//                                a timeout at the next model deadline
+//   gPTP plane                   flexptpd's status block in shared memory,
+//                                polled for the grandmaster and asCapable
+//   interrupt and sleep          epoll on the socket and netlink, with a
+//                                timeout at the next model deadline or poll
 //
 // One interface (MBX_N_IF is 1 in the shipping contract). One thread.
 
@@ -34,15 +34,13 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "gptp_shm.h"
 #include "mbx_model.h"
-#include "ptp_mgmt.h"
 
 struct softfab_config {
 	const char *ifname;
-	const char *ptp_server;         // ptp4l's read-only socket; NULL = no gPTP plane
-	const char *ptp_local;          // our socket for the replies
-	uint8_t ptp_transport_specific; // 1 for gPTP
-	unsigned ptp_poll_ms;           // TIME_STATUS_NP period
+	const char *gptp_shm;           // flexptpd's status block; NULL = no gPTP plane
+	unsigned gptp_poll_ms;          // its polling period
 };
 
 struct softfab_stats {
@@ -52,7 +50,7 @@ struct softfab_stats {
 	uint64_t tx_errors;             // sendto() failures
 	uint64_t tx_lost;               // frames the capture lost before we sent them
 	uint64_t gm_changes;
-	uint64_t ptp_replies;
+	uint64_t gptp_reads;            // consistent status block reads
 };
 
 struct softfab {
@@ -70,9 +68,11 @@ struct softfab {
 	uint64_t gm_id;
 	uint8_t gm_domain;
 	bool as_capable;
-	struct ptp_mgmt ptp;
-	bool ptp_open;
-	uint64_t ptp_next_ms;
+	struct gptp_shm gptp;
+	bool gptp_open;
+	uint64_t gptp_next_ms;          // the next poll
+	uint32_t gptp_updates;          // the block's update counter at the last change
+	uint64_t gptp_fresh_ms;         // when it last changed
 	struct softfab_stats stats;
 };
 

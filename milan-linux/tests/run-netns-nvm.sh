@@ -39,12 +39,12 @@ ip link set veth0 up
 ip link set veth1 up
 sleep 0.2
 
-"$B/milan-ctrld" -i veth0 -e "$E" -p none -n -l "$TMP/a.ptp" -d "$DPA" -N "$TMP/a.bin" > "$TMP/a.log" 2>&1 &
+"$B/milan-ctrld" -i veth0 -e "$E" -g none -n -d "$DPA" -N "$TMP/a.bin" > "$TMP/a.log" 2>&1 &
 A=$!
 # start B, and wait for its own datapath block: until then the block is the
 # killed process's, and must not be read for the new one's state
 start_b() {
-	"$B/milan-ctrld" -i veth1 -e "$E" -p none -n -l "$TMP/b.ptp" -d "$DPB" -N "$TMP/b.bin" >> "$TMP/b.log" 2>&1 &
+	"$B/milan-ctrld" -i veth1 -e "$E" -g none -n -d "$DPB" -N "$TMP/b.bin" >> "$TMP/b.log" 2>&1 &
 	CB=$!
 	i=0
 	while [ "$i" -lt 50 ] && [ "$("$B/milan-dp" "$DPB" 2>/dev/null | sed -n 's/^writer_pid=//p')" != "$CB" ]; do

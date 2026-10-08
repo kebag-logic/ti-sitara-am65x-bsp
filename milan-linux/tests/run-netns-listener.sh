@@ -43,9 +43,9 @@ sleep 0.2
 
 E="$HERE/../config/entity.conf"
 # -n: a direct link, no MSRP bridge, so a settled sink does not wait for SRP
-"$B/milan-ctrld" -i veth0 -e "$E" -p none -n -l "$TMP/a.ptp" -d "$DPA" -N "$TMP/a.bin" > "$TMP/ctrld-a.log" 2>&1 &
+"$B/milan-ctrld" -i veth0 -e "$E" -g none -n -d "$DPA" -N "$TMP/a.bin" > "$TMP/ctrld-a.log" 2>&1 &
 PIDS="$!"
-"$B/milan-ctrld" -i veth1 -e "$E" -p none -n -l "$TMP/b.ptp" -d "$DPB" -N "$TMP/b.bin" > "$TMP/ctrld-b.log" 2>&1 &
+"$B/milan-ctrld" -i veth1 -e "$E" -g none -n -d "$DPB" -N "$TMP/b.bin" > "$TMP/ctrld-b.log" 2>&1 &
 PIDS="$PIDS $!"
 # Without SCHED_FIFO, on a shared host, either bridge's threads can be held off
 # for tens of milliseconds. A 50 ms PTO and drop level, and a 100 ms

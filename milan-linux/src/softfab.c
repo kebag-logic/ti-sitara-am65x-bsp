@@ -162,56 +162,49 @@ static void rx_netlink(struct softfab *sf)
 	}
 }
 
-static void rx_ptp(struct softfab *sf)
-{
-	uint8_t buf[512];
-	for (;;) {
-		ssize_t n = recv(sf->ptp.fd, buf, sizeof buf, 0);
-		if (n <= 0) {
-			return;
-		}
-		uint16_t id;
-		uint8_t domain;
-		const uint8_t *data;
-		size_t len;
-		if (!ptp_mgmt_decode(buf, (size_t)n, &id, &domain, &data, &len)) {
-			continue;
-		}
-		sf->stats.ptp_replies++;
-		if (id == PTP_MID_TIME_STATUS_NP) {
-			struct ptp_time_status ts;
-			if (!ptp_parse_time_status(data, len, &ts)) {
-				continue;
-			}
-			if (!sf->gm_known || ts.gm_identity != sf->gm_id || domain != sf->gm_domain) {
-				sf->gm_known = true;
-				sf->gm_id = ts.gm_identity;
-				sf->gm_domain = domain;
-				sf->stats.gm_changes++;
-				mbx_model_gm_change(&sf->model, 0, ts.gm_identity, domain);
-			}
-		} else if (id == PTP_MID_PORT_DATA_SET_NP) {
-			struct ptp_port_ds_np ds;
-			if (ptp_parse_port_ds_np(data, len, &ds)) {
-				sf->as_capable = ds.as_capable;
-			}
-		}
-	}
-}
+// flexptpd's block, unchanged this long, belongs to a flexptpd that is gone:
+// a new one makes a new block under the same name, so map it again
+#define GPTP_STALE_MS 2000u
 
-static void poll_ptp(struct softfab *sf)
+static void poll_gptp(struct softfab *sf)
 {
-	if (!sf->ptp_open) {
+	if (!sf->gptp_open) {
 		return;
 	}
+
 	uint64_t now = softfab_now_ms(sf);
-	if (now < sf->ptp_next_ms) {
+	if (now < sf->gptp_next_ms) {
 		return;
 	}
-	sf->ptp_next_ms = now + sf->cfg.ptp_poll_ms;
-	// ptp4l not running yet is not an error: the next poll asks again
-	(void)ptp_mgmt_get(&sf->ptp, PTP_MID_TIME_STATUS_NP);
-	(void)ptp_mgmt_get(&sf->ptp, PTP_MID_PORT_DATA_SET_NP);
+	sf->gptp_next_ms = now + sf->cfg.gptp_poll_ms;
+
+	// flexptpd not running yet is not an error: the next poll looks again
+	struct gptp_status st;
+	if (!gptp_shm_read(&sf->gptp, &st)) {
+		return;
+	}
+	sf->stats.gptp_reads++;
+
+	if (st.updates != sf->gptp_updates) {
+		sf->gptp_updates = st.updates;
+		sf->gptp_fresh_ms = now;
+	} else if (now - sf->gptp_fresh_ms > GPTP_STALE_MS) {
+		gptp_shm_close(&sf->gptp);
+		sf->gptp_fresh_ms = now;
+		return;
+	}
+
+	sf->as_capable = st.as_capable;
+
+	uint64_t gm = gptp_status_grandmaster(&st);
+
+	if (!sf->gm_known || gm != sf->gm_id || st.domain != sf->gm_domain) {
+		sf->gm_known = true;
+		sf->gm_id = gm;
+		sf->gm_domain = st.domain;
+		sf->stats.gm_changes++;
+		mbx_model_gm_change(&sf->model, 0, gm, st.domain);
+	}
 }
 
 // Milliseconds until the model next needs time to pass: its earliest armed
@@ -233,8 +226,8 @@ static int wait_ms(struct softfab *sf)
 		int64_t d = (int64_t)MBX_TICK_MS - m->tick_div;
 		wait = d < wait ? d : wait;
 	}
-	if (sf->ptp_open) {
-		int64_t d = (int64_t)sf->ptp_next_ms - (int64_t)softfab_now_ms(sf);
+	if (sf->gptp_open) {
+		int64_t d = (int64_t)sf->gptp_next_ms - (int64_t)softfab_now_ms(sf);
 		wait = d < wait ? d : wait;
 	}
 	return wait < 0 ? 0 : (int)wait;
@@ -250,11 +243,9 @@ void softfab_pump(struct softfab *sf, bool block)
 			rx_frames(sf);
 		} else if (ev[k].data.fd == sf->nl_fd) {
 			rx_netlink(sf);
-		} else if (sf->ptp_open && ev[k].data.fd == sf->ptp.fd) {
-			rx_ptp(sf);
 		}
 	}
-	poll_ptp(sf);
+	poll_gptp(sf);
 	tx_flush(sf);
 }
 
@@ -346,7 +337,7 @@ int softfab_open(struct softfab *sf, const struct softfab_config *cfg)
 {
 	memset(sf, 0, sizeof *sf);
 	sf->cfg = *cfg;
-	sf->pkt_fd = sf->nl_fd = sf->ep_fd = sf->ptp.fd = -1;
+	sf->pkt_fd = sf->nl_fd = sf->ep_fd = -1;
 	mbx_model_reset(&sf->model);
 	sf->t0_ms = mono_ms();
 	bound = sf;
@@ -373,13 +364,10 @@ int softfab_open(struct softfab *sf, const struct softfab_config *cfg)
 	if (err == 0) {
 		err = watch(sf, sf->nl_fd);
 	}
-	if (err == 0 && cfg->ptp_server != NULL) {
-		what = "ptp4l management socket";
-		err = ptp_mgmt_open(&sf->ptp, cfg->ptp_server, cfg->ptp_local, cfg->ptp_transport_specific);
-		if (err == 0) {
-			sf->ptp_open = true;
-			err = watch(sf, sf->ptp.fd);
-		}
+	if (err == 0 && cfg->gptp_shm != NULL) {
+		what = "flexptpd status block name";
+		err = gptp_shm_open(&sf->gptp, cfg->gptp_shm);
+		sf->gptp_open = err == 0;
 	}
 	if (err != 0) {
 		fprintf(stderr, "softfab: %s on %s: %s\n", what, cfg->ifname, strerror(-err));
@@ -392,9 +380,9 @@ int softfab_open(struct softfab *sf, const struct softfab_config *cfg)
 
 void softfab_close(struct softfab *sf)
 {
-	if (sf->ptp_open) {
-		ptp_mgmt_close(&sf->ptp);
-		sf->ptp_open = false;
+	if (sf->gptp_open) {
+		gptp_shm_close(&sf->gptp);
+		sf->gptp_open = false;
 	}
 	if (sf->ep_fd >= 0) {
 		close(sf->ep_fd);

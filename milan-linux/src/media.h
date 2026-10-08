@@ -67,8 +67,8 @@ struct milan_media {
 	uint32_t version;
 	uint32_t seq;
 	uint32_t writer_pid;
-	int64_t gptp_corr_ns;           // gPTP - CLOCK_TAI
-	int64_t gptp_residual_ns;       // its change at the last calibration
+	int64_t gptp_rate_ppb;          // the PHC's rate against CLOCK_MONOTONIC_RAW, less 1, in ppb
+	int64_t gptp_residual_ns;       // the model's miss at the last measurement
 	uint8_t gptp_calibrated;
 	uint8_t pad[7];
 	struct milan_media_talker talker;

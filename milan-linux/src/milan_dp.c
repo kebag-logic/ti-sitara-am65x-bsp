@@ -50,7 +50,7 @@ int main(int argc, char **argv)
 		return 0;
 	}
 	const struct milan_media_talker *t = &m.talker;
-	printf("gptp_corr_ns=%lld\ngptp_residual_ns=%lld\ngptp_calibrated=%u\n", (long long)m.gptp_corr_ns,
+	printf("gptp_rate_ppb=%lld\ngptp_residual_ns=%lld\ngptp_calibrated=%u\n", (long long)m.gptp_rate_ppb,
 	       (long long)m.gptp_residual_ns, m.gptp_calibrated);
 	printf("talker_active=%u\ntalker_locked=%u\ntalker_pitch=%u\ntalker_stream_id=%016llx\n"
 	       "talker_frames_tx=%llu\ntalker_underruns=%llu\ntalker_overruns=%llu\ntalker_late=%llu\n"

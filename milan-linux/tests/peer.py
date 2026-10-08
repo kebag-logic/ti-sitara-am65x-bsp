@@ -6,8 +6,8 @@
 Plays every role the bench plays for issue #8 (A1), on one host, inside the
 network namespace run-netns.sh makes:
 
-  ptp4l        a fake read-only management socket answering TIME_STATUS_NP and
-               PORT_DATA_SET_NP with a grandmaster the test chooses
+  flexptpd     a fake gPTP status block in /dev/shm, as flexptpd publishes it,
+               with a grandmaster the test chooses
   controller   ENTITY_DISCOVER, BIND_RX, UNBIND_RX
   listener     PROBE_TX_COMMAND to the PB2's talker
   talker       PROBE_TX_RESPONSE to the PB2's listener
@@ -23,6 +23,7 @@ Usage (as root in the namespace): peer.py --dut veth0 --peer veth1 --ctrld BIN -
 from __future__ import annotations
 
 import argparse
+import mmap
 import os
 import signal
 import socket
@@ -164,43 +165,72 @@ def is_sub(sub: int, msg: int | None = None):
     return lambda f: f[14] == sub and (msg is None or (f[15] & 0x0F) == msg)
 
 
-# ---- the fake ptp4l ---------------------------------------------------------------
+# ---- the fake flexptpd -------------------------------------------------------------
 
-class FakePtp4l:
-    """ptp4l's read-only management socket, answering two GETs."""
+# the status block: "FLXPTPD", layout 1, seq, size, then PtpGptpStatus (136 bytes)
+SHM_HEADER = struct.Struct("<8sIIII")
+SHM_STATUS = struct.Struct("<II8BQQ4BHHHHIqddqd4b8IBBHII")
+PORT_SLAVE = 4
 
-    def __init__(self, path: str):
+
+class FakeFlexptpd:
+    """flexptpd's status block, refreshed every 50 ms like the real one."""
+
+    def __init__(self, name: str, own: int):
         self.gm = GM_A
-        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-        if os.path.exists(path):
-            os.unlink(path)
-        self.sock.bind(path)
-        self.sock.settimeout(0.1)
-        self.gets = 0
+        self.own = own
+        self.path = "/dev/shm/" + name
+        self.seq = 0
+        self.updates = 0
         self.stop = False
+
+        with open(self.path, "wb") as f:
+            f.write(b"\0" * (SHM_HEADER.size + SHM_STATUS.size))
+
+        self.f = open(self.path, "r+b")
+        self.map = mmap.mmap(self.f.fileno(), SHM_HEADER.size + SHM_STATUS.size)
+
+        self._write()
         threading.Thread(target=self._run, daemon=True).start()
+
+    def _status(self) -> bytes:
+        self.updates += 1
+
+        return SHM_STATUS.pack(
+            1, self.updates,
+            PORT_SLAVE, 1, 1, 1, 0, 1, 1, 0,          # port state, link, asCapable, measuring, domain 0, gmPresent, locked
+            self.own,
+            self.gm,
+            246, 248, 0xFE, 248, 0x4100, 1, 0, 0, 1,  # the GM's quality, stepsRemoved, time base, changes
+            200, 1.0, 1.0, 0, 0.0,                    # link delay, ratios, time error, tuning
+            -3, 0, 0, 0,                              # intervals
+            0, 0, 0, 0, 0, 0, 0, 0,                   # counters
+            0, 1, 0, 0, 0)                            # reverse sync
+
+    def _write(self) -> None:
+        # a seqlock: odd while writing
+        self.seq += 1
+        self.map[0:SHM_HEADER.size] = SHM_HEADER.pack(b"FLXPTPD\0", 1, self.seq, SHM_STATUS.size, 0)
+
+        self.map[SHM_HEADER.size:] = self._status()
+
+        self.seq += 1
+        self.map[0:SHM_HEADER.size] = SHM_HEADER.pack(b"FLXPTPD\0", 1, self.seq, SHM_STATUS.size, 0)
 
     def _run(self) -> None:
         while not self.stop:
-            try:
-                req, addr = self.sock.recvfrom(512)
-            except socket.timeout:
-                continue
-            if len(req) < 54 or (req[0] & 0x0F) != 0x0D or (req[0] >> 4) != 1:
-                continue
-            self.gets += 1
-            mid = struct.unpack(">H", req[52:54])[0]
-            if mid == 0xC000:
-                data = struct.pack(">qqiiH", 0, 0, 0, 0, 0) + b"\0" * 12 + struct.pack(">iQ", 1, self.gm)
-            elif mid == 0xC002:
-                data = struct.pack(">Ii", 800, 1)
-            else:
-                continue
-            rsp = bytearray(req[:54])
-            rsp[46] = (rsp[46] & 0xF0) | 2
-            struct.pack_into(">H", rsp, 2, 54 + len(data))
-            struct.pack_into(">H", rsp, 50, 2 + len(data))
-            self.sock.sendto(bytes(rsp) + data, addr)
+            time.sleep(0.05)
+            self._write()
+
+    def close(self) -> None:
+        self.stop = True
+        time.sleep(0.1)
+        self.map.close()
+        self.f.close()
+        try:
+            os.unlink(self.path)
+        except OSError:
+            pass
 
 
 # ---- the test ---------------------------------------------------------------------
@@ -249,18 +279,18 @@ def main() -> int:
     probe.close()
     eid = mac_int(dut_mac[:3] + b"\xff\xfe" + dut_mac[3:])
     shm = f"/milan-dp-test-{os.getpid()}"
-    ptp = FakePtp4l(os.path.join(a.tmp, "ptp4lro"))
+    gptp_name = f"flexptpd-test-{os.getpid()}"
+    ptp = FakeFlexptpd(gptp_name, mac_int(dut_mac[:3] + b"\xff\xfe" + dut_mac[3:]))
     wire = Wire(a.peer, dut_mac)
 
     log = open(os.path.join(a.tmp, "ctrld.log"), "w")
     t0 = time.monotonic()
-    proc = subprocess.Popen([a.ctrld, "-i", a.dut, "-e", a.entity, "-p", os.path.join(a.tmp, "ptp4lro"),
-                             "-l", os.path.join(a.tmp, "ctrld.ptp"), "-d", shm,
+    proc = subprocess.Popen([a.ctrld, "-i", a.dut, "-e", a.entity, "-g", gptp_name, "-d", shm,
                              "-N", os.path.join(a.tmp, "journal.bin"), "-v"], stdout=log, stderr=log)
     try:
         # A1.2: ENTITY_AVAILABLE with the entity's identity, shape and grandmaster
         r = wire.wait(lambda f: is_sub(SUB_ADP, ADP_AVAILABLE)(f) and parse_adp(f[14:])["gm"] == GM_A, 7.0)
-        if g.check("ADP: ENTITY_AVAILABLE carrying ptp4l's grandmaster", r is not None,
+        if g.check("ADP: ENTITY_AVAILABLE carrying flexptpd's grandmaster", r is not None,
                    f"after {r[0] - t0:.2f} s" if r else "none in 7 s"):
             p = parse_adp(r[1][14:])
             g.check("ADP: destination 91:e0:f0:01:00:00, 82-byte frame", r[1][:6] == ADP_ACMP_MC and len(r[1]) >= 82)
@@ -272,7 +302,6 @@ def main() -> int:
             got = {k: p[k] for k in want}
             g.check("ADP: fields as entity.conf", got == want, "" if got == want else f"{got} != {want}")
             g.check("ADP: gPTP domain 0", p["domain"] == 0)
-        g.check("ptp4l: management GETs received", ptp.gets > 0, f"{ptp.gets}")
 
         # the datapath block carries the identity and the grandmaster
         dp = milan_dp(a.dp, shm)
@@ -382,7 +411,7 @@ def main() -> int:
         if proc.poll() is None:
             proc.kill()
         wire.stop = True
-        ptp.stop = True
+        ptp.close()
         try:
             os.unlink("/dev/shm" + shm)
         except OSError:

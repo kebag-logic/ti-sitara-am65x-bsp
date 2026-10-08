@@ -41,7 +41,7 @@ ip link set veth0 up
 ip link set veth1 up
 sleep 0.2
 
-"$B/milan-ctrld" -i veth0 -e "$HERE/../config/entity.conf" -p none -d "$DP" -N "$TMP/journal.bin" > "$TMP/ctrld.log" 2>&1 &
+"$B/milan-ctrld" -i veth0 -e "$HERE/../config/entity.conf" -g none -d "$DP" -N "$TMP/journal.bin" > "$TMP/ctrld.log" 2>&1 &
 CTRLD=$!
 # no SCHED_FIFO in a user namespace, so the host's stalls are absorbed by a
 # 10 ms drop level; on the board the talker runs SCHED_FIFO on its own core
