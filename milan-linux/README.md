@@ -70,8 +70,8 @@ gPTP. No frame is resampled, dropped or repeated: the stream is bit-exact.
 
 | Setting | Default | What it is |
 |---|---|---|
-| `-L` (`AVB_TALKER_LEVEL`) | 24 frames | the level the servo holds, and the bridge's own latency: about 500 us from a USB packet to its PDU |
-| `-M` | 96 frames | the level past which frames are dropped (an overrun) |
+| `-L` (`AVB_TALKER_LEVEL`) | 48 frames | the level the servo holds, and the bridge's own latency: about 1 ms from a USB packet to its PDU. 24 (500 us) ran dry behind the bench host's USB delivery gaps |
+| `-M` | 192 frames | the level past which frames are dropped (an overrun); `milan-bridge.sh` passes 4 x `-L` |
 | `-o` (`AVB_PTO_NS`) | 2 000 000 | presentation time offset |
 | `-P` (`AVB_MEDIAD_PRIO`), `-a` (`AVB_RT_CPU`) | 70, CPU 3 | the talker thread: SCHED_FIFO, on the core the `ethcap` label isolates |
 
@@ -81,9 +81,15 @@ gPTP. No frame is resampled, dropped or repeated: the stream is bit-exact.
   `CLOCK_TAI`, which `phc2sys` keeps on the PHC.
 * **The talker's states.** PRIMING sends silence until the buffer holds its
   level. RUNNING sends 6 frames per PDU, or silence on an underrun, and drops
-  frames past `-M` (an overrun). IDLE sends silence while the host sends
-  nothing for 10 ms, with the pitch back at nominal. The level is judged as the
-  slot saw it: frames that arrived because a wake was late are not an excess.
+  frames past `-M` (an overrun). The level is judged as the slot saw it: frames
+  that arrived because a wake was late are not an excess. IDLE begins when no
+  new frame has arrived for 10 ms, not when the buffer is empty, since a host
+  that stops can leave a few frames. It drops them, sends silence, and puts the
+  pitch back at nominal.
+* **Sleeping, and gPTP jumps.** Each slot's wait is measured in gPTP time and
+  slept on `CLOCK_MONOTONIC`, which no clock step moves. A slot more than 50 ms
+  ahead or behind means the time base jumped (`ptp4l`'s first lock, a
+  grandmaster change), and the stream starts over on the new time base.
 * **Frames go out tagged** by the talker itself (VID from the datapath block,
   PCP = `SO_PRIORITY` = 3), on `eth0`, so `mqprio` puts them in class A
   (`avb-shaper.sh`).

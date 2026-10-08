@@ -5,9 +5,9 @@
 //
 // AVTP timestamps are gPTP time, which is the PHC of the AVB interface (the
 // CPTS on the PB2), steered by ptp4l. Reading the PHC is a system call into the
-// CPTS, so the real-time path reads CLOCK_TAI instead (a vDSO read, and a
-// clock clock_nanosleep() can sleep on), which phc2sys keeps on the PHC, plus
-// a correction this module measures once a second against the PHC itself
+// CPTS, so the real-time path reads CLOCK_TAI instead (a vDSO read), which
+// phc2sys keeps on the PHC, plus a correction this module measures once a
+// second against the PHC itself
 // (PTP_SYS_OFFSET_EXTENDED). The correction absorbs a kernel TAI offset that
 // phc2sys did not set (37 s) and phc2sys's residual, and the residual it
 // measures is the media clock's error, which the bridge reports.
@@ -60,7 +60,11 @@ static inline int64_t gptp_now(const struct gptp_time *g)
 	return ts_ns(&ts) + atomic_load_explicit(&g->corr_ns, memory_order_relaxed);
 }
 
-// Sleep until gPTP time `t` (ns), on CLOCK_TAI.
-int gptp_sleep_until(const struct gptp_time *g, int64_t t);
+// Sleep until gPTP time `t` (ns). The wait is measured in gPTP time now and
+// slept on CLOCK_MONOTONIC, which no clock step moves: an absolute sleep on
+// CLOCK_TAI would last days if phc2sys stepped the clock back during it, as it
+// does when gPTP first locks. Returns how far ahead `t` was (ns, negative when
+// already past), so a caller can tell a time base that jumped.
+int64_t gptp_sleep_until(const struct gptp_time *g, int64_t t);
 
 #endif // MILAN_GPTP_TIME_H

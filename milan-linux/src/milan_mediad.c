@@ -64,8 +64,8 @@ static struct {
 	.media_name = MILAN_MEDIA_NAME,
 	.channels = 8,
 	.pto_ns = 2000000,
-	.level_target = 24,
-	.level_max = 96,
+	.level_target = 48,
+	.level_max = 192,
 	.rt_priority = 70,
 	.cpu = -1,
 };
@@ -111,8 +111,8 @@ static void usage(FILE *to)
 		"  -W FILE     with -S, the WAV the simulated host records the listener's stream into\n"
 		"  -c N        channels (8)\n"
 		"  -o NS       presentation time offset (2000000)\n"
-		"  -L FRAMES   buffer level the servo holds (24 = 500 us)\n"
-		"  -M FRAMES   buffer level past which frames are dropped (96)\n"
+		"  -L FRAMES   buffer level the servo holds (48 = 1 ms)\n"
+		"  -M FRAMES   buffer level past which frames are dropped (192)\n"
 		"  -P PRIO     SCHED_FIFO priority of the talker thread (70), 0 for none\n"
 		"  -a CPU      CPU of the talker thread (any)\n"
 		"  -d NAME     datapath block (" MILAN_DP_NAME ")\n"

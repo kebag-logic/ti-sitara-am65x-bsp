@@ -97,12 +97,20 @@ int gptp_time_calibrate(struct gptp_time *g)
 	return 0;
 }
 
-int gptp_sleep_until(const struct gptp_time *g, int64_t t)
+int64_t gptp_sleep_until(const struct gptp_time *g, int64_t t)
 {
-	struct timespec ts = ns_ts(t - atomic_load_explicit(&g->corr_ns, memory_order_relaxed));
-	int rc;
-	do {
-		rc = clock_nanosleep(CLOCK_TAI, TIMER_ABSTIME, &ts, NULL);
-	} while (rc == EINTR);
-	return rc;
+	struct timespec mono;
+	clock_gettime(CLOCK_MONOTONIC, &mono);
+
+	int64_t ahead = t - gptp_now(g);
+	if (ahead <= 0) {
+		return ahead;
+	}
+
+	struct timespec ts = ns_ts(ts_ns(&mono) + ahead);
+	while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, NULL) == EINTR) {
+		// a signal woke it early: sleep on to the same instant
+	}
+
+	return ahead;
 }

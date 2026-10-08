@@ -13,7 +13,9 @@ void servo_init(struct servo *s, double target, double lo_ppm, double hi_ppm)
 		.target = target,
 		.lo = lo_ppm,
 		.hi = hi_ppm,
-		.lock_band = 2.0,
+		// one USB packet: a real host delivers in microframes, with bursts
+		// after a gap (measured on the PB2: +-1 frame, +5 at worst)
+		.lock_band = 6.0,
 		.lock_needed = 40,
 	};
 }

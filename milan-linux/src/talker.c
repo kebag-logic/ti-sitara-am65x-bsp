@@ -26,6 +26,7 @@
 #define IDLE_SLOTS 80u                  // 10 ms without a frame: the host stopped
 #define PRIME_WAIT_NS 20000000          // a start waits this long for the first frames
 #define RESTART_LATE_NS 50000000        // this far behind its slots, a stream starts over
+#define RESTART_EARLY_NS 50000000       // this far ahead too: the time base jumped back
 #define MAX_CHANNELS 64u
 #define MAX_FRAMES 64u
 
@@ -127,11 +128,22 @@ static void run_stream(struct talker *tk, int fd, const struct stream *s, struct
 	// host is not sending
 	long a = src->avail(src);
 	discard(src, a > 0 ? a : 0);
-	int64_t deadline = gptp_now(c->clk) + PRIME_WAIT_NS;
-	while (src->avail(src) < (long)c->level_target && gptp_now(c->clk) < deadline && !atomic_load(&tk->stop)) {
+
+	// the priming wait runs on CLOCK_MONOTONIC, which a gPTP step cannot stretch
+	struct timespec m;
+	clock_gettime(CLOCK_MONOTONIC, &m);
+	int64_t deadline = ts_ns(&m) + PRIME_WAIT_NS;
+
+	while (src->avail(src) < (long)c->level_target && !atomic_load(&tk->stop)) {
+		clock_gettime(CLOCK_MONOTONIC, &m);
+		if (ts_ns(&m) >= deadline) {
+			break;
+		}
+
 		struct timespec ts = {0, 50000};
 		nanosleep(&ts, NULL);
 	}
+
 	int64_t t0 = ((gptp_now(c->clk) + SLOT_NS) / SLOT_NS + 1) * SLOT_NS;
 	enum tstate state = src->avail(src) >= (long)c->level_target ? T_RUNNING : T_IDLE;
 
@@ -146,13 +158,25 @@ static void run_stream(struct talker *tk, int fd, const struct stream *s, struct
 	int32_t samples[MAX_FRAMES * MAX_CHANNELS];
 	uint8_t frame[1600];
 	uint8_t seq = 0;
-	unsigned empty = 0;
+
+	unsigned empty = 0;             // slots in a row with no new frame from the host
+	uint64_t taken = 0;             // frames read from the source in this stream
+	uint64_t seen_total = 0;        // frames the source had delivered at the last slot
+
 	double level_sum = 0;
 	unsigned level_n = 0;
 	int32_t late_max = 0;
+
 	for (uint64_t k = 0; !atomic_load(&tk->stop); ++k) {
 		int64_t t = t0 + (int64_t)k * SLOT_NS;
-		gptp_sleep_until(c->clk, t);
+
+		// a gPTP step (ptp4l's first lock, a grandmaster change) moves every
+		// slot at once: start the stream over on the new time base
+		int64_t ahead = gptp_sleep_until(c->clk, t);
+		if (ahead > RESTART_EARLY_NS) {
+			break;
+		}
+
 		int64_t delay = gptp_now(c->clk) - t;
 		if (delay > RESTART_LATE_NS) {
 			break;
@@ -162,47 +186,84 @@ static void run_stream(struct talker *tk, int fd, const struct stream *s, struct
 		if (level < 0) {
 			level = 0;
 		}
+
+		// a host that stopped can leave a few frames, fewer than a PDU: what
+		// tells it is that nothing new came in
+		uint64_t total = taken + (uint64_t)level;
+		if (total == seen_total) {
+			empty++;
+		} else {
+			empty = 0;
+		}
+		seen_total = total;
+
 		// the frames that came in after the slot, because this wake was late, are
 		// not an excess: judge, and steer, the level the slot itself saw
 		long lag = delay > 0 ? (long)(delay * 48 / 1000000) : 0;
 		long seen = level > lag ? level - lag : 0;
+
 		if (seen > (long)c->level_max) {
-			discard(src, seen - (long)c->level_target);
-			rep->overruns += (uint64_t)(seen - (long)c->level_target);
-			level -= seen - (long)c->level_target;
+			long excess = seen - (long)c->level_target;
+
+			discard(src, excess);
+			taken += (uint64_t)excess;
+			rep->overruns += (uint64_t)excess;
+
+			level -= excess;
 			seen = c->level_target;
 		}
+
 		bool have = false;
+
 		switch (state) {
 		case T_PRIMING:
 			if (level >= (long)c->level_target) {
 				state = T_RUNNING;
 			}
 			break;
+
 		case T_RUNNING:
 			if (level >= (long)c->frames_per_pdu) {
-				have = src->read(src, samples, c->frames_per_pdu) == (long)c->frames_per_pdu;
+				long got = src->read(src, samples, c->frames_per_pdu);
+
+				have = got == (long)c->frames_per_pdu;
+				if (have) {
+					taken += c->frames_per_pdu;
+				}
 			}
-			empty = level == 0 ? empty + 1 : 0;
+
 			if (empty >= IDLE_SLOTS) {
 				state = T_IDLE;
+
+				// what the host left goes, so a restart primes on fresh frames
+				long left = src->avail(src);
+				if (left > 0) {
+					discard(src, left);
+					taken += (uint64_t)left;
+				}
+
 				src->set_pitch(src, 1000000);
 				servo_init(&servo, c->level_target, servo.lo, servo.hi);
 				rep->pitch = 1000000;
 			}
 			break;
+
 		case T_IDLE:
-			if (level > 0) {
+			if (empty == 0 && level > 0) {
 				state = T_PRIMING;
 			}
 			break;
 		}
+
 		if (!have) {
 			memset(samples, 0, sizeof(int32_t) * c->frames_per_pdu * c->channels);
-			if (state != T_PRIMING) {
+
+			// silence counts as an underrun only while the host is sending
+			if (state == T_RUNNING) {
 				rep->underruns++;
 			}
 		}
+
 		size_t n = aaf_build(frame, sizeof frame, &s->aaf, seq++, true, (uint32_t)(t + c->pto_ns), samples);
 		if (send(fd, frame, n, MSG_DONTWAIT) == (ssize_t)n) {
 			rep->frames_tx++;

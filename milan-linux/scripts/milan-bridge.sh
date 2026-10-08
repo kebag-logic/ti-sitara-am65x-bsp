@@ -33,7 +33,7 @@ MPRIO=${AVB_MEDIAD_PRIO:-70}
 CPU=${AVB_RT_CPU:-3}
 ENTITY=${AVB_ENTITY_CONF:-/etc/milan/entity.conf}
 PTO=${AVB_PTO_NS:-2000000}
-LEVEL=${AVB_TALKER_LEVEL:-24}
+LEVEL=${AVB_TALKER_LEVEL:-48}
 INFLIGHT=${AVB_USB_IN_FLIGHT_NS:-500000}
 SRP=${AVB_SRP_DOMAIN:-none}
 JOURNAL=${AVB_JOURNAL:-/var/lib/milan/journal.bin}
@@ -58,25 +58,59 @@ daemon() { # <name> <args...>
 
 halt() { # <name>
 	running "$1" || return 0
+
 	start-stop-daemon -K -s TERM -q -p "$(pidf "$1")"
+
 	i=0
-	while running "$1" && [ "$i" -lt 20 ]; do
+	while running "$1" && [ "$i" -lt 30 ]; do
 		sleep 0.1
 		i=$((i + 1))
 	done
+
+	# one that outlives its grace would keep the gadget's PCMs from the next
+	if running "$1"; then
+		pid=$(cat "$(pidf "$1")")
+		echo "milan-bridge: $1 did not stop in 3 s, killed" >&2
+		kill -9 "$pid" 2>/dev/null
+	fi
+
 	rm -f "$(pidf "$1")"
 }
 
 start() {
 	mkdir -p "$RUN" "$(dirname "$JOURNAL")"
+
 	nosrp=
-	if [ "$SRP" = none ]; then nosrp=-n; fi
-	daemon milan-ctrld -i "$IF" -e "$ENTITY" -V "$VID" -N "$JOURNAL" $nosrp -s || return 1
-	chrt -f -p "$PRIO" "$(cat "$(pidf milan-ctrld)")" >/dev/null
-	echo "milan-bridge: milan-ctrld pid $(cat "$(pidf milan-ctrld)") on $IF, SCHED_FIFO $PRIO"
-	# the talker thread sets its own priority and CPU; it waits for the gadget
-	daemon milan-mediad -i "$IF" -o "$PTO" -L "$LEVEL" -R "$INFLIGHT" -P "$MPRIO" -a "$CPU" -s || return 1
-	echo "milan-bridge: milan-mediad pid $(cat "$(pidf milan-mediad)"), talker SCHED_FIFO $MPRIO on CPU $CPU"
+	if [ "$SRP" = none ]; then
+		nosrp=-n
+	fi
+
+	daemon milan-ctrld \
+		-i "$IF" \
+		-e "$ENTITY" \
+		-V "$VID" \
+		-N "$JOURNAL" \
+		$nosrp \
+		-s || return 1
+
+	pid=$(cat "$(pidf milan-ctrld)")
+	chrt -f -p "$PRIO" "$pid" >/dev/null
+	echo "milan-bridge: milan-ctrld pid $pid on $IF, SCHED_FIFO $PRIO"
+
+	# the talker thread sets its own priority and CPU; it waits for the gadget.
+	# Frames past four times the level are dropped (an overrun).
+	daemon milan-mediad \
+		-i "$IF" \
+		-o "$PTO" \
+		-L "$LEVEL" \
+		-M $((LEVEL * 4)) \
+		-R "$INFLIGHT" \
+		-P "$MPRIO" \
+		-a "$CPU" \
+		-s || return 1
+
+	pid=$(cat "$(pidf milan-mediad)")
+	echo "milan-bridge: milan-mediad pid $pid, talker SCHED_FIFO $MPRIO on CPU $CPU"
 }
 
 stop() {
