@@ -235,7 +235,7 @@ the build and the tests are in [`milan-linux/README.md`](milan-linux/README.md).
 | #8 A1, control plane on Linux | `milan-ctrld`: ADP, ACMP, MAAP. Passes milan-fpga's gate at the pin and the host network-namespace test; not yet run on the board |
 | #9 A2, entity description | `entity.conf` is generated from the 1x1 TDM8 shape; the PB2's own end-station config needs a non-FPGA target in milan-fpga's builder |
 | #10 A4, #11 A3, media clock and talker | `milan-mediad`: the talker on the media clock and the servo on the gadget's feedback. Bit-exact and gap-free in the host test with a +80 ppm host; not yet run on the board |
-| #12 A5, listener | next |
+| #12 A5, listener | `milan-mediad`'s listener: placed and held at its presentation time through the gadget's playback pitch, with Milan's STREAM_INPUT counters. Bit-exact between two bridges in the host test; not yet run on the board |
 | #13 A6, saved state | next |
 | #14 A7, SRP, AECP, interop | waits for milan-fpga SRP (#690) and AECP (#665 lane F5) |
 
@@ -245,11 +245,21 @@ gPTP. That starts two daemons:
 * `milan-ctrld -i eth0 -e /etc/milan/entity.conf -V 2 -s`, at SCHED_FIFO
   `AVB_CTRLD_PRIO` (40, below `ptp4l` and `phc2sys`). It reads the grandmaster
   from `/var/run/ptp4lro` and publishes the streams in `/dev/shm/milan-datapath`.
-* `milan-mediad`, whose talker thread runs at SCHED_FIFO 70 on CPU 3. It waits
-  for the UAC2 gadget, then streams whatever the host plays, starting once MAAP
-  holds a destination.
+* `milan-mediad`, whose talker and listener threads run at SCHED_FIFO 70 and 69
+  on CPU 3. It waits for the UAC2 gadget. Then the talker streams whatever the
+  host plays, starting once MAAP holds a destination. The listener plays
+  whichever stream ACMP settles on, at its presentation time.
 
-On the host, `aplay -D hw:<the bridge's card>,0 -f S32_LE -c 8 -r 48000 file.wav`.
+On the host:
+
+```sh
+aplay   -D hw:<the bridge's card>,0 -f S32_LE -c 8 -r 48000 file.wav   # to Milan
+arecord -D hw:<the bridge's card>,0 -f S32_LE -c 8 -r 48000 out.wav    # from Milan
+```
+
+`AVB_SRP_DOMAIN=none`, the default until SRP (#14), runs `milan-ctrld -n` for a
+direct link: a settled listener takes its talker as registered instead of
+re-probing every 10 s. Through an AVB switch, streams need SRP.
 
 ```sh
 /usr/sbin/milan-bridge.sh status   # state into syslog, then the datapath block:

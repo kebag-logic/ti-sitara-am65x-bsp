@@ -27,6 +27,7 @@
 #include "datapath.h"
 #include "gptp_time.h"
 #include "media.h"
+#include "listener.h"
 #include "talker.h"
 
 static struct {
@@ -37,6 +38,10 @@ static struct {
 	const char *dp_name;
 	const char *media_name;
 	const char *sim;                // simulated host's ppm, NULL for the gadget
+	const char *sim_wav;            // the simulated host's recording of the listener's stream
+	const char *playback;
+	bool talker, listener;
+	int64_t in_flight_ns;
 	unsigned channels;
 	uint32_t pto_ns;
 	unsigned level_target;
@@ -48,7 +53,11 @@ static struct {
 	.ifname = "eth0",
 	.vlan_ifname = NULL,
 	.pcm = "hw:CARD=UAC2Gadget,DEV=0",
+	.playback = "hw:CARD=UAC2Gadget,DEV=0",
 	.ctl = "hw:CARD=UAC2Gadget",
+	.talker = true,
+	.listener = true,
+	.in_flight_ns = 500000,
 	.dp_name = MILAN_DP_NAME,
 	.media_name = MILAN_MEDIA_NAME,
 	.channels = 8,
@@ -91,8 +100,12 @@ static void usage(FILE *to)
 		"  -i IFACE    AVB interface, for its PTP clock (eth0)\n"
 		"  -I IFACE    where the PDUs go, tagged with the stream's VLAN (the -i interface)\n"
 		"  -D PCM      the gadget's capture PCM (hw:CARD=UAC2Gadget,DEV=0)\n"
-		"  -C CTL      its control device, for Capture Pitch (hw:CARD=UAC2Gadget)\n"
+		"  -E PCM      the gadget's playback PCM (hw:CARD=UAC2Gadget,DEV=0)\n"
+		"  -C CTL      its control device, for the two pitches (hw:CARD=UAC2Gadget)\n"
+		"  -r ROLES    talker, listener or both (talker,listener)\n"
+		"  -R NS       the USB IN requests already filled, for the listener (500000: 4 x 125 us)\n"
 		"  -S PPM      instead of the gadget, a simulated USB host PPM off gPTP (tests)\n"
+		"  -W FILE     with -S, the WAV the simulated host records the listener's stream into\n"
 		"  -c N        channels (8)\n"
 		"  -o NS       presentation time offset (2000000)\n"
 		"  -L FRAMES   buffer level the servo holds (24 = 500 us)\n"
@@ -108,13 +121,20 @@ static void usage(FILE *to)
 static int parse(int argc, char **argv)
 {
 	int c;
-	while ((c = getopt(argc, argv, "i:I:D:C:S:c:o:L:M:P:a:d:m:sh")) != -1) {
+	while ((c = getopt(argc, argv, "i:I:D:E:C:r:R:S:W:c:o:L:M:P:a:d:m:sh")) != -1) {
 		switch (c) {
 		case 'i': opt.ifname = optarg; break;
 		case 'I': opt.vlan_ifname = optarg; break;
 		case 'D': opt.pcm = optarg; break;
+		case 'E': opt.playback = optarg; break;
 		case 'C': opt.ctl = optarg; break;
+		case 'r':
+			opt.talker = strstr(optarg, "talker") != NULL;
+			opt.listener = strstr(optarg, "listener") != NULL;
+			break;
+		case 'R': opt.in_flight_ns = strtoll(optarg, NULL, 0); break;
 		case 'S': opt.sim = optarg; break;
+		case 'W': opt.sim_wav = optarg; break;
 		case 'c': opt.channels = (unsigned)strtoul(optarg, NULL, 0); break;
 		case 'o': opt.pto_ns = (uint32_t)strtoul(optarg, NULL, 0); break;
 		case 'L': opt.level_target = (unsigned)strtoul(optarg, NULL, 0); break;
@@ -131,8 +151,26 @@ static int parse(int argc, char **argv)
 	return optind == argc ? 0 : -1;
 }
 
-static void report(const struct milan_media_talker *t, const struct gptp_time *clk)
+static void report(const struct milan_media_talker *t, const struct milan_media_listener *l,
+		   const struct gptp_time *clk)
 {
+	if (opt.listener) {
+		say(LOG_INFO,
+		    "listener %s%s stream %016llx | FRAMES_RX %llu SEQ_NUM_MISMATCH %llu LATE %llu EARLY %llu "
+		    "UNSUPPORTED %llu MEDIA_LOCKED %llu MEDIA_UNLOCKED %llu MEDIA_RESET %llu STREAM_INTERRUPTED %llu "
+		    "| underruns %llu pitch %u | presentation error %d..%d avg %d ns, least margin %d ns",
+		    l->active ? "active" : "idle", l->locked ? ", locked" : "", (unsigned long long)l->stream_id,
+		    (unsigned long long)l->frames_rx, (unsigned long long)l->seq_mismatch,
+		    (unsigned long long)l->late_timestamp, (unsigned long long)l->early_timestamp,
+		    (unsigned long long)l->unsupported_format, (unsigned long long)l->media_locked,
+		    (unsigned long long)l->media_unlocked, (unsigned long long)l->media_resets,
+		    (unsigned long long)l->stream_interrupted, (unsigned long long)l->underruns, l->pitch,
+		    l->align_min_ns == INT32_MAX ? 0 : l->align_min_ns, l->align_max_ns == INT32_MIN ? 0 : l->align_max_ns,
+		    l->align_avg_ns, l->margin_min_ns == INT32_MAX ? 0 : l->margin_min_ns);
+	}
+	if (!opt.talker) {
+		return;
+	}
 	say(LOG_INFO,
 	    "talker %s%s stream %016llx -> %012llx | PDUs %llu underruns %llu overruns %llu late %llu send errors %llu "
 	    "| level %d..%d avg %.2f (target %d) pitch %u | worst send delay %d ns | gPTP corr %lld ns residual %lld ns",
@@ -174,17 +212,24 @@ int main(int argc, char **argv)
 
 	// S99usb_gadgets builds the gadget after S95avb has started us: wait for it
 	struct audio_src *src = NULL;
-	for (int i = 0; src == NULL && !stop_requested; ++i) {
-		src = opt.sim != NULL ? audio_sim_open(opt.channels, 48000, strtod(opt.sim, NULL))
-				      : audio_alsa_open(opt.pcm, opt.ctl, opt.channels, 48000);
-		if (src == NULL) {
+	struct audio_sink *snk = NULL;
+	for (int i = 0; ((opt.talker && src == NULL) || (opt.listener && snk == NULL)) && !stop_requested; ++i) {
+		if (opt.talker && src == NULL) {
+			src = opt.sim != NULL ? audio_sim_open(opt.channels, 48000, strtod(opt.sim, NULL))
+					      : audio_alsa_open(opt.pcm, opt.ctl, opt.channels, 48000);
+		}
+		if (opt.listener && snk == NULL) {
+			snk = opt.sim != NULL ? audio_sim_sink_open(opt.channels, 48000, strtod(opt.sim, NULL), opt.sim_wav)
+					      : audio_alsa_sink_open(opt.playback, opt.ctl, opt.channels, 48000);
+		}
+		if ((opt.talker && src == NULL) || (opt.listener && snk == NULL)) {
 			if (i == 0) {
-				say(LOG_INFO, "waiting for the gadget's capture PCM %s", opt.pcm);
+				say(LOG_INFO, "waiting for the gadget's PCMs");
 			}
 			sleep(1);
 		}
 	}
-	if (src == NULL) {
+	if (stop_requested) {
 		return 0;
 	}
 	const struct milan_dp *dp = NULL;
@@ -223,37 +268,81 @@ int main(int argc, char **argv)
 		.clk = &clk,
 		.dp = dp,
 	};
-	rc = talker_start(&tk, &tcfg);
-	if (rc != 0) {
-		say(LOG_ERR, "talker thread: %s", strerror(rc));
-		return 1;
+	if (opt.talker) {
+		rc = talker_start(&tk, &tcfg);
+		if (rc != 0) {
+			say(LOG_ERR, "talker thread: %s", strerror(rc));
+			return 1;
+		}
+		say(LOG_INFO, "talker on %s, %u channels, PTO %u ns, level %u..%u frames, PHC %d", opt.vlan_ifname,
+		    opt.channels, opt.pto_ns, opt.level_target, opt.level_max, clk.phc_index);
 	}
-	say(LOG_INFO, "talker on %s, %u channels, PTO %u ns, level %u..%u frames, PHC %d", opt.vlan_ifname,
-	    opt.channels, opt.pto_ns, opt.level_target, opt.level_max, clk.phc_index);
+	static struct listener ls;
+	struct listener_cfg lcfg = {
+		.ifname = opt.ifname,
+		.sink = 0,
+		.channels = opt.channels,
+		.pto_ns = opt.pto_ns,
+		.in_flight_ns = opt.sim != NULL ? 0 : opt.in_flight_ns,
+		.rt_priority = opt.rt_priority > 1 ? opt.rt_priority - 1 : opt.rt_priority,
+		.cpu = opt.cpu,
+		.snk = snk,
+		.clk = &clk,
+		.dp = dp,
+	};
+	if (opt.listener) {
+		rc = listener_start(&ls, &lcfg);
+		if (rc != 0) {
+			say(LOG_ERR, "listener thread: %s", strerror(rc));
+			return 1;
+		}
+		say(LOG_INFO, "listener on %s, %u channels, USB IN pipeline %lld ns", opt.ifname, opt.channels,
+		    (long long)lcfg.in_flight_ns);
+	}
 
 	struct milan_media_talker t;
+	struct milan_media_listener l;
+	memset(&t, 0, sizeof t);
+	memset(&l, 0, sizeof l);
 	for (unsigned tick = 0; !stop_requested; ++tick) {
 		struct timespec ts = {0, 100000000};
 		nanosleep(&ts, NULL);
 		if (tick % 10u == 9u) {
 			gptp_time_calibrate(&clk);
 		}
-		talker_report(&tk, &t);
+		if (opt.talker) {
+			talker_report(&tk, &t);
+		}
+		if (opt.listener) {
+			listener_report(&ls, &l);
+		}
 		milan_media_begin(media);
 		media->gptp_corr_ns = atomic_load(&clk.corr_ns);
 		media->gptp_residual_ns = clk.residual_ns;
 		media->gptp_calibrated = clk.calibrated;
 		media->talker = t;
+		media->listener = l;
 		milan_media_end(media);
 		if (dump_requested) {
 			dump_requested = 0;
-			report(&t, &clk);
+			report(&t, &l, &clk);
 		}
 	}
-	talker_stop(&tk);
-	talker_report(&tk, &t);
-	report(&t, &clk);
-	src->close(src);
+	if (opt.talker) {
+		talker_stop(&tk);
+		talker_report(&tk, &t);
+	}
+	if (opt.listener) {
+		listener_stop(&ls);
+		listener_report(&ls, &l);
+	}
+	report(&t, &l, &clk);
+	if (src != NULL) {
+		src->close(src);
+	}
+	if (snk != NULL) {
+		snk->close(snk);
+	}
 	gptp_time_close(&clk);
 	return 0;
 }

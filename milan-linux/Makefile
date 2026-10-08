@@ -32,7 +32,7 @@ OWN_CFLAGS := -std=gnu11 -O2 -Wall -Wextra -Werror -Isrc $(FW_INC) $(CFLAGS)
 
 CTRLD_SRCS := src/milan_ctrld.c src/softfab.c src/ptp_mgmt.c src/datapath.c src/shmblk.c src/entity_conf.c
 CTRLD_OBJS := $(addprefix $(O)/,$(notdir $(CTRLD_SRCS:.c=.o)))
-MEDIAD_SRCS := src/milan_mediad.c src/talker.c src/aaf.c src/servo.c src/gptp_time.c src/audio_alsa.c \
+MEDIAD_SRCS := src/milan_mediad.c src/talker.c src/listener.c src/aaf.c src/servo.c src/gptp_time.c src/audio_alsa.c \
 	src/audio_sim.c src/datapath.c src/media.c src/shmblk.c
 MEDIAD_OBJS := $(addprefix $(O)/,$(notdir $(MEDIAD_SRCS:.c=.o)))
 DP_OBJS := $(addprefix $(O)/,milan_dp.o datapath.o media.o shmblk.o)
@@ -64,6 +64,7 @@ check: all $(O)/test_ptp_mgmt $(O)/test_media
 	$(O)/test_media
 	tests/run-netns.sh $(O)/milan-ctrld $(O)/milan-dp config/entity.conf
 	tests/run-netns-talker.sh $(O)
+	tests/run-netns-listener.sh $(O)
 
 $(O)/test_ptp_mgmt: tests/test_ptp_mgmt.c src/ptp_mgmt.c src/ptp_mgmt.h
 	@mkdir -p $(O)

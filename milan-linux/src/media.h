@@ -14,7 +14,7 @@
 
 #define MILAN_MEDIA_NAME "/milan-media"
 #define MILAN_MEDIA_MAGIC 0x3144454Du           // "MED1"
-#define MILAN_MEDIA_VERSION 1u
+#define MILAN_MEDIA_VERSION 2u
 
 struct milan_media_talker {
 	uint8_t active;                 // a stream is being sent
@@ -39,6 +39,29 @@ struct milan_media_talker {
 	uint32_t pto_ns;
 };
 
+struct milan_media_listener {
+	uint8_t active;                 // a stream is bound and arriving
+	uint8_t locked;                 // MEDIA_LOCKED: presented on time, the servo locked
+	uint8_t pad[2];
+	uint32_t pitch;                 // the last Playback Pitch written
+	uint64_t stream_id;
+	uint64_t frames_rx;             // PDUs taken (Milan FRAMES_RX)
+	uint64_t seq_mismatch;          // SEQ_NUM_MISMATCH
+	uint64_t late_timestamp;        // LATE_TIMESTAMP: a PDU after its presentation time
+	uint64_t early_timestamp;       // EARLY_TIMESTAMP: more than 4 x PTO ahead
+	uint64_t unsupported_format;    // UNSUPPORTED_FORMAT
+	uint64_t media_locked;          // MEDIA_LOCKED transitions
+	uint64_t media_unlocked;        // MEDIA_UNLOCKED transitions
+	uint64_t media_resets;          // MEDIA_RESET: a jump to put the stream back on time
+	uint64_t stream_interrupted;    // STREAM_INTERRUPTED: no PDU for 10 ms
+	uint64_t underruns;             // the gadget ran dry
+	int32_t align_min_ns;           // presentation error, last report interval:
+	int32_t align_max_ns;           // when a frame will reach USB minus its presentation time
+	int32_t align_avg_ns;
+	int32_t margin_min_ns;          // presentation time minus arrival, the least of the interval
+	int64_t in_flight_ns;           // the USB IN pipeline the alignment accounts for
+};
+
 struct milan_media {
 	uint32_t magic;
 	uint32_t version;
@@ -49,6 +72,7 @@ struct milan_media {
 	uint8_t gptp_calibrated;
 	uint8_t pad[7];
 	struct milan_media_talker talker;
+	struct milan_media_listener listener;
 };
 
 struct milan_media *milan_media_create(const char *name);

@@ -62,5 +62,19 @@ int main(int argc, char **argv)
 	       (unsigned long long)t->send_errors, (unsigned long long)t->stream_starts,
 	       (unsigned long long)t->stream_stops, t->level_target, t->level_min, t->level_max,
 	       t->level_avg_milli / 1000.0, t->late_max_ns, t->pto_ns);
+	const struct milan_media_listener *l = &m.listener;
+	printf("listener_active=%u\nlistener_locked=%u\nlistener_pitch=%u\nlistener_stream_id=%016llx\n"
+	       "listener_frames_rx=%llu\nlistener_seq_mismatch=%llu\nlistener_late_timestamp=%llu\n"
+	       "listener_early_timestamp=%llu\nlistener_unsupported_format=%llu\nlistener_media_locked=%llu\n"
+	       "listener_media_unlocked=%llu\nlistener_media_resets=%llu\nlistener_stream_interrupted=%llu\n"
+	       "listener_underruns=%llu\nlistener_align_min_ns=%d\nlistener_align_max_ns=%d\n"
+	       "listener_align_avg_ns=%d\nlistener_margin_min_ns=%d\nlistener_in_flight_ns=%lld\n",
+	       l->active, l->locked, l->pitch, (unsigned long long)l->stream_id, (unsigned long long)l->frames_rx,
+	       (unsigned long long)l->seq_mismatch, (unsigned long long)l->late_timestamp,
+	       (unsigned long long)l->early_timestamp, (unsigned long long)l->unsupported_format,
+	       (unsigned long long)l->media_locked, (unsigned long long)l->media_unlocked,
+	       (unsigned long long)l->media_resets, (unsigned long long)l->stream_interrupted,
+	       (unsigned long long)l->underruns, l->align_min_ns, l->align_max_ns, l->align_avg_ns,
+	       l->margin_min_ns, (long long)l->in_flight_ns);
 	return 0;
 }

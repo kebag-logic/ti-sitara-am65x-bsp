@@ -9,9 +9,14 @@
 #   milan-ctrld   the Milan control plane (ADP, ACMP, MAAP; the Mark II
 #                 firmware of milan-fpga on the soft fabric), SCHED_FIFO
 #                 AVB_CTRLD_PRIO, logging to syslog
-#   milan-mediad  the media plane: the AAF talker fed by the UAC2 gadget, on the
-#                 media clock, its servo steering the host; its talker thread at
-#                 SCHED_FIFO AVB_MEDIAD_PRIO on AVB_RT_CPU
+#   milan-mediad  the media plane: the AAF talker fed by the UAC2 gadget and the
+#                 AAF listener feeding it back, each with the servo that steers
+#                 the host; both threads SCHED_FIFO near AVB_MEDIAD_PRIO on
+#                 AVB_RT_CPU
+#
+# AVB_SRP_DOMAIN=none (until SRP, #14) runs milan-ctrld with -n: the link is
+# direct, no MSRP bridge, so a settled listener does not wait for a talker
+# registration that cannot come.
 #
 # "status" logs both daemons' state to syslog (SIGUSR1) and prints the
 # datapath and media blocks (milan-dp).
@@ -29,6 +34,8 @@ CPU=${AVB_RT_CPU:-3}
 ENTITY=${AVB_ENTITY_CONF:-/etc/milan/entity.conf}
 PTO=${AVB_PTO_NS:-2000000}
 LEVEL=${AVB_TALKER_LEVEL:-24}
+INFLIGHT=${AVB_USB_IN_FLIGHT_NS:-500000}
+SRP=${AVB_SRP_DOMAIN:-none}
 RUN=/run/avb
 
 pidf() { echo "$RUN/$1.pid"; }
@@ -61,11 +68,13 @@ halt() { # <name>
 
 start() {
 	mkdir -p "$RUN"
-	daemon milan-ctrld -i "$IF" -e "$ENTITY" -V "$VID" -s || return 1
+	nosrp=
+	if [ "$SRP" = none ]; then nosrp=-n; fi
+	daemon milan-ctrld -i "$IF" -e "$ENTITY" -V "$VID" $nosrp -s || return 1
 	chrt -f -p "$PRIO" "$(cat "$(pidf milan-ctrld)")" >/dev/null
 	echo "milan-bridge: milan-ctrld pid $(cat "$(pidf milan-ctrld)") on $IF, SCHED_FIFO $PRIO"
 	# the talker thread sets its own priority and CPU; it waits for the gadget
-	daemon milan-mediad -i "$IF" -o "$PTO" -L "$LEVEL" -P "$MPRIO" -a "$CPU" -s || return 1
+	daemon milan-mediad -i "$IF" -o "$PTO" -L "$LEVEL" -R "$INFLIGHT" -P "$MPRIO" -a "$CPU" -s || return 1
 	echo "milan-bridge: milan-mediad pid $(cat "$(pidf milan-mediad)"), talker SCHED_FIFO $MPRIO on CPU $CPU"
 }
 

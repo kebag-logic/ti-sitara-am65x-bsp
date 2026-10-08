@@ -7,7 +7,7 @@ end station**.
 | Program | What it is | Ticket |
 |---|---|---|
 | `milan-ctrld` | the Milan control plane: milan-fpga's Mark II control-plane firmware ([milan-fpga#665](https://github.com/kebag-logic/milan-fpga/issues/665)), unchanged, on a soft fabric | #8 |
-| `milan-mediad` | the media plane: the AAF talker fed by the UAC2 gadget, on the media clock, and the servo that steers the USB host | #10, #11 |
+| `milan-mediad` | the media plane: the AAF talker fed by the UAC2 gadget, on the media clock; the AAF listener that feeds the gadget back; and the servos that steer the USB host | #10, #11, #12 |
 | `milan-dp` | prints the datapath block `milan-ctrld` publishes and the media block `milan-mediad` publishes | #8 |
 | `milan-bridge.sh` | starts and stops them; `S95avb` runs it for `AVB_STACK=native` | #8 |
 
@@ -99,6 +99,37 @@ is the buffer level: `talker_level_avg` / 48 000, about 500 us, plus up to one
 that stamps every frame (`validation/pb2-tsn/latency-peer.py`). The bridge
 latency is the sum of the two.
 
+## The listener: Milan to USB (#12)
+
+The listener plays the stream `milan-ctrld` settled on (ACMP, BIND_RX) into the
+gadget's playback PCM, so the host records it with `arecord`. A frame with
+presentation time *T* must reach the host's USB IN packet at *T*. When the
+listener queues a PDU at gPTP time *t*, its first frame leaves at about
+*t* + (frames queued ahead) / 48 000 + `-R` (the IN requests already filled:
+`TDM8_REQ_NUMBER` × 125 us, 500 us). The difference from *T* is the
+presentation error:
+
+* The first PDU of a stream is placed: silence is queued until the error is
+  nought.
+* After that, the servo holds it at nought through `Playback Pitch 1000000`. A
+  stream running late makes the gadget send faster.
+* An error past 1 ms is jumped instead (MEDIA_RESET): silence inserted, or
+  frames dropped.
+
+It keeps Milan's STREAM_INPUT counters (v1.2 5.3.7) in the media block:
+`listener_frames_rx`, `_seq_mismatch`, `_late_timestamp`, `_early_timestamp`,
+`_unsupported_format`, `_media_locked`, `_media_unlocked`, `_media_resets` and
+`_stream_interrupted`. It also reports `_align_min/max/avg_ns`, the presentation
+error, and `_margin_min_ns`, how early the PDUs arrive.
+
+**No SRP domain (`-n`, `AVB_SRP_DOMAIN=none`).** A Milan listener that has
+settled waits TMR_NO_TK (10 s) for its talker's MSRP registration, and probes
+again without one. Until the bridge has SRP (#14), `milan-ctrld -n` declares
+the link direct, with no MSRP bridge, and reports a settled sink's talker as
+registered (`acmp_tk_registered()`, from the main loop: no port calls back
+into a core, milan-fpga #678). Through an AVB switch, SRP is needed anyway: a
+switch forwards a stream only for a registered talker and listener.
+
 ## Build and test on the host
 
 ```sh
@@ -119,6 +150,22 @@ PCP 3) and `ramp-check.py` (the counting ramp bit for bit). The test also
 checks that the pitch cancels the host's offset and that the level holds. The
 servo's lock time and the slot-to-wire figures are board checks: without
 SCHED_FIFO the host stalls for milliseconds.
+
+`tests/run-netns-listener.sh` runs two complete bridges, A on `veth0` and B on
+`veth1`, in no-SRP mode:
+
+1. A streams a simulated USB host that runs 80 ppm fast.
+2. A controller binds B's STREAM_INPUT 0 to A's STREAM_OUTPUT 0 with a Milan
+   BIND_RX (`tests/bind.py`).
+3. B probes A and settles, then plays the stream to its own simulated host,
+   50 ppm slow, which records it.
+
+Over the measured window, B's counters must show 8000 PDUs/s and no sequence
+error, late PDU, interruption, reset or underrun, and the presentation error
+must stay within 125 us. The playback pitch must cancel the host's offset. The
+recording, inside that window, must be the ramp bit for bit. Both bridges run a
+20 ms PTO there, so the listener's queue outlasts this unprivileged host's
+stalls; the board runs 2 ms.
 
 `tests/peer.py`, the control-plane test, The peer plays the fake ptp4l, the
 controller, a listener, a talker and a MAAP peer, and grades what

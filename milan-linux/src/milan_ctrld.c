@@ -15,7 +15,11 @@
 //   acmp_env.source               the talker's stream: the entity MAC and the
 //                                 source index as stream_id, MAAP's address
 //   acmp_env.srp                  the listener's settled stream, published for
-//                                 the media plane
+//                                 the media plane; with -n (no SRP domain: a
+//                                 direct link, no MSRP bridge), its talker also
+//                                 counts as registered, so the sink holds
+//                                 SETTLED_RSV_OK instead of re-probing every
+//                                 TMR_NO_TK
 //   acmp_env.persist, .changed    logged (the saved state and AECP's
 //                                 notifications arrive with their lanes)
 //   maap_allocation               the MAAP range, published for the media
@@ -51,6 +55,7 @@ static struct {
 	uint16_t vlan;
 	unsigned ptp_poll_ms;
 	bool use_syslog;
+	bool no_srp;
 	int verbose;
 } opt = {
 	.ifname = "eth0",
@@ -61,6 +66,10 @@ static struct {
 	.vlan = DEFAULT_VLAN,
 	.ptp_poll_ms = 250u,
 };
+
+// sinks whose talker attribute the no-SRP mode owes the ACMP core, delivered
+// from the main loop: a port never calls back into a core (milan-fpga #678)
+static bool tk_owed[ACMP_MAX_SINKS];
 
 static volatile sig_atomic_t stop_requested;
 static volatile sig_atomic_t dump_requested;
@@ -139,6 +148,9 @@ static void env_srp(void *ctx, unsigned sink, const struct acmp_stream *stream)
 	k->dest_mac = stream != NULL ? stream->dest_mac : 0u;
 	k->vlan_id = stream != NULL ? stream->vlan_id : 0u;
 	milan_dp_end(dp);
+	if (sink < ACMP_MAX_SINKS) {
+		tk_owed[sink] = opt.no_srp && stream != NULL;
+	}
 	if (stream != NULL) {
 		say(LOG_INFO, "sink %u: listening to stream %016llx at %012llx, VLAN %u", sink,
 		    (unsigned long long)stream->stream_id, (unsigned long long)stream->dest_mac, stream->vlan_id);
@@ -244,6 +256,7 @@ static void usage(FILE *to)
 		"  -l PATH    our socket for ptp4l's replies (/var/run/milan-ctrld.ptp)\n"
 		"  -d NAME    datapath block, a shm_open() name (" MILAN_DP_NAME ")\n"
 		"  -V VID     VLAN of the talker's streams (2)\n"
+		"  -n         no SRP domain (a direct link, no MSRP bridge): a settled sink's talker counts as registered\n"
 		"  -s         log to syslog\n"
 		"  -v         more logging (twice: the firmware's own prints)\n"
 		"SIGUSR1 logs the state; SIGTERM or SIGINT departs (ENTITY_DEPARTING) and exits.\n");
@@ -252,7 +265,7 @@ static void usage(FILE *to)
 static int parse(int argc, char **argv)
 {
 	int c;
-	while ((c = getopt(argc, argv, "i:e:p:l:d:V:svh")) != -1) {
+	while ((c = getopt(argc, argv, "i:e:p:l:d:V:nsvh")) != -1) {
 		switch (c) {
 		case 'i': opt.ifname = optarg; break;
 		case 'e': opt.entity_path = optarg; break;
@@ -261,6 +274,7 @@ static int parse(int argc, char **argv)
 		case 'd': opt.dp_name = optarg; break;
 		case 'V': opt.vlan = (uint16_t)strtoul(optarg, NULL, 0); break;
 		case 's': opt.use_syslog = true; break;
+		case 'n': opt.no_srp = true; break;
 		case 'v': opt.verbose++; break;
 		case 'h': usage(stdout); exit(0);
 		default: usage(stderr); return -1;
@@ -353,10 +367,10 @@ int main(int argc, char **argv)
 	if (compose() != 0) {
 		return 1;
 	}
-	say(LOG_INFO, "entity %016llx on %s (mac %012llx, model %016llx, %u sources, %u sinks)",
+	say(LOG_INFO, "entity %016llx on %s (mac %012llx, model %016llx, %u sources, %u sinks%s)",
 	    (unsigned long long)econf.entity.entity_id, opt.ifname, (unsigned long long)econf.entity.mac,
 	    (unsigned long long)econf.entity.entity_model_id, econf.entity.talker_stream_sources,
-	    econf.entity.listener_stream_sinks);
+	    econf.entity.listener_stream_sinks, opt.no_srp ? ", no SRP domain" : "");
 
 	struct sigaction sa = {.sa_handler = on_signal};
 	sigemptyset(&sa.sa_mask);
@@ -366,6 +380,13 @@ int main(int argc, char **argv)
 
 	while (!stop_requested) {
 		unsigned handled = ctrl_loop_service(&app.loop);
+		for (unsigned k = 0; k < acmp_cfg.n_sinks && k < ACMP_MAX_SINKS; ++k) {
+			if (tk_owed[k]) {
+				tk_owed[k] = false;
+				acmp_tk_registered(&app.acmp.acmp, k, false);
+				handled++;
+			}
+		}
 		softfab_pump(&fab, handled == 0u);
 		publish_gptp();
 		if (dump_requested) {
