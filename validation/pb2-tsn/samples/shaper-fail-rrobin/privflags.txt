@@ -1,0 +1,2 @@
+Private flags for eth0:
+p0-rx-ptype-rrobin: on

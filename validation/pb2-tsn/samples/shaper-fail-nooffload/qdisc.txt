@@ -1,0 +1,15 @@
+qdisc mqprio 100: root refcnt 9 tc 3 map 0 0 1 2 0 0 0 0 0 0 0 0 0 0 0 0
+             queues:(0:0) (1:1) (2:2)
+             mode:channel
+             shaper:bw_rlimit	min_rate:0bit 1Mbit 17Mbit 	max_rate:0bit 2Mbit 20Mbit
+ Sent 98765432 bytes 412345 pkt (dropped 0, overlimits 0 requeues 0)
+ backlog 0b 0p requeues 0
+qdisc pfifo_fast 0: parent 100:3 bands 3 priomap 1 2 2 2 1 2 0 0 1 1 1 1 1 1 1 1
+ Sent 4950000 bytes 21153 pkt (dropped 0, overlimits 0 requeues 0)
+ backlog 0b 0p requeues 0
+qdisc pfifo_fast 0: parent 100:2 bands 3 priomap 1 2 2 2 1 2 0 0 1 1 1 1 1 1 1 1
+ Sent 120000 bytes 1000 pkt (dropped 0, overlimits 0 requeues 0)
+ backlog 0b 0p requeues 0
+qdisc pfifo_fast 0: parent 100:1 bands 3 priomap 1 2 2 2 1 2 0 0 1 1 1 1 1 1 1 1
+ Sent 93695432 bytes 390192 pkt (dropped 0, overlimits 0 requeues 0)
+ backlog 0b 0p requeues 0
