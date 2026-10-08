@@ -6,12 +6,15 @@ config BR2_PACKAGE_PIPEWIRE_UPSTREAM
 	depends on !BR2_PACKAGE_PIPEWIRE_MILAN
 	select BR2_PACKAGE_ALSA_LIB
 	select BR2_PACKAGE_DBUS
-	select BR2_PACKAGE_LINUXPTP
 	help
 	  PipeWire built from the official upstream master
 	  (gitlab.freedesktop.org/pipewire/pipewire) with module-avb enabled.
 	  Installs /usr/bin/pipewire, so it conflicts with the stock pipewire
 	  and pipewire-milan packages (enable exactly one).
+
+	  module-avb reads gPTP from a ptp4l-style management socket: the
+	  board's defconfig brings the gPTP daemon (BR2_PACKAGE_LINUXPTP on
+	  the MYIR and SK boards; the PocketBeagle 2 runs flexptpd instead).
 
 comment "pipewire-upstream needs threads and conflicts with stock pipewire / pipewire-milan"
 	depends on !BR2_TOOLCHAIN_HAS_THREADS || BR2_PACKAGE_PIPEWIRE || BR2_PACKAGE_PIPEWIRE_MILAN

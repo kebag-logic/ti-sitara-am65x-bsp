@@ -5,11 +5,13 @@ config BR2_PACKAGE_PIPEWIRE_MILAN
 	depends on !BR2_PACKAGE_PIPEWIRE
 	select BR2_PACKAGE_ALSA_LIB
 	select BR2_PACKAGE_DBUS
-	select BR2_PACKAGE_LINUXPTP
 	help
 	  PipeWire built from the Milan AVB fork (gitlab Mister-M-alt/pipewire)
 	  with the module-avb / Milan support enabled. Installs /usr/bin/pipewire
 	  so it conflicts with the stock pipewire package (disable that one).
+
+	  module-avb reads gPTP from a ptp4l-style management socket: the
+	  board's defconfig brings the gPTP daemon (BR2_PACKAGE_LINUXPTP).
 
 	  Alternative: keep stock pipewire and deploy the Milan build at runtime
 	  with the pipewire-helper build-and-install script instead of this package.
