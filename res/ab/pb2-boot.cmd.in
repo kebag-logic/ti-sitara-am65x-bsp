@@ -1,0 +1,67 @@
+# RAUC A/B bootchooser for the PocketBeagle 2 (issue #27).
+#
+# Run from the boot partition by the board's envboot (loadbootscript loads
+# boot.scr, bootscript sources it), before bootstd: the A/B card carries no
+# extlinux.conf. build-tdm8-uac2-pb2.sh abcard fills @APPEND@ and makes
+# boot.scr with mkimage.
+#
+# Env contract (RAUC "uboot" backend): BOOT_ORDER="A B", and BOOT_A_LEFT /
+# BOOT_B_LEFT the attempts each slot has left. Each boot takes one attempt of
+# the first slot in BOOT_ORDER that has any; `rauc status mark-good` (the
+# image's S99bootgood, once the board is healthy) gives the booted slot its
+# attempts back. A slot that never gets that far is left after 3 tries.
+#
+# Slot A is mmcblk1p2, slot B mmcblk1p3. Each carries its own kernel, device
+# trees and modules in /boot and /lib/modules.
+
+test -n "${BOOT_ORDER}" || setenv BOOT_ORDER "A B"
+test -n "${BOOT_A_LEFT}" || setenv BOOT_A_LEFT 3
+test -n "${BOOT_B_LEFT}" || setenv BOOT_B_LEFT 3
+
+# the device tree: the Ethernet Cap's unless the environment says otherwise
+test -n "${pb2_dtb}" || setenv pb2_dtb k3-am62-pocketbeagle2-ethcap.dtb
+
+# the "ethcap" label's arguments, and a reboot 5 s after a panic, so a kernel
+# that dies uses up an attempt instead of the board
+setenv cargs "@APPEND@ panic=5"
+
+setenv bootslot ""
+
+# the first slot in BOOT_ORDER that still has attempts: take one, and persist it
+for slot in ${BOOT_ORDER}; do
+	if test "${bootslot}" = ""; then
+		if test "${slot}" = "A" && test ${BOOT_A_LEFT} -gt 0; then
+			setexpr BOOT_A_LEFT ${BOOT_A_LEFT} - 1
+			setenv bootslot A
+			setenv rootpart 2
+		fi
+		if test "${slot}" = "B" && test ${BOOT_B_LEFT} -gt 0; then
+			setexpr BOOT_B_LEFT ${BOOT_B_LEFT} - 1
+			setenv bootslot B
+			setenv rootpart 3
+		fi
+	fi
+done
+
+saveenv
+
+# both slots used up: start over rather than stop
+if test "${bootslot}" = ""; then
+	echo "BOOTCHOOSER: both slots exhausted, giving each 3 attempts again"
+	setenv BOOT_A_LEFT 3
+	setenv BOOT_B_LEFT 3
+	saveenv
+	reset
+fi
+
+echo "BOOTCHOOSER: slot ${bootslot} (mmcblk1p${rootpart}), A_LEFT=${BOOT_A_LEFT} B_LEFT=${BOOT_B_LEFT}"
+
+ext4load mmc 1:${rootpart} ${kernel_addr_r} /boot/Image.gz
+ext4load mmc 1:${rootpart} ${fdt_addr_r} /boot/${pb2_dtb}
+
+setenv bootargs "${cargs} root=/dev/mmcblk1p${rootpart} ro rauc.slot=${bootslot}"
+booti ${kernel_addr_r} - ${fdt_addr_r}
+
+# booti only returns on failure: count the attempt and try again
+echo "BOOTCHOOSER: slot ${bootslot} did not boot; resetting"
+reset

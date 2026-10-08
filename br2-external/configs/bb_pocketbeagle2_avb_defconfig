@@ -33,6 +33,12 @@ BR2_PACKAGE_PIPEWIRE_UPSTREAM=y
 # gPTP: flexptpd, the IEEE 802.1AS end station of our flexPTP fork (#19), in
 # place of linuxptp
 BR2_PACKAGE_FLEXPTP_GPTP=y
+# RAUC A/B updates (#27): rauc, fw_printenv/fw_setenv for its U-Boot backend,
+# and GNU tar, which RAUC extracts tar slot images with (BusyBox's tar here
+# cannot decompress)
+BR2_PACKAGE_RAUC=y
+BR2_PACKAGE_LIBUBOOTENV=y
+BR2_PACKAGE_TAR=y
 BR2_PACKAGE_ALSA_UTILS=y
 BR2_PACKAGE_ALSA_UTILS_APLAY=y
 # alsaloop bridges the McASP TDM8 card to the UAC2 gadget card

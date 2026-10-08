@@ -32,11 +32,15 @@
 # anything else writes to the card in earnest.  Online resize2fs needs / to be
 # read-write; it is by then.
 #
-# GROWROOTFS_MNT (default /) exists so the script can be exercised on a
-# loop-mounted copy of the card image from the build host.
+# On the RAUC A/B card (issue #27) the root partition is a slot, not the last
+# partition, so it is left alone; the data partition mounted on /data is the
+# last one, and takes the rest of the card instead (its marker is
+# /data/.growrootfs.done).
+#
+# GROWROOTFS_MNT (default: / then /data) exists so the script can be exercised
+# on a loop-mounted copy of the card image from the build host.
 
-MNT=${GROWROOTFS_MNT:-/}
-DONE="${MNT%/}/etc/growrootfs.done"
+MOUNTS=${GROWROOTFS_MNT:-/ /data}
 
 log() { echo "growrootfs: $*"; }
 
@@ -89,16 +93,32 @@ grow() {
 	esac
 }
 
+# the marker that says a mount point has been grown
+done_marker() {
+	if [ "$1" = / ]; then
+		echo /etc/growrootfs.done
+	else
+		echo "${1%/}/.growrootfs.done"
+	fi
+}
+
 case "$1" in
 start)
-	[ -e "$DONE" ] && exit 0
-	if grow; then
-		touch "$DONE"
-		sync
-		log "done: $(df -h "$MNT" | awk 'NR == 2 { print $2 " on " $6 ", " $4 " free" }')"
-	else
-		log "FAILED - / keeps its current size; this runs again on the next boot"
-	fi
+	for MNT in $MOUNTS; do
+		# /data exists only on an A/B card
+		awk -v m="$MNT" '$5 == m { found = 1 } END { exit !found }' /proc/self/mountinfo || continue
+
+		DONE=$(done_marker "$MNT")
+		[ -e "$DONE" ] && continue
+
+		if grow; then
+			touch "$DONE"
+			sync
+			log "done: $(df -h "$MNT" | awk 'NR == 2 { print $2 " on " $6 ", " $4 " free" }')"
+		else
+			log "FAILED - $MNT keeps its current size; this runs again on the next boot"
+		fi
+	done
 	;;
 stop)
 	;;

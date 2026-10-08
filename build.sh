@@ -125,6 +125,11 @@ if [ "$1" = "PB2" ]; then
 	# Default to putting the A53 stages on main_uart0 too, so the whole log
 	# lands on one wire; PB2_CONSOLE_ON_P1=off keeps the stock split.
 	${SCRIPT_DIR}/res/uboot/pb2-console-on-p1.sh "${PB2_CONSOLE_ON_P1:-on}" "$UBOOT_SRC"
+
+	# A persistent, redundant environment on the microSD, which RAUC's A/B
+	# bootchooser keeps its state in (issue #27); PB2_AB_ENV=off keeps the
+	# stock CONFIG_ENV_IS_NOWHERE.
+	${SCRIPT_DIR}/res/uboot/pb2-ab-env.sh "${PB2_AB_ENV:-on}" "$UBOOT_SRC"
 fi
 
 cd $UBOOT_SRC

@@ -57,6 +57,8 @@
 #        probe      = ask a live board what it is (rev A1/AM6254 vs rev A0/AM6232)
 #        bootloader = verify u-boot-pb/out_bp2 is a complete HS-FS chain
 #        sdimage    = build the microSD image (wraps build-spare-sd.sh; needs sudo)
+#        abcard     = build the RAUC A/B microSD image, flashed once (no root needed)
+#        bundle     = build a signed RAUC bundle for an A/B card (no root needed)
 # Env:   KVER BOARD JOBS CROSS_COMPILE PB2_DEFAULT_LABEL PB2_ETHCAP_APPEND UBOUT_PB2 UB_VARIANT
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -464,6 +466,218 @@ echo "then reboot; the serial console can still pick 'notdm8'"
 REMOTE
 }
 
+# ---- RAUC A/B (issue #27) --------------------------------------------------
+#
+# abcard [out.img]    an A/B microSD image, flashed once:
+#                       p1  FAT  BOOT      tiboot3.bin, tispl.bin, u-boot.img,
+#                                          boot.scr (the bootchooser,
+#                                          res/ab/pb2-boot.cmd.in), and no
+#                                          extlinux.conf
+#                       p2  ext4 rootfs.A  a complete slot: the rootfs, /boot
+#                       p3  ext4 rootfs.B  (Image.gz and the four device
+#                                          trees), /lib/modules
+#                       p4  ext4 data      /data, which survives slot switches
+#                     Every update after that goes through RAUC. The
+#                     bootloaders must have the A/B environment
+#                     (res/uboot/pb2-ab-env.sh, on by default in ./build.sh PB2).
+# bundle [out.raucb]  a signed RAUC bundle of one complete slot, compatible
+#                     pocketbeagle2-am62x: rauc install <bundle> on the board.
+#
+# Both are built without root: fakeroot keeps the rootfs's owners, mke2fs -d
+# fills the ext4 slots, mtools the FAT, sfdisk and dd the image file.
+
+AB_BOOT_MB="${AB_BOOT_MB:-300}"
+AB_SLOT_MB="${AB_SLOT_MB:-1536}"
+AB_DATA_MB="${AB_DATA_MB:-256}"
+RAUC_COMPATIBLE="pocketbeagle2-am62x"
+RAUC_CERT="${RAUC_CERT:-$HERE/res/rauc/rauc-dev.cert.pem}"
+RAUC_KEY="${RAUC_KEY:-$HERE/res/rauc/rauc-dev.key.pem}"
+# host-rauc and mksquashfs, from a Buildroot output that built them
+BR_HOST="${BR_HOST:-$HERE/../buildroot/output/host}"
+
+# The "ethcap" label's kernel arguments, without root= and ro: the bootchooser
+# adds the slot's own.
+ab_append() {
+	echo "$DEFAULT_APPEND${PB2_ETHCAP_APPEND:+ $PB2_ETHCAP_APPEND}" | sed 's/ root=[^ ]*//; s/ ro / /'
+}
+
+# Check what a slot is made of, and print the kernel release.
+ab_inputs() {
+	local rel roottar="$1" miss=0
+	rel=$(M -s kernelrelease)
+
+	for f in "$KSRC/arch/arm64/boot/Image.gz" "$roottar"; do
+		[ -s "$f" ] || { echo "missing: $f" >&2; miss=1; }
+	done
+
+	for d in "$DTB_NAME" "$DTB_ASYNC_NAME" "$DTB_STOCK" "$DTB_ETHCAP_NAME"; do
+		[ -s "$OUTDIR/$d.dtb" ] || { echo "missing: $OUTDIR/$d.dtb" >&2; miss=1; }
+	done
+
+	[ -d "$STAGE/lib/modules/$rel" ] || { echo "missing: $STAGE/lib/modules/$rel" >&2; miss=1; }
+
+	if [ "$miss" -ne 0 ]; then
+		echo "  kernel, device trees, modules: $0 build && $0 dtb" >&2
+		echo "  rootfs: make -C ../buildroot O=\$PWD/../buildroot-pb2 (or ROOTTAR=)" >&2
+		exit 1
+	fi
+
+	echo "$rel"
+}
+
+# Fill directory $1 with one complete slot (run under fakeroot, so the rootfs
+# keeps its owners): the rootfs from $3, /boot, /lib/modules/$2.
+ab_slot_tree() {
+	local dir="$1" rel="$2" roottar="$3"
+
+	tar -C "$dir" -xzf "$roottar"
+
+	mkdir -p "$dir/boot" "$dir/lib/modules"
+	cp "$KSRC/arch/arm64/boot/Image.gz" "$dir/boot/Image.gz"
+
+	for d in "$DTB_NAME" "$DTB_ASYNC_NAME" "$DTB_STOCK" "$DTB_ETHCAP_NAME"; do
+		cp "$OUTDIR/$d.dtb" "$dir/boot/$d.dtb"
+	done
+
+	rm -rf "$dir/lib/modules/$rel"
+	cp -a "$STAGE/lib/modules/$rel" "$dir/lib/modules/"
+}
+
+abcard() {
+	local out roottar rel r5 w mkimage
+	roottar="${ROOTTAR:-$HERE/../buildroot-pb2/images/rootfs.tar.gz}"
+	out="${1:-$HERE/res/spare-sd-pb2/pocketbeagle2-ethcap-ab.img}"
+	r5="$UBOUT_PB2/r5/tiboot3-am62x-$UB_VARIANT-evm.bin"
+	mkimage="$UBOUT_PB2/a53/tools/mkimage"
+
+	rel=$(ab_inputs "$roottar")
+
+	for f in "$r5" "$UBOUT_PB2/a53/tispl.bin" "$UBOUT_PB2/a53/u-boot.img" "$mkimage"; do
+		[ -s "$f" ] || { echo "missing: $f (./build.sh PB2)" >&2; exit 1; }
+	done
+
+	# a bootloader without the A/B environment would forget every attempt
+	grep -q '^CONFIG_ENV_IS_IN_MMC=y' "$UBOUT_PB2/a53/.config" || {
+		echo "$UBOUT_PB2 keeps no environment: rebuild with PB2_AB_ENV=on ./build.sh PB2" >&2
+		exit 1
+	}
+
+	w=$(mktemp -d)
+	trap 'rm -rf "$w"' EXIT
+
+	echo "building $out"
+	echo "  slots    $rel, rootfs $roottar"
+	echo "  sizes    boot $AB_BOOT_MB, rootfs.A/B $AB_SLOT_MB each, data $AB_DATA_MB MiB"
+
+	# the bootchooser, with the ethcap label's arguments
+	sed "s|@APPEND@|$(ab_append)|" "$HERE/res/ab/pb2-boot.cmd.in" > "$w/boot.cmd"
+	"$mkimage" -A arm64 -T script -C none -n "PB2 A/B bootchooser" -d "$w/boot.cmd" "$w/boot.scr" >/dev/null
+
+	# p1: the FAT, as build-spare-sd.sh makes it (mformat keeps the full
+	# total-sector count the K3 ROM wants)
+	truncate -s "${AB_BOOT_MB}M" "$w/boot.vfat"
+	mformat -i "$w/boot.vfat" -R 6 -F -v BOOT ::
+	mcopy -i "$w/boot.vfat" "$r5" ::/tiboot3.bin
+	mcopy -i "$w/boot.vfat" "$UBOUT_PB2/a53/tispl.bin" ::/tispl.bin
+	mcopy -i "$w/boot.vfat" "$UBOUT_PB2/a53/u-boot.img" ::/u-boot.img
+	mcopy -i "$w/boot.vfat" "$w/boot.scr" ::/boot.scr
+
+	# p2, p3: the same slot twice; p4: an empty data file system
+	mkdir "$w/slot"
+	export -f ab_slot_tree
+	export KSRC OUTDIR STAGE CROSS DTB_NAME DTB_ASYNC_NAME DTB_STOCK DTB_ETHCAP_NAME
+	fakeroot -- bash -c '
+		set -e
+		ab_slot_tree "$1/slot" "$2" "$3"
+		mke2fs -q -t ext4 -L rootfs.A -d "$1/slot" "$1/rootfs.A.ext4" "${4}M"
+		mke2fs -q -t ext4 -L rootfs.B -d "$1/slot" "$1/rootfs.B.ext4" "${4}M"
+	' _ "$w" "$rel" "$roottar" "$AB_SLOT_MB"
+	mke2fs -q -t ext4 -L data "$w/data.ext4" "${AB_DATA_MB}M"
+
+	# the card: an MBR (the K3 ROM finds the FAT through it), partitions
+	# aligned on 1 MiB, each written at its start
+	rm -f "$out"
+	truncate -s "$((1 + AB_BOOT_MB + 2 * AB_SLOT_MB + AB_DATA_MB + 1))M" "$out"
+	sfdisk -q "$out" <<SF
+label: dos
+start=2048, size=$((AB_BOOT_MB * 2048)), type=c, bootable
+size=$((AB_SLOT_MB * 2048)), type=83
+size=$((AB_SLOT_MB * 2048)), type=83
+size=$((AB_DATA_MB * 2048)), type=83
+SF
+
+	local n=1 start
+	for part in boot.vfat rootfs.A.ext4 rootfs.B.ext4 data.ext4; do
+		start=$(sfdisk -q --dump "$out" | awk -v n="$n" '$1 ~ ("img" n "$") { sub(",", "", $4); print $4 }')
+		dd if="$w/$part" of="$out" bs=512 seek="$start" conv=notrunc,sparse status=none
+		n=$((n + 1))
+	done
+
+	rm -rf "$w"
+	trap - EXIT
+
+	echo "built $out ($(du -h --apparent-size "$out" | cut -f1), $(du -h "$out" | cut -f1) on disk)"
+	sfdisk -l "$out" | sed -n '/^Device/,$p'
+	echo "flash once: sudo dd if=$out of=/dev/sdX bs=4M conv=fsync status=progress"
+	echo "then update with: $0 bundle && rauc install <bundle> on the board"
+}
+
+bundle() {
+	local out roottar rel w version
+	roottar="${ROOTTAR:-$HERE/../buildroot-pb2/images/rootfs.tar.gz}"
+	out="${1:-$HERE/res/rauc/pocketbeagle2-am62x.raucb}"
+	version="${VERSION:-$(git -C "$HERE" describe --always --dirty)-$(date +%Y%m%d%H%M)}"
+
+	rel=$(ab_inputs "$roottar")
+
+	export PATH="$BR_HOST/bin:$PATH"
+	command -v rauc >/dev/null || { echo "no rauc: make -C ../buildroot host-rauc (or BR_HOST=)" >&2; exit 1; }
+	command -v mksquashfs >/dev/null || { echo "no mksquashfs in $BR_HOST/bin" >&2; exit 1; }
+
+	for f in "$RAUC_CERT" "$RAUC_KEY"; do
+		[ -s "$f" ] || { echo "missing: $f" >&2; exit 1; }
+	done
+
+	w=$(mktemp -d)
+	trap 'rm -rf "$w"' EXIT
+
+	echo "building $out ($RAUC_COMPATIBLE $version, $rel)"
+
+	# one complete slot as a tar image: RAUC formats the inactive slot and
+	# extracts it, so the slot's size is the partition's, not the bundle's
+	mkdir "$w/slot" "$w/content"
+	export -f ab_slot_tree
+	export KSRC OUTDIR STAGE CROSS DTB_NAME DTB_ASYNC_NAME DTB_STOCK DTB_ETHCAP_NAME
+	fakeroot -- bash -c '
+		set -e
+		ab_slot_tree "$1/slot" "$2" "$3"
+		tar -C "$1/slot" --numeric-owner -czf "$1/content/rootfs.tar.gz" .
+	' _ "$w" "$rel" "$roottar"
+
+	cat > "$w/content/manifest.raucm" <<MF
+[update]
+compatible=$RAUC_COMPATIBLE
+version=$version
+
+[bundle]
+format=plain
+
+[image.rootfs]
+filename=rootfs.tar.gz
+MF
+
+	mkdir -p "$(dirname "$out")"
+	rm -f "$out"
+	rauc bundle --cert="$RAUC_CERT" --key="$RAUC_KEY" "$w/content" "$out"
+	rauc info --keyring="$RAUC_CERT" "$out" | sed -n '1,12p'
+
+	rm -rf "$w"
+	trap - EXIT
+
+	echo "built $out ($(du -h "$out" | cut -f1))"
+	echo "install: scp $out <board>:/tmp/ && ssh <board> rauc install /tmp/$(basename "$out")"
+}
+
 case "${1:-all}" in
 fetch)  fetch ;;
 shim)   fetch; shim ;;
@@ -476,7 +690,9 @@ deploy) deploy ;;
 probe)  probe ;;
 bootloader) bootloader ;;
 sdimage) shift 2>/dev/null; sdimage "$@" ;;
+abcard) shift 2>/dev/null; abcard "$@" ;;
+bundle) shift 2>/dev/null; bundle "$@" ;;
 all)    fetch; shim; dts; config; dtb; build; deploy ;;
 image)  fetch; shim; dts; config; dtb; build; stage ;;
-*) echo "Usage: $0 {fetch|shim|dts|config|dtb|build|stage|deploy|probe|bootloader|sdimage|all|image}"; exit 1 ;;
+*) echo "Usage: $0 {fetch|shim|dts|config|dtb|build|stage|deploy|probe|bootloader|sdimage|abcard|bundle|all|image}"; exit 1 ;;
 esac

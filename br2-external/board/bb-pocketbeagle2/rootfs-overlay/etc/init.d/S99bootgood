@@ -1,0 +1,96 @@
+#!/bin/sh
+
+# SPDX-FileCopyrightText: Copyright (c) 2026 Kebag-Logic
+# SPDX-License-Identifier: Apache-2.0
+
+# Commit a healthy boot of a RAUC slot (issue #27): `rauc status mark-good`
+# gives the booted slot its attempts back, so the U-Boot bootchooser keeps
+# booting it. A slot that boots but never gets healthy is not marked: after
+# its attempts (3) the bootchooser goes back to the other slot.
+#
+# Healthy means: the root file system is writable, and on a board wearing the
+# Ethernet Cap (AVB_INTERFACE exists), gPTP (flexptpd) runs and, with
+# AVB_STACK=native, so do the bridge's daemons. The check waits up to
+# BOOTGOOD_WAIT_S for them, in the background, so the boot is not held up.
+#
+# Not on an A/B card (no rauc.slot= on the command line): nothing to do.
+
+ENV_FILE=${AVB_ENV:-/etc/avb/avb.env}
+if [ -r "$ENV_FILE" ]; then . "$ENV_FILE"; fi
+
+WAIT_S=${BOOTGOOD_WAIT_S:-90}
+
+log() {
+	logger -t bootgood "$*"
+	echo "bootgood: $*"
+}
+
+booted_slot() {
+	sed -n 's/.*rauc\.slot=\([AB]\).*/\1/p' /proc/cmdline
+}
+
+running() {
+	pidof "$1" >/dev/null 2>&1
+}
+
+healthy() {
+	touch /.bootgood-probe 2>/dev/null || return 1
+	rm -f /.bootgood-probe
+
+	# a TDM8 boot of this card has no AVB port: nothing more to ask
+	[ -d "/sys/class/net/${AVB_INTERFACE:-eth0}" ] || return 0
+
+	running flexptpd || return 1
+
+	if [ "${AVB_STACK:-native}" = native ]; then
+		running milan-ctrld || return 1
+		running milan-mediad || return 1
+	fi
+
+	return 0
+}
+
+commit() {
+	slot=$(booted_slot)
+
+	i=0
+	while ! healthy; do
+		i=$((i + 5))
+		if [ "$i" -gt "$WAIT_S" ]; then
+			log "slot $slot not healthy after ${WAIT_S} s: left unmarked, the bootchooser falls back after its attempts"
+			return 1
+		fi
+		sleep 5
+	done
+
+	if rauc status mark-good >/dev/null 2>&1; then
+		log "slot $slot healthy: marked good"
+		return 0
+	fi
+
+	# rauc missing or broken must not drain a healthy slot
+	if fw_setenv "BOOT_${slot}_LEFT" 3 2>/dev/null; then
+		log "slot $slot healthy: rauc unavailable, BOOT_${slot}_LEFT=3 set directly"
+		return 0
+	fi
+
+	log "slot $slot healthy, but neither rauc nor fw_setenv could commit it"
+	return 1
+}
+
+case "$1" in
+start)
+	[ -n "$(booted_slot)" ] || exit 0
+	commit &
+	;;
+stop|restart|reload)
+	;;
+status)
+	echo "booted slot: $(booted_slot)"
+	rauc status 2>/dev/null
+	;;
+*)
+	echo "usage: $0 {start|stop|status}" >&2
+	exit 1
+	;;
+esac

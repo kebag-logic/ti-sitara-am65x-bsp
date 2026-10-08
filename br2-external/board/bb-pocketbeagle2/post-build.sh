@@ -13,7 +13,7 @@ TARGET_DIR="$1"
 HERE=$(cd "$(dirname "$0")" && pwd)
 BSP=$(cd "$HERE/../../.." && pwd)          # .../ti-sitara-am65x-bsp
 
-for f in etc/init.d/S99usb_gadgets etc/init.d/S05growrootfs etc/init.d/S95avb \
+for f in etc/init.d/S99usb_gadgets etc/init.d/S05growrootfs etc/init.d/S95avb etc/init.d/S99bootgood \
 	root/setup_gadgets.sh root/remove_usb.sh usr/sbin/tdm8-uac2.sh \
 	usr/sbin/avb-gptp.sh usr/sbin/avb-irq.sh usr/sbin/avb-shaper.sh; do
 	chmod 0755 "$TARGET_DIR/$f" 2>/dev/null || true
@@ -21,6 +21,15 @@ done
 for f in etc/tdm8/tdm8.env etc/avb/avb.env etc/avb/flexptpd.conf etc/avb/uac2-milan.env; do
 	chmod 0644 "$TARGET_DIR/$f" 2>/dev/null || true
 done
+
+# The RAUC A/B card's data partition (issue #27): state that has to survive a
+# slot switch lives there, the Milan saved-state journal among it. nofail: a
+# single-slot card has no fourth partition, and /data is then a plain
+# directory of the root file system.
+mkdir -p "$TARGET_DIR/data"
+if ! grep -q '[[:space:]]/data[[:space:]]' "$TARGET_DIR/etc/fstab"; then
+	printf '/dev/mmcblk1p4\t/data\t\text4\tdefaults,noatime,nofail\t0\t2\n' >> "$TARGET_DIR/etc/fstab"
+fi
 
 # gPTP is flexptpd, started by S95avb (avb-gptp.sh) after the shaper, since
 # changing the CPSW TX channels takes eth0 down. linuxptp is not in the image;
