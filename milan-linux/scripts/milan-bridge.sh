@@ -36,6 +36,7 @@ PTO=${AVB_PTO_NS:-2000000}
 LEVEL=${AVB_TALKER_LEVEL:-24}
 INFLIGHT=${AVB_USB_IN_FLIGHT_NS:-500000}
 SRP=${AVB_SRP_DOMAIN:-none}
+JOURNAL=${AVB_JOURNAL:-/var/lib/milan/journal.bin}
 RUN=/run/avb
 
 pidf() { echo "$RUN/$1.pid"; }
@@ -67,10 +68,10 @@ halt() { # <name>
 }
 
 start() {
-	mkdir -p "$RUN"
+	mkdir -p "$RUN" "$(dirname "$JOURNAL")"
 	nosrp=
 	if [ "$SRP" = none ]; then nosrp=-n; fi
-	daemon milan-ctrld -i "$IF" -e "$ENTITY" -V "$VID" $nosrp -s || return 1
+	daemon milan-ctrld -i "$IF" -e "$ENTITY" -V "$VID" -N "$JOURNAL" $nosrp -s || return 1
 	chrt -f -p "$PRIO" "$(cat "$(pidf milan-ctrld)")" >/dev/null
 	echo "milan-bridge: milan-ctrld pid $(cat "$(pidf milan-ctrld)") on $IF, SCHED_FIFO $PRIO"
 	# the talker thread sets its own priority and CPU; it waits for the gadget

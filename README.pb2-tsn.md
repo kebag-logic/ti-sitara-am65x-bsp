@@ -236,7 +236,7 @@ the build and the tests are in [`milan-linux/README.md`](milan-linux/README.md).
 | #9 A2, entity description | `entity.conf` is generated from the 1x1 TDM8 shape; the PB2's own end-station config needs a non-FPGA target in milan-fpga's builder |
 | #10 A4, #11 A3, media clock and talker | `milan-mediad`: the talker on the media clock and the servo on the gadget's feedback. Bit-exact and gap-free in the host test with a +80 ppm host; not yet run on the board |
 | #12 A5, listener | `milan-mediad`'s listener: placed and held at its presentation time through the gadget's playback pitch, with Milan's STREAM_INPUT counters. Bit-exact between two bridges in the host test; not yet run on the board |
-| #13 A6, saved state | next |
+| #13 A6, saved state | milan-fpga's KLJ2 store on a journal file: a binding survives a power cut and fast-connects at boot; 20 random power cuts never leave a torn journal (host test); not yet run on the board |
 | #14 A7, SRP, AECP, interop | waits for milan-fpga SRP (#690) and AECP (#665 lane F5) |
 
 With `AVB_STACK=native`, `S95avb` runs `/usr/sbin/milan-bridge.sh start` after

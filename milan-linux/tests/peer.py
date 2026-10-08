@@ -255,7 +255,8 @@ def main() -> int:
     log = open(os.path.join(a.tmp, "ctrld.log"), "w")
     t0 = time.monotonic()
     proc = subprocess.Popen([a.ctrld, "-i", a.dut, "-e", a.entity, "-p", os.path.join(a.tmp, "ptp4lro"),
-                             "-l", os.path.join(a.tmp, "ctrld.ptp"), "-d", shm, "-v"], stdout=log, stderr=log)
+                             "-l", os.path.join(a.tmp, "ctrld.ptp"), "-d", shm,
+                             "-N", os.path.join(a.tmp, "journal.bin"), "-v"], stdout=log, stderr=log)
     try:
         # A1.2: ENTITY_AVAILABLE with the entity's identity, shape and grandmaster
         r = wire.wait(lambda f: is_sub(SUB_ADP, ADP_AVAILABLE)(f) and parse_adp(f[14:])["gm"] == GM_A, 7.0)

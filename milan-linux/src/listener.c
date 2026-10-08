@@ -24,7 +24,6 @@
 #define FS 48000
 #define SERVO_NS 50000000               // a servo update every 50 ms
 #define CHECK_NS 10000000               // the datapath block is read every 10 ms
-#define INTERRUPT_NS 10000000           // no PDU for 10 ms: STREAM_INTERRUPTED
 #define RESET_NS 1000000                // a presentation error past 1 ms is jumped, not steered
 #define MAX_CHANNELS 64u
 #define MAX_FRAMES 64u
@@ -137,6 +136,9 @@ static void *listener_main(void *arg)
 	}
 	int one = 1;
 	(void)setsockopt(fd, SOL_PACKET, PACKET_IGNORE_OUTGOING, &one, sizeof one);
+	// room for half a second of PDUs, should the thread be held off its core
+	int rcvbuf = 1 << 20;
+	(void)setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof rcvbuf);
 
 	enum lstate state = L_NONE;
 	struct lstream cur = {0};
@@ -188,7 +190,7 @@ static void *listener_main(void *arg)
 			// with any waiting, the stream was never interrupted
 			uint8_t peek;
 			bool pending = recv(fd, &peek, 1, MSG_PEEK | MSG_DONTWAIT) > 0;
-			if (state == L_RUNNING && !pending && now - last_rx > INTERRUPT_NS) {
+			if (state == L_RUNNING && !pending && now - last_rx > c->interrupt_ns) {
 				rep.stream_interrupted++;
 				if (rep.locked) {
 					rep.media_unlocked++;

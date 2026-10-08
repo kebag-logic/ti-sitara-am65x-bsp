@@ -42,6 +42,7 @@ static struct {
 	const char *playback;
 	bool talker, listener;
 	int64_t in_flight_ns;
+	int64_t interrupt_ns;
 	unsigned channels;
 	uint32_t pto_ns;
 	unsigned level_target;
@@ -58,6 +59,7 @@ static struct {
 	.talker = true,
 	.listener = true,
 	.in_flight_ns = 500000,
+	.interrupt_ns = 10000000,
 	.dp_name = MILAN_DP_NAME,
 	.media_name = MILAN_MEDIA_NAME,
 	.channels = 8,
@@ -104,6 +106,7 @@ static void usage(FILE *to)
 		"  -C CTL      its control device, for the two pitches (hw:CARD=UAC2Gadget)\n"
 		"  -r ROLES    talker, listener or both (talker,listener)\n"
 		"  -R NS       the USB IN requests already filled, for the listener (500000: 4 x 125 us)\n"
+		"  -T NS       no PDU for this long is STREAM_INTERRUPTED (10000000)\n"
 		"  -S PPM      instead of the gadget, a simulated USB host PPM off gPTP (tests)\n"
 		"  -W FILE     with -S, the WAV the simulated host records the listener's stream into\n"
 		"  -c N        channels (8)\n"
@@ -121,7 +124,7 @@ static void usage(FILE *to)
 static int parse(int argc, char **argv)
 {
 	int c;
-	while ((c = getopt(argc, argv, "i:I:D:E:C:r:R:S:W:c:o:L:M:P:a:d:m:sh")) != -1) {
+	while ((c = getopt(argc, argv, "i:I:D:E:C:r:R:T:S:W:c:o:L:M:P:a:d:m:sh")) != -1) {
 		switch (c) {
 		case 'i': opt.ifname = optarg; break;
 		case 'I': opt.vlan_ifname = optarg; break;
@@ -133,6 +136,7 @@ static int parse(int argc, char **argv)
 			opt.listener = strstr(optarg, "listener") != NULL;
 			break;
 		case 'R': opt.in_flight_ns = strtoll(optarg, NULL, 0); break;
+		case 'T': opt.interrupt_ns = strtoll(optarg, NULL, 0); break;
 		case 'S': opt.sim = optarg; break;
 		case 'W': opt.sim_wav = optarg; break;
 		case 'c': opt.channels = (unsigned)strtoul(optarg, NULL, 0); break;
@@ -284,6 +288,7 @@ int main(int argc, char **argv)
 		.channels = opt.channels,
 		.pto_ns = opt.pto_ns,
 		.in_flight_ns = opt.sim != NULL ? 0 : opt.in_flight_ns,
+		.interrupt_ns = opt.interrupt_ns,
 		.rt_priority = opt.rt_priority > 1 ? opt.rt_priority - 1 : opt.rt_priority,
 		.cpu = opt.cpu,
 		.snk = snk,

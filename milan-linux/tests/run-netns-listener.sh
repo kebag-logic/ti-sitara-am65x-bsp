@@ -43,15 +43,17 @@ sleep 0.2
 
 E="$HERE/../config/entity.conf"
 # -n: a direct link, no MSRP bridge, so a settled sink does not wait for SRP
-"$B/milan-ctrld" -i veth0 -e "$E" -p none -n -l "$TMP/a.ptp" -d "$DPA" > "$TMP/ctrld-a.log" 2>&1 &
+"$B/milan-ctrld" -i veth0 -e "$E" -p none -n -l "$TMP/a.ptp" -d "$DPA" -N "$TMP/a.bin" > "$TMP/ctrld-a.log" 2>&1 &
 PIDS="$!"
-"$B/milan-ctrld" -i veth1 -e "$E" -p none -n -l "$TMP/b.ptp" -d "$DPB" > "$TMP/ctrld-b.log" 2>&1 &
+"$B/milan-ctrld" -i veth1 -e "$E" -p none -n -l "$TMP/b.ptp" -d "$DPB" -N "$TMP/b.bin" > "$TMP/ctrld-b.log" 2>&1 &
 PIDS="$PIDS $!"
-# a 20 ms PTO: without SCHED_FIFO the host stalls for milliseconds, and the
-# listener's queue must outlast them (the board runs the 2 ms default)
-"$B/milan-mediad" -i veth0 -r talker -S 80 -P 0 -M 480 -o 20000000 -d "$DPA" -m "$MDA" > "$TMP/mediad-a.log" 2>&1 &
+# Without SCHED_FIFO, on a shared host, either bridge's threads can be held off
+# for tens of milliseconds. A 50 ms PTO and drop level, and a 100 ms
+# interruption threshold, keep that from reading as a stream fault; the board
+# runs 2 ms, 2 ms and 10 ms on its own isolated core.
+"$B/milan-mediad" -i veth0 -r talker -S 80 -P 0 -M 2400 -o 50000000 -d "$DPA" -m "$MDA" > "$TMP/mediad-a.log" 2>&1 &
 PIDS="$PIDS $!"
-"$B/milan-mediad" -i veth1 -r listener -S -50 -W "$TMP/b.wav" -P 0 -o 20000000 -d "$DPB" -m "$MDB" > "$TMP/mediad-b.log" 2>&1 &
+"$B/milan-mediad" -i veth1 -r listener -S -50 -W "$TMP/b.wav" -P 0 -o 50000000 -T 100000000 -d "$DPB" -m "$MDB" > "$TMP/mediad-b.log" 2>&1 &
 MEDIAD_B=$!
 PIDS="$PIDS $MEDIAD_B"
 

@@ -130,6 +130,37 @@ registered (`acmp_tk_registered()`, from the main loop: no port calls back
 into a core, milan-fpga #678). Through an AVB switch, SRP is needed anyway: a
 switch forwards a stream only for a registered talker and listener.
 
+## Saved state (#13)
+
+`milan-ctrld -N /var/lib/milan/journal.bin` (`AVB_JOURNAL`) runs milan-fpga's
+Mark II saved-state store, the KLJ2 journal (`sw/firmware/ctrl_nvm`), unchanged.
+It runs in the RISC-V platform's boot order: compose, then
+`acmp_nvm_init()`, `nvm_store_boot()`, the store's tick, and then open. So a
+binding is restored before any channel opens, and the listener fast-connects at
+boot without a controller.
+
+* **The media** (`src/nvm_file.c`) is a file of the journal's size, 128 KiB: two
+  64 KiB slots, with flash semantics kept. An erase sets a block to 0xFF, and a
+  program only clears bits. A worker thread writes every operation to the file
+  (`pwrite`, `fdatasync`) in issue order, and `busy()` stays 1 until it is on
+  the card. The store's write order is the flash's, and the control loop never
+  waits on the card.
+* **The shape** (`config/nvm_shape_gen.h`) comes from milan-fpga's own
+  derivation (`tools/gen-nvm-shape.py`, through
+  `sw/firmware/ctrl_nvm/test/nvm_bench.py`), for the shape `entity.conf` is
+  generated from. The container's identity words are run-time variables: the
+  entity ID comes from `eth0`'s MAC.
+* **The model.** On the RISC-V end station, the AEM image's CRC proves the
+  model at boot. Without a proof the restore ends CLOSED, and no writer runs.
+  The PB2 has no AEM image yet (#9), so `milan-ctrld` takes the model as
+  proven when the entity advertises the model ID the shape was derived for.
+* **What it keeps today:** the bindings (`acmp_nvm`). The other records (names,
+  formats, maps) belong to AECP's owners (#14), and are left as staged until
+  then.
+* At boot, and on SIGUSR1, `milan-ctrld` logs the store's verdict: the
+  authoritative slot and sequence, `bindings restored`/`blank`, the phase, the
+  commits, and any unread slot or read fault.
+
 ## Build and test on the host
 
 ```sh
@@ -163,9 +194,21 @@ SCHED_FIFO the host stalls for milliseconds.
 Over the measured window, B's counters must show 8000 PDUs/s and no sequence
 error, late PDU, interruption, reset or underrun, and the presentation error
 must stay within 125 us. The playback pitch must cancel the host's offset. The
-recording, inside that window, must be the ramp bit for bit. Both bridges run a
-20 ms PTO there, so the listener's queue outlasts this unprivileged host's
-stalls; the board runs 2 ms.
+recording, inside that window, must be the ramp bit for bit. Without SCHED_FIFO,
+on a shared host, either bridge can be held off its CPU for tens of
+milliseconds. So the test runs a 50 ms PTO and drop level, and a 100 ms
+interruption threshold (`-T`). The board runs 2 ms, 2 ms and 10 ms, on its own
+isolated core.
+
+`tests/run-netns-nvm.sh` runs the saved state against real power cuts (SIGKILL,
+nothing flushed):
+
+* A6.1: a bind is written, B is killed and restarted, and B settles on the
+  talker again with no controller.
+* A6.2: an unbind survives a power cut.
+* A6.3: 20 cuts at random points of bind/unbind; every boot must judge an
+  accepted slot and restore the bindings, with no read fault, and the journal
+  must still take a bind afterwards.
 
 `tests/peer.py`, the control-plane test, The peer plays the fake ptp4l, the
 controller, a listener, a talker and a MAAP peer, and grades what

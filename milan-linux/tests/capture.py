@@ -48,7 +48,8 @@ def main() -> int:
     s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(3))
     s.bind((ifname, 3))
     s.setsockopt(SOL_PACKET, PACKET_AUXDATA, 1)
-    # 8000 frames/s into Python: room for its stalls (about 4 s of frames)
+    # 8000 frames/s into Python: as much room for its stalls as an unprivileged
+    # socket gets (net.core.rmem_max caps it, about 50 ms of frames by default)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 16 << 20)
     s.setsockopt(socket.SOL_SOCKET, SO_TIMESTAMPNS, 1)
     s.settimeout(0.2)
@@ -56,7 +57,10 @@ def main() -> int:
     f = open(out, "wb")
     # classic pcap, nanosecond resolution, Ethernet
     f.write(struct.pack("<IHHiIII", 0xA1B23C4D, 2, 4, 0, 0, 65535, 1))
-    end = time.monotonic() + seconds
+    # Frames are handled the same way through a 0.3 s warm-up and only kept
+    # after it, so the interpreter's first-pass stalls fall outside the record.
+    start = time.monotonic() + 0.3
+    end = start + seconds
     n = 0
     while time.monotonic() < end:
         try:
@@ -78,7 +82,7 @@ def main() -> int:
         if tci is not None:
             data = data[:12] + struct.pack(">HH", tci[0], tci[1]) + data[12:]
         inner = struct.unpack(">H", data[16:18])[0] if data[12:14] == b"\x81\x00" else struct.unpack(">H", data[12:14])[0]
-        if inner != ethertype or ts is None:
+        if inner != ethertype or ts is None or time.monotonic() < start:
             continue
         f.write(struct.pack("<IIII", ts // 1_000_000_000, ts % 1_000_000_000, len(data), len(data)))
         f.write(data)

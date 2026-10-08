@@ -20,8 +20,11 @@
 //                                 counts as registered, so the sink holds
 //                                 SETTLED_RSV_OK instead of re-probing every
 //                                 TMR_NO_TK
-//   acmp_env.persist, .changed    logged (the saved state and AECP's
-//                                 notifications arrive with their lanes)
+//   acmp_env.persist              the saved-state store marks the binding
+//                                 record (nvm_store_changed), as on the RISC-V
+//                                 platform; the store is milan-fpga's KLJ2
+//                                 journal on a file (nvm_file.h, -N)
+//   acmp_env.changed              logged (AECP's notifications arrive with it)
 //   maap_allocation               the MAAP range, published for the media
 //                                 plane and read back by acmp_env.source
 //
@@ -38,9 +41,13 @@
 #include <syslog.h>
 #include <unistd.h>
 
+#include "acmp_nvm.h"
 #include "ctrl_app.h"
 #include "datapath.h"
 #include "entity_conf.h"
+#include "nvm_file.h"
+#include "nvm_klj2.h"
+#include "nvm_store.h"
 #include "softfab.h"
 
 #define DEFAULT_VLAN 2u                 // Milan v1.2 4.2.7: the SR class default VID
@@ -52,6 +59,7 @@ static struct {
 	const char *ptp_server;
 	const char *ptp_local;
 	const char *dp_name;
+	const char *journal;            // the saved-state journal file, NULL for none
 	uint16_t vlan;
 	unsigned ptp_poll_ms;
 	bool use_syslog;
@@ -63,6 +71,7 @@ static struct {
 	.ptp_server = "/var/run/ptp4lro",
 	.ptp_local = "/var/run/milan-ctrld.ptp",
 	.dp_name = MILAN_DP_NAME,
+	.journal = "/var/lib/milan/journal.bin",
 	.vlan = DEFAULT_VLAN,
 	.ptp_poll_ms = 250u,
 };
@@ -79,6 +88,8 @@ static struct ctrl_app app;
 static struct entity_conf econf;
 static struct acmp_config acmp_cfg;
 static struct milan_dp *dp;
+static struct acmp_nvm binding_owner;
+static struct nvm_flash journal_port;
 
 // lwSRP's pool, the RV32 image's classes; the composition carves it even
 // before SRP is bound. The arena also holds the alignment and a flag per block
@@ -162,7 +173,83 @@ static void env_srp(void *ctx, unsigned sink, const struct acmp_stream *stream)
 static void env_persist(void *ctx, unsigned sink)
 {
 	(void)ctx;
-	say(LOG_DEBUG, "sink %u: binding changed (no saved state on this build)", sink);
+	if (opt.journal != NULL) {
+		nvm_store_changed(NVM_G_BIND, sink);
+	}
+	say(LOG_DEBUG, "sink %u: binding changed", sink);
+}
+
+// Every saved group but the bindings belongs to AECP's owners (#14); until
+// they exist, those records are taken and left as staged.
+//
+// The model. On the RISC-V end station it is proven by the AEM image's CRC at
+// boot; without it the restore ends CLOSED and no writer runs. The PB2 has no
+// AEM image yet (#9), so the model counts as proven when the entity advertises
+// the model ID the store's shape was derived for (config/nvm_shape_gen.h): the
+// records are then judged against the shape they were written in.
+static int others_model_ready(void *ctx)
+{
+	(void)ctx;
+	return econf.entity.entity_model_id ==
+	       (((uint64_t)MILAN_NVM_SHAPE_MODEL_ID_HI << 32) | MILAN_NVM_SHAPE_MODEL_ID_LO);
+}
+
+static enum nvm_apply others_apply(void *ctx, unsigned int group, unsigned int index, const uint8_t *payload,
+				   unsigned int len)
+{
+	(void)ctx;
+	(void)group;
+	(void)index;
+	(void)payload;
+	(void)len;
+	return NVM_APPLIED;
+}
+
+static enum nvm_apply others_settle(void *ctx)
+{
+	(void)ctx;
+	return NVM_APPLIED;
+}
+
+static int others_rollback(void *ctx, enum nvm_walk walk)
+{
+	(void)ctx;
+	(void)walk;
+	return 0;
+}
+
+static int others_latch(void *ctx, unsigned int group, unsigned int index, uint8_t *payload, unsigned int len)
+{
+	(void)ctx;
+	(void)group;
+	(void)index;
+	(void)payload;
+	(void)len;
+	return 0;
+}
+
+static void others_release(void *ctx)
+{
+	(void)ctx;
+}
+
+static const struct nvm_state others = {
+	others_model_ready, others_apply, others_settle, others_rollback, others_latch, others_release, NULL,
+};
+
+static void report_store(const char *when)
+{
+	if (opt.journal == NULL) {
+		return;
+	}
+	const struct nvm_status *s = nvm_store_status();
+	say(LOG_INFO,
+	    "saved state %s: slot %s seq %u (A %u, B %u) | bindings %s, rest %s | phase %d dirty %d pending %d "
+	    "| commits %u ok, %u failed, %u skipped | unread 0x%x read faults %u",
+	    when, s->auth == 0 ? "A" : s->auth == 1 ? "B" : "none", s->seq, s->seq_a, s->seq_b,
+	    s->bind_terminal == NVM_T_COMPLETE ? "restored" : s->bind_terminal == NVM_T_BLANK ? "blank" : "other",
+	    s->terminal == NVM_T_CLOSED ? "closed" : s->terminal == NVM_T_COMPLETE ? "restored" : "other", (int)s->phase,
+	    s->dirty, s->pending, s->commits_ok, s->commits_failed, s->commits_skipped, s->unread, s->read_faults);
 }
 
 static void env_changed(void *ctx, unsigned sink)
@@ -227,6 +314,7 @@ static void dump(void)
 	    fab.model.filter_mismatch);
 	say(LOG_INFO, "MAAP %s base %012llx count %u", dp->maap_valid ? "valid" : "none",
 	    (unsigned long long)dp->maap_base, dp->maap_count);
+	report_store("now");
 	for (unsigned k = 0; k < acmp_cfg.n_sinks; ++k) {
 		const struct acmp_sink *x = &app.acmp.acmp.sinks[k];
 		say(LOG_INFO, "sink %u: state %d bound %d talker %016llx/%u started %d status %u", k, (int)x->state,
@@ -255,6 +343,7 @@ static void usage(FILE *to)
 		"  -p PATH    ptp4l read-only management socket (/var/run/ptp4lro), \"none\" for no gPTP\n"
 		"  -l PATH    our socket for ptp4l's replies (/var/run/milan-ctrld.ptp)\n"
 		"  -d NAME    datapath block, a shm_open() name (" MILAN_DP_NAME ")\n"
+		"  -N FILE    saved-state journal (/var/lib/milan/journal.bin), \"none\" for none\n"
 		"  -V VID     VLAN of the talker's streams (2)\n"
 		"  -n         no SRP domain (a direct link, no MSRP bridge): a settled sink's talker counts as registered\n"
 		"  -s         log to syslog\n"
@@ -265,13 +354,14 @@ static void usage(FILE *to)
 static int parse(int argc, char **argv)
 {
 	int c;
-	while ((c = getopt(argc, argv, "i:e:p:l:d:V:nsvh")) != -1) {
+	while ((c = getopt(argc, argv, "i:e:p:l:d:N:V:nsvh")) != -1) {
 		switch (c) {
 		case 'i': opt.ifname = optarg; break;
 		case 'e': opt.entity_path = optarg; break;
 		case 'p': opt.ptp_server = strcmp(optarg, "none") == 0 ? NULL : optarg; break;
 		case 'l': opt.ptp_local = optarg; break;
 		case 'd': opt.dp_name = optarg; break;
+		case 'N': opt.journal = strcmp(optarg, "none") == 0 ? NULL : optarg; break;
 		case 'V': opt.vlan = (uint16_t)strtoul(optarg, NULL, 0); break;
 		case 's': opt.use_syslog = true; break;
 		case 'n': opt.no_srp = true; break;
@@ -329,6 +419,30 @@ static int compose(void)
 	if (!ctrl_app_compose(&app, &cfg)) {
 		say(LOG_ERR, "the firmware refused its composition");
 		return -1;
+	}
+	// the RISC-V platform's boot order: the store restores the bindings between
+	// the composition and the open, so they are in place before a channel opens
+	if (opt.journal != NULL) {
+		if (cfg.acmp == NULL) {
+			say(LOG_ERR, "a saved state needs ACMP: the entity has no stream");
+			return -1;
+		}
+		milan_nvm_entity_id_lo = (uint32_t)e->entity_id;
+		milan_nvm_entity_id_hi = (uint32_t)(e->entity_id >> 32);
+		milan_nvm_model_id_lo = (uint32_t)e->entity_model_id;
+		milan_nvm_model_id_hi = (uint32_t)(e->entity_model_id >> 32);
+		int rc = nvm_file_open(opt.journal, &journal_port);
+		if (rc != 0) {
+			say(LOG_ERR, "saved state %s: %s", opt.journal, strerror(-rc));
+			return -1;
+		}
+		acmp_nvm_init(&binding_owner, &app.acmp.acmp, NVM_G_BIND, &others);
+		nvm_store_boot(&journal_port, &binding_owner.port);
+		if (!ctrl_loop_add_tick(&app.loop, nvm_store_service)) {
+			say(LOG_ERR, "no room for the store's tick");
+			return -1;
+		}
+		report_store("at boot");
 	}
 	if (!ctrl_app_open(&app, &cfg)) {
 		say(LOG_ERR, "the soft fabric does not carry this firmware's contract");
@@ -404,6 +518,20 @@ int main(int argc, char **argv)
 		if (handled == 0u) {
 			usleep(1000);
 		}
+	}
+	// a change still inside the store's debounce is written before the exit
+	if (opt.journal != NULL) {
+		const struct nvm_status *s = nvm_store_status();
+		if (s->dirty || s->pending) {
+			nvm_store_commit_now();
+			until = softfab_now_ms(&fab) + 3000u;
+			while (softfab_now_ms(&fab) < until && (s->dirty || s->pending || s->phase != NVM_P_IDLE)) {
+				ctrl_loop_service(&app.loop);
+				softfab_pump(&fab, false);
+				usleep(1000);
+			}
+		}
+		nvm_file_close();
 	}
 	dump();
 	softfab_close(&fab);

@@ -36,6 +36,7 @@ struct listener_cfg {
 	unsigned channels;
 	uint32_t pto_ns;                // for EARLY_TIMESTAMP: more than 4 x PTO ahead
 	int64_t in_flight_ns;           // the USB IN requests already filled
+	int64_t interrupt_ns;           // no PDU for this long: STREAM_INTERRUPTED
 	int rt_priority;
 	int cpu;
 	struct audio_sink *snk;

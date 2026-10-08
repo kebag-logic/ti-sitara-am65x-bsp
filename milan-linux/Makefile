@@ -20,17 +20,20 @@ PREFIX ?= /usr
 DESTDIR ?=
 
 CTRL := $(MILAN_FPGA)/sw/firmware/ctrl
+NVM := $(MILAN_FPGA)/sw/firmware/ctrl_nvm
 FW_DIRS := mbx wire host port loop adp maap acmp app
-FW_INC := $(addprefix -I$(CTRL)/,$(FW_DIRS))
-FW_SRCS := mbx/mbx.c loop/ctrl_loop.c port/ctrl_debug.c port/ctrl_pool.c port/shlan_port.c \
-	adp/adp.c adp/adp_mbx.c acmp/acmp.c acmp/acmp_mbx.c maap/maap.c maap/maap_mbx.c \
-	app/ctrl_app.c host/mbx_model.c
+# config/ holds nvm_shape_gen.h, the store's shape (tools/gen-nvm-shape.py)
+FW_INC := $(addprefix -I$(CTRL)/,$(FW_DIRS)) -I$(NVM) -Iconfig
+FW_SRCS := $(addprefix $(CTRL)/,mbx/mbx.c loop/ctrl_loop.c port/ctrl_debug.c port/ctrl_pool.c \
+	port/shlan_port.c adp/adp.c adp/adp_mbx.c acmp/acmp.c acmp/acmp_mbx.c acmp/acmp_nvm.c maap/maap.c \
+	maap/maap_mbx.c app/ctrl_app.c host/mbx_model.c) $(addprefix $(NVM)/,nvm_klj2.c nvm_store.c)
 FW_OBJS := $(addprefix $(O)/fw/,$(notdir $(FW_SRCS:.c=.o)))
 
 FW_CFLAGS := -std=c11 -O2 -DNDEBUG -Wall -Wextra -Werror -pedantic $(FW_INC)
 OWN_CFLAGS := -std=gnu11 -O2 -Wall -Wextra -Werror -Isrc $(FW_INC) $(CFLAGS)
 
-CTRLD_SRCS := src/milan_ctrld.c src/softfab.c src/ptp_mgmt.c src/datapath.c src/shmblk.c src/entity_conf.c
+CTRLD_SRCS := src/milan_ctrld.c src/softfab.c src/ptp_mgmt.c src/datapath.c src/shmblk.c src/entity_conf.c \
+	src/nvm_file.c
 CTRLD_OBJS := $(addprefix $(O)/,$(notdir $(CTRLD_SRCS:.c=.o)))
 MEDIAD_SRCS := src/milan_mediad.c src/talker.c src/listener.c src/aaf.c src/servo.c src/gptp_time.c src/audio_alsa.c \
 	src/audio_sim.c src/datapath.c src/media.c src/shmblk.c
@@ -44,14 +47,14 @@ $(CTRL)/mbx/mbx.c:
 
 $(O)/fw/%.o: | $(CTRL)/mbx/mbx.c
 	@mkdir -p $(dir $@)
-	$(CC) $(FW_CFLAGS) -c $(filter %/$(notdir $(@:.o=.c)),$(addprefix $(CTRL)/,$(FW_SRCS))) -o $@
+	$(CC) $(FW_CFLAGS) -c $(filter %/$(notdir $(@:.o=.c)),$(FW_SRCS)) -o $@
 
-$(O)/%.o: src/%.c src/*.h | $(CTRL)/mbx/mbx.c
+$(O)/%.o: src/%.c src/*.h config/nvm_shape_gen.h | $(CTRL)/mbx/mbx.c
 	@mkdir -p $(dir $@)
 	$(CC) $(OWN_CFLAGS) -c $< -o $@
 
 $(O)/milan-ctrld: $(CTRLD_OBJS) $(FW_OBJS)
-	$(CC) $(LDFLAGS) -o $@ $^ -lrt
+	$(CC) $(LDFLAGS) -o $@ $^ -lpthread -lrt
 
 $(O)/milan-mediad: $(MEDIAD_OBJS)
 	$(CC) $(LDFLAGS) -o $@ $^ -lasound -lpthread -lm -lrt
@@ -65,6 +68,7 @@ check: all $(O)/test_ptp_mgmt $(O)/test_media
 	tests/run-netns.sh $(O)/milan-ctrld $(O)/milan-dp config/entity.conf
 	tests/run-netns-talker.sh $(O)
 	tests/run-netns-listener.sh $(O)
+	tests/run-netns-nvm.sh $(O)
 
 $(O)/test_ptp_mgmt: tests/test_ptp_mgmt.c src/ptp_mgmt.c src/ptp_mgmt.h
 	@mkdir -p $(O)
