@@ -68,7 +68,7 @@ Then log in:
 
 ```sh
 ssh root@192.168.1.12          # over the cap; password "root" (BR2_TARGET_GENERIC_ROOT_PASSWD)
-ssh root@192.168.7.12          # over USB-C (ECM), still there
+ssh root@192.168.8.12          # over USB-C (ECM): the ethcap gadget profile's own subnet
 ```
 
 ---

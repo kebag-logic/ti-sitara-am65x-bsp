@@ -191,7 +191,7 @@ owns the PCMs:
 | `TDM8_HS_BINT` | 1 | one isochronous packet per 125 us microframe. `f_uac2` picks bInterval 3 (500 us) for 8 x 32-bit on its own |
 | `TDM8_REQ_NUMBER` | 4 | requests queued per direction: 500 us of the board-to-host path. Host-to-board data completes packet by packet |
 | `c_sync` | async | the host follows the feedback endpoint, which the media clock servo steers through `Capture Pitch 1000000` |
-| ECM | yes | `usb0` stays the second way in |
+| ECM | yes | `usb0` stays the second way in, at 192.168.8.12/24 (host 192.168.8.1), MACs `…:30`/`…:32`: a TDM8 PocketBeagle 2 on the same host keeps 192.168.7.12, so the two never collide |
 
 `tdm8-uac2.sh` gained `TDM8_HS_BINT`, `TDM8_PRODUCT`, `TDM8_FUNCTION_NAME` and
 `TDM8_CONFIG_NAME`, which default to what it wrote before, so the TDM8 gadgets
