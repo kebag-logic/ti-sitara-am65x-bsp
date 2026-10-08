@@ -83,6 +83,11 @@ If no parameter is passed, `build.sh` selects MYIR.
   Cap rev B**: DP83867IR on CPSW3G port 2 (RGMII2) as `eth0`, with the CPTS PTP
   clock and the TSN qdiscs; the header-pin map, the device tree, and the
   `ethcap` image
+* `README.pb2-tsn.md` — **TSN on the PocketBeagle 2 Ethernet Cap**, the
+  foundation of the USB-to-Milan bridge: the `PREEMPT_RT` kernel and the
+  isolated core, gPTP on the CPTS clock, the VLAN and the am65-cpsw class A/B
+  shaper, the `S95avb` service, the bridge's UAC2 gadget profile, and the
+  validation kit (`validation/pb2-tsn/`)
 * `README.tdm8-validation.md` — bench log of the FPGA ↔ McASP1 link: what is
   proven, what is not, and the reproducible procedure
 

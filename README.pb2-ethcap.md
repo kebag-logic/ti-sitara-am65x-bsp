@@ -16,8 +16,8 @@ Everything else (kernel, bootloader chain, rootfs, card layout) is the
 PocketBeagle 2 build in `README.tdm8-pb2.md`. This file covers only what the
 cap adds.
 
-> **Status:** built and checked on the host (device tree, kernel config, image
-> contents). Not yet brought up on a rev B board. §5 is the bring-up check.
+> **Status:** brought up on a rev B board. §5 is the bring-up check. TSN on
+> top of it (gPTP, shaper, the USB-to-Milan bridge) is `README.pb2-tsn.md`.
 
 ---
 
