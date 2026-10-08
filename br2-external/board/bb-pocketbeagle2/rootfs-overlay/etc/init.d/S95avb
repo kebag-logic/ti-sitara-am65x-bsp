@@ -6,7 +6,7 @@
 #   2. VLAN, priority map and class A/B shaper; this may take
 #      eth0 down and up once, so it runs before gPTP           (avb-shaper.sh)
 #   3. stream multicast to the host port                       (allmulticast)
-#   4. gPTP: ptp4l on the CPTS clock, phc2sys                  (avb-gptp.sh)
+#   4. gPTP: flexptpd on the CPTS clock                        (avb-gptp.sh)
 #   5. the stack named by AVB_STACK
 # Settings: /etc/avb/avb.env. Without eth0 (any label but "ethcap") it logs one
 # line and does nothing, so the TDM8 labels are unaffected.

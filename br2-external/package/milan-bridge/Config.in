@@ -2,14 +2,14 @@ config BR2_PACKAGE_MILAN_BRIDGE
 	bool "milan-bridge (PocketBeagle 2 USB-to-Milan bridge)"
 	depends on BR2_TOOLCHAIN_HAS_THREADS
 	select BR2_PACKAGE_MILAN_FPGA_SRC
-	select BR2_PACKAGE_LINUXPTP
+	select BR2_PACKAGE_FLEXPTP_GPTP
 	select BR2_PACKAGE_ALSA_LIB
 	help
 	  The daemons of the PocketBeagle 2 USB-to-Milan bridge, from
 	  milan-linux/ in this BSP: milan-ctrld, the Milan control plane
 	  (milan-fpga's Mark II control-plane firmware, unchanged, on a
-	  soft fabric over AF_PACKET, netlink and ptp4l's management
-	  socket); milan-mediad, the media plane (the AAF talker fed by the
+	  soft fabric over AF_PACKET, netlink and the gPTP status block of
+	  flexptpd); milan-mediad, the media plane (the AAF talker fed by the
 	  UAC2 gadget, on the media clock, with the servo that steers the
 	  USB host); and milan-dp, which prints what both publish. Started
 	  by S95avb with AVB_STACK=native through /usr/sbin/milan-bridge.sh.

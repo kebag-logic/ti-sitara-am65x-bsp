@@ -18,15 +18,14 @@ for f in etc/init.d/S99usb_gadgets etc/init.d/S05growrootfs etc/init.d/S95avb \
 	usr/sbin/avb-gptp.sh usr/sbin/avb-irq.sh usr/sbin/avb-shaper.sh; do
 	chmod 0755 "$TARGET_DIR/$f" 2>/dev/null || true
 done
-for f in etc/tdm8/tdm8.env etc/avb/avb.env etc/avb/gPTP.cfg etc/avb/uac2-milan.env; do
+for f in etc/tdm8/tdm8.env etc/avb/avb.env etc/avb/flexptpd.conf etc/avb/uac2-milan.env; do
 	chmod 0644 "$TARGET_DIR/$f" 2>/dev/null || true
 done
 
-# linuxptp installs S65ptp4l and S66phc2sys, which run ptp4l on eth0 from
-# /etc/linuxptp.cfg: UDPv4, end-to-end, client only. That is not gPTP, and it
-# would start before S95avb changes the CPSW TX channels (which takes eth0 down).
-# S95avb starts ptp4l and phc2sys itself, with /etc/avb/gPTP.cfg, after the
-# shaper (avb-gptp.sh), so the stock pair is removed.
+# gPTP is flexptpd, started by S95avb (avb-gptp.sh) after the shaper, since
+# changing the CPSW TX channels takes eth0 down. linuxptp is not in the image;
+# should a configuration bring it back, its stock S65ptp4l and S66phc2sys
+# (UDPv4, end-to-end: not gPTP) must not run, so they are removed.
 rm -f "$TARGET_DIR/etc/init.d/S65ptp4l" "$TARGET_DIR/etc/init.d/S66phc2sys"
 
 # sshd StrictModes: key-based root login needs 0700 dir + 0600 authorized_keys

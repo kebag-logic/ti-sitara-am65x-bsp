@@ -1,0 +1,17 @@
+config BR2_PACKAGE_FLEXPTP_GPTP
+	bool "flexptp-gptp (IEEE 802.1AS end station)"
+	depends on BR2_TOOLCHAIN_HAS_THREADS
+	help
+	  flexptpd, the PocketBeagle 2's gPTP: our fork of flexPTP with an
+	  IEEE 802.1AS-2020 time-aware end station (peer delay with
+	  neighborRateRatio and asCapable, the 802.1AS BMCA, signaling)
+	  and Avnu's reverse sync, as a Linux daemon on a PHC with
+	  hardware timestamps. It publishes the port's state in
+	  /dev/shm/flexptpd.<interface>, which the bridge reads.
+
+	  Built at the revision package/flexptp-gptp/flexptp.pin names.
+
+	  https://github.com/kebag-logic/flexPTP
+
+comment "flexptp-gptp needs a toolchain with threads"
+	depends on !BR2_TOOLCHAIN_HAS_THREADS

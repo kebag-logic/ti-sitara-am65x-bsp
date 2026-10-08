@@ -170,7 +170,7 @@ static void run_stream(struct talker *tk, int fd, const struct stream *s, struct
 	for (uint64_t k = 0; !atomic_load(&tk->stop); ++k) {
 		int64_t t = t0 + (int64_t)k * SLOT_NS;
 
-		// a gPTP step (ptp4l's first lock, a grandmaster change) moves every
+		// a gPTP step (flexptpd's first lock, a grandmaster change) moves every
 		// slot at once: start the stream over on the new time base
 		int64_t ahead = gptp_sleep_until(c->clk, t);
 		if (ahead > RESTART_EARLY_NS) {

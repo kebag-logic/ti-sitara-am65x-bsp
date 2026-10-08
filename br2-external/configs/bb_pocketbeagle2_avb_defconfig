@@ -30,7 +30,9 @@ BR2_TARGET_GENERIC_GETTY_BAUDRATE_115200=y
 BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_KL_AM62X_PATH)/board/common/rootfs-overlay $(BR2_EXTERNAL_KL_AM62X_PATH)/board/bb-pocketbeagle2/rootfs-overlay"
 BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_KL_AM62X_PATH)/board/bb-pocketbeagle2/post-build.sh"
 BR2_PACKAGE_PIPEWIRE_UPSTREAM=y
-BR2_PACKAGE_LINUXPTP=y
+# gPTP: flexptpd, the IEEE 802.1AS end station of our flexPTP fork (#19), in
+# place of linuxptp
+BR2_PACKAGE_FLEXPTP_GPTP=y
 BR2_PACKAGE_ALSA_UTILS=y
 BR2_PACKAGE_ALSA_UTILS_APLAY=y
 # alsaloop bridges the McASP TDM8 card to the UAC2 gadget card

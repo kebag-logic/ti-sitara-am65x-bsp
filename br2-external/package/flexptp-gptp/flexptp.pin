@@ -1,0 +1,6 @@
+# The revision of our flexPTP fork (IEEE 802.1AS end station, branch gptp)
+# that the PocketBeagle 2 image builds flexptpd from (issue #19). KEY=VALUE,
+# readable by sh and make. Moving the pin is a reviewed change: rerun the
+# fork's conformance suite (tests/conformance/run.sh) at the new revision.
+FLEXPTP_REPO=https://github.com/kebag-logic/flexPTP
+FLEXPTP_REV=f985615c99d2669007568bde4c40e62e66e4010d

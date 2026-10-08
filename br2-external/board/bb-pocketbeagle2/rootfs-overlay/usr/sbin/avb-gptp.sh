@@ -3,12 +3,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 Kebag-Logic
 # SPDX-License-Identifier: Apache-2.0
 
-# gPTP (802.1AS) on the PocketBeagle 2 Ethernet Cap (issue #4): ptp4l on the
-# CPTS hardware clock of eth0, and phc2sys steering CLOCK_REALTIME from it.
+# gPTP (802.1AS) on the PocketBeagle 2 Ethernet Cap (issues #4, #19):
+# flexptpd, our IEEE 802.1AS-2020 end station (kebag-logic/flexPTP), on the
+# CPTS hardware clock of eth0.
 #
-# ptp4l exports the read-only management socket /var/run/ptp4lro (gPTP.cfg),
-# which the bridge reads for the grandmaster and asCapable. Both daemons log to
-# syslog. Management queries need transportSpecific 1, so pmc runs with -t 1.
+# It steers the PHC onto the grandmaster and publishes the port's state in
+# /dev/shm/flexptpd.<interface>, which milan-ctrld reads for ADP and
+# `milan-dp -g` prints. Nothing steers the system clocks: the media plane
+# models the PHC itself. The daemon's event log goes to AVB_GPTP_LOG.
 #
 # usage: avb-gptp.sh {start|stop|restart|status}
 
@@ -18,62 +20,71 @@ ENV_FILE=${AVB_ENV:-/etc/avb/avb.env}
 if [ -r "$ENV_FILE" ]; then . "$ENV_FILE"; fi
 
 IF=${AVB_INTERFACE:-eth0}
-CFG=${AVB_GPTP_CFG:-/etc/avb/gPTP.cfg}
+CONF=${AVB_GPTP_CONF:-/etc/avb/flexptpd.conf}
+PRIO=${AVB_GPTP_PRIO:-53}
+LOG=${AVB_GPTP_LOG:-/var/log/flexptpd.log}
+
 RUN=/run/avb
-PMC="pmc -u -b 0 -t 1"
+PIDF=$RUN/flexptpd.pid
 
-die() { echo "avb-gptp: $*" >&2; exit 1; }
-
-daemon_start() { # <name> <rt prio> <args...>
-	name=$1; prio=$2; shift 2
-	pidf="$RUN/$name.pid"
-	if [ -f "$pidf" ] && kill -0 "$(cat "$pidf")" 2>/dev/null; then
-		echo "avb-gptp: $name already running (pid $(cat "$pidf"))"
-		return 0
-	fi
-	start-stop-daemon -S -b -m -p "$pidf" -x "/usr/sbin/$name" -- "$@"
-	sleep 1
-	pid=$(cat "$pidf")
-	kill -0 "$pid" 2>/dev/null || die "$name exited at once (see /var/log/messages)"
-	chrt -f -p "$prio" "$pid" >/dev/null
-	echo "avb-gptp: $name pid $pid, SCHED_FIFO $prio"
+die() {
+	echo "avb-gptp: $*" >&2
+	exit 1
 }
 
-daemon_stop() { # <name>
-	pidf="$RUN/$1.pid"
-	if [ -f "$pidf" ]; then
-		start-stop-daemon -K -q -p "$pidf" || true
-		rm -f "$pidf"
-	fi
+running() {
+	[ -f "$PIDF" ] && kill -0 "$(cat "$PIDF")" 2>/dev/null
 }
 
 start() {
 	[ -d "/sys/class/net/$IF" ] || die "no $IF (booted without the ethcap label?)"
-	[ -r "$CFG" ] || die "no $CFG"
+	[ -r "$CONF" ] || die "no $CONF"
+
 	mkdir -p "$RUN"
-	daemon_start ptp4l "${AVB_PTP4L_PRIO:-53}" -f "$CFG" -i "$IF"
-	# -w waits for ptp4l to lock and takes the UTC offset from it
-	daemon_start phc2sys "${AVB_PHC2SYS_PRIO:-52}" -s "$IF" -c CLOCK_REALTIME -w \
-		--transportSpecific=1 -S 1.0
+
+	if running; then
+		echo "avb-gptp: flexptpd already running (pid $(cat "$PIDF"))"
+		return 0
+	fi
+
+	# the shell execs flexptpd, so the pid file names the daemon; -P puts
+	# every thread of it on SCHED_FIFO
+	start-stop-daemon -S -b -m -p "$PIDF" -x /bin/sh -- -c \
+		"exec /usr/sbin/flexptpd -i $IF -c $CONF -P $PRIO -q >> $LOG 2>&1"
+
+	sleep 1
+
+	running || die "flexptpd exited at once (see $LOG)"
+	echo "avb-gptp: flexptpd pid $(cat "$PIDF") on $IF, SCHED_FIFO $PRIO"
 }
 
 stop() {
-	daemon_stop phc2sys
-	daemon_stop ptp4l
+	if ! running; then
+		rm -f "$PIDF"
+		return 0
+	fi
+
+	start-stop-daemon -K -q -p "$PIDF" || true
+
+	i=0
+	while running && [ "$i" -lt 20 ]; do
+		sleep 0.1
+		i=$((i + 1))
+	done
+
+	rm -f "$PIDF"
 }
 
-# One line per field, as pmc prints them, from the three data sets that say
-# whether the port is a synchronized gPTP slave.
+# The fields that say whether the port is a synchronized gPTP slave.
 status() {
-	for n in ptp4l phc2sys; do
-		if [ -f "$RUN/$n.pid" ] && kill -0 "$(cat "$RUN/$n.pid")" 2>/dev/null; then
-			echo "$n: running (pid $(cat "$RUN/$n.pid"))"
-		else
-			echo "$n: not running"
-		fi
-	done
-	$PMC 'GET PORT_DATA_SET' 'GET TIME_STATUS_NP' 'GET PARENT_DATA_SET' 2>/dev/null |
-		awk '$1 ~ /^(portState|peerMeanPathDelay|master_offset|gmPresent|gmIdentity|grandmasterIdentity|parentPortIdentity)$/ { print "  " $1 " " $2 }'
+	if running; then
+		echo "flexptpd: running (pid $(cat "$PIDF"))"
+	else
+		echo "flexptpd: not running"
+	fi
+
+	milan-dp -g "flexptpd.$IF" 2>/dev/null |
+		awk -F= '$1 ~ /^(port_state|as_capable|gm_identity|steps_removed|mean_link_delay_ns|time_error_ns|locked)$/ { print "  " $1 " " $2 }'
 }
 
 case "${1:-status}" in

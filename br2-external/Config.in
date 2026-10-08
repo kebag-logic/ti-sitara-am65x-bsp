@@ -1,4 +1,5 @@
 source "$BR2_EXTERNAL_KL_AM62X_PATH/package/pipewire-milan/Config.in"
 source "$BR2_EXTERNAL_KL_AM62X_PATH/package/pipewire-upstream/Config.in"
 source "$BR2_EXTERNAL_KL_AM62X_PATH/package/milan-fpga-src/Config.in"
+source "$BR2_EXTERNAL_KL_AM62X_PATH/package/flexptp-gptp/Config.in"
 source "$BR2_EXTERNAL_KL_AM62X_PATH/package/milan-bridge/Config.in"
