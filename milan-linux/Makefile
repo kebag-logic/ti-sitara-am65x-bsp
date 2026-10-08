@@ -30,10 +30,14 @@ FW_OBJS := $(addprefix $(O)/fw/,$(notdir $(FW_SRCS:.c=.o)))
 FW_CFLAGS := -std=c11 -O2 -DNDEBUG -Wall -Wextra -Werror -pedantic $(FW_INC)
 OWN_CFLAGS := -std=gnu11 -O2 -Wall -Wextra -Werror -Isrc $(FW_INC) $(CFLAGS)
 
-CTRLD_SRCS := src/milan_ctrld.c src/softfab.c src/ptp_mgmt.c src/datapath.c src/entity_conf.c
+CTRLD_SRCS := src/milan_ctrld.c src/softfab.c src/ptp_mgmt.c src/datapath.c src/shmblk.c src/entity_conf.c
 CTRLD_OBJS := $(addprefix $(O)/,$(notdir $(CTRLD_SRCS:.c=.o)))
+MEDIAD_SRCS := src/milan_mediad.c src/talker.c src/aaf.c src/servo.c src/gptp_time.c src/audio_alsa.c \
+	src/audio_sim.c src/datapath.c src/media.c src/shmblk.c
+MEDIAD_OBJS := $(addprefix $(O)/,$(notdir $(MEDIAD_SRCS:.c=.o)))
+DP_OBJS := $(addprefix $(O)/,milan_dp.o datapath.o media.o shmblk.o)
 
-all: $(O)/milan-ctrld $(O)/milan-dp
+all: $(O)/milan-ctrld $(O)/milan-mediad $(O)/milan-dp
 
 $(CTRL)/mbx/mbx.c:
 	@echo "no milan-fpga tree at MILAN_FPGA=$(MILAN_FPGA): run tools/fetch-milan-fpga.sh" >&2; exit 1
@@ -49,19 +53,29 @@ $(O)/%.o: src/%.c src/*.h | $(CTRL)/mbx/mbx.c
 $(O)/milan-ctrld: $(CTRLD_OBJS) $(FW_OBJS)
 	$(CC) $(LDFLAGS) -o $@ $^ -lrt
 
-$(O)/milan-dp: $(O)/milan_dp.o $(O)/datapath.o
+$(O)/milan-mediad: $(MEDIAD_OBJS)
+	$(CC) $(LDFLAGS) -o $@ $^ -lasound -lpthread -lm -lrt
+
+$(O)/milan-dp: $(DP_OBJS)
 	$(CC) $(LDFLAGS) -o $@ $^ -lrt
 
-check: $(O)/milan-ctrld $(O)/milan-dp $(O)/test_ptp_mgmt
+check: all $(O)/test_ptp_mgmt $(O)/test_media
 	$(O)/test_ptp_mgmt
+	$(O)/test_media
 	tests/run-netns.sh $(O)/milan-ctrld $(O)/milan-dp config/entity.conf
+	tests/run-netns-talker.sh $(O)
 
 $(O)/test_ptp_mgmt: tests/test_ptp_mgmt.c src/ptp_mgmt.c src/ptp_mgmt.h
 	@mkdir -p $(O)
 	$(CC) $(OWN_CFLAGS) -o $@ tests/test_ptp_mgmt.c src/ptp_mgmt.c
 
-install: $(O)/milan-ctrld $(O)/milan-dp
+$(O)/test_media: tests/test_media.c src/aaf.c src/servo.c src/aaf.h src/servo.h
+	@mkdir -p $(O)
+	$(CC) $(OWN_CFLAGS) -o $@ tests/test_media.c src/aaf.c src/servo.c -lm
+
+install: all
 	install -D -m 0755 $(O)/milan-ctrld $(DESTDIR)$(PREFIX)/sbin/milan-ctrld
+	install -D -m 0755 $(O)/milan-mediad $(DESTDIR)$(PREFIX)/sbin/milan-mediad
 	install -D -m 0755 $(O)/milan-dp $(DESTDIR)$(PREFIX)/sbin/milan-dp
 
 clean:

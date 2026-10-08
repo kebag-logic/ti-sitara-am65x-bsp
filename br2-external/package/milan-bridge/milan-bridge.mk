@@ -7,7 +7,7 @@
 MILAN_BRIDGE_SITE = $(BR2_EXTERNAL_KL_AM62X_PATH)/../milan-linux
 MILAN_BRIDGE_SITE_METHOD = local
 MILAN_BRIDGE_LICENSE = Apache-2.0, CERN-OHL-W-2.0 (milan-fpga firmware)
-MILAN_BRIDGE_DEPENDENCIES = milan-fpga-src
+MILAN_BRIDGE_DEPENDENCIES = milan-fpga-src alsa-lib
 # the host build's objects and its milan-fpga link have no place here
 MILAN_BRIDGE_OVERRIDE_SRCDIR_RSYNC_EXCLUSIONS = --exclude build --exclude .milan-fpga
 

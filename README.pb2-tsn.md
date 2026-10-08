@@ -234,15 +234,22 @@ the build and the tests are in [`milan-linux/README.md`](milan-linux/README.md).
 |---|---|
 | #8 A1, control plane on Linux | `milan-ctrld`: ADP, ACMP, MAAP. Passes milan-fpga's gate at the pin and the host network-namespace test; not yet run on the board |
 | #9 A2, entity description | `entity.conf` is generated from the 1x1 TDM8 shape; the PB2's own end-station config needs a non-FPGA target in milan-fpga's builder |
-| #10, #11, #12 A4, A3, A5, media plane | next |
+| #10 A4, #11 A3, media clock and talker | `milan-mediad`: the talker on the media clock and the servo on the gadget's feedback. Bit-exact and gap-free in the host test with a +80 ppm host; not yet run on the board |
+| #12 A5, listener | next |
 | #13 A6, saved state | next |
 | #14 A7, SRP, AECP, interop | waits for milan-fpga SRP (#690) and AECP (#665 lane F5) |
 
 With `AVB_STACK=native`, `S95avb` runs `/usr/sbin/milan-bridge.sh start` after
-gPTP. That starts `milan-ctrld -i eth0 -e /etc/milan/entity.conf -V 2 -s` at
-SCHED_FIFO `AVB_CTRLD_PRIO` (40, below `ptp4l` and `phc2sys`). It reads the
-grandmaster from `/var/run/ptp4lro` and publishes the streams in
-`/dev/shm/milan-datapath`:
+gPTP. That starts two daemons:
+
+* `milan-ctrld -i eth0 -e /etc/milan/entity.conf -V 2 -s`, at SCHED_FIFO
+  `AVB_CTRLD_PRIO` (40, below `ptp4l` and `phc2sys`). It reads the grandmaster
+  from `/var/run/ptp4lro` and publishes the streams in `/dev/shm/milan-datapath`.
+* `milan-mediad`, whose talker thread runs at SCHED_FIFO 70 on CPU 3. It waits
+  for the UAC2 gadget, then streams whatever the host plays, starting once MAAP
+  holds a destination.
+
+On the host, `aplay -D hw:<the bridge's card>,0 -f S32_LE -c 8 -r 48000 file.wav`.
 
 ```sh
 /usr/sbin/milan-bridge.sh status   # state into syslog, then the datapath block:
@@ -250,6 +257,8 @@ milan-dp
 #   entity_id=<eth0 EUI-64>  gm_id=<grandmaster>  maap_valid=1  maap_base=91e0f000....
 #   source0=stream_id:<mac>0000 dest_mac:91e0f000.... vlan:2 dest_mac_valid:1
 #   sink0=stream_id:... listening:1        (after a controller's BIND_RX settles)
+#   talker_active=1 talker_locked=1 talker_pitch=<1e6 - the host's offset in ppm>
+#   talker_frames_tx=... talker_underruns=0 talker_overruns=0 talker_level_avg=24.0
 ```
 
 Until AECP arrives (#14), a controller cannot enumerate the entity. Bind

@@ -7,7 +7,8 @@ end station**.
 | Program | What it is | Ticket |
 |---|---|---|
 | `milan-ctrld` | the Milan control plane: milan-fpga's Mark II control-plane firmware ([milan-fpga#665](https://github.com/kebag-logic/milan-fpga/issues/665)), unchanged, on a soft fabric | #8 |
-| `milan-dp` | prints the datapath block `milan-ctrld` publishes for the media plane | #8 |
+| `milan-mediad` | the media plane: the AAF talker fed by the UAC2 gadget, on the media clock, and the servo that steers the USB host | #10, #11 |
+| `milan-dp` | prints the datapath block `milan-ctrld` publishes and the media block `milan-mediad` publishes | #8 |
 | `milan-bridge.sh` | starts and stops them; `S95avb` runs it for `AVB_STACK=native` | #8 |
 
 ## How the RISC-V firmware runs on Linux
@@ -56,6 +57,48 @@ The integrator's ports (`src/milan_ctrld.c`):
 | `acmp_env.persist`, `.changed` | logged (#13, #14) |
 | `maap_allocation` | published in the datapath block |
 
+## The talker: USB to Milan (#10, #11)
+
+`milan-mediad` sends the AAF stream on the **media clock**, not the USB host's.
+PDU *k* leaves at gPTP time *t_k* = *T0* + *k* × 125 us and carries 6 frames
+taken from the gadget's capture buffer. It is stamped *t_k* + PTO, so the
+timestamps step by exactly 125 000 ns. The host keeps that buffer at a steady
+level because of the **servo** (`src/servo.c`). A PI controller on the buffer
+level writes the gadget's asynchronous feedback, `Capture Pitch 1000000`, and the
+host's rate follows it, whatever the offset between the host's USB clock and
+gPTP. No frame is resampled, dropped or repeated: the stream is bit-exact.
+
+| Setting | Default | What it is |
+|---|---|---|
+| `-L` (`AVB_TALKER_LEVEL`) | 24 frames | the level the servo holds, and the bridge's own latency: about 500 us from a USB packet to its PDU |
+| `-M` | 96 frames | the level past which frames are dropped (an overrun) |
+| `-o` (`AVB_PTO_NS`) | 2 000 000 | presentation time offset |
+| `-P` (`AVB_MEDIAD_PRIO`), `-a` (`AVB_RT_CPU`) | 70, CPU 3 | the talker thread: SCHED_FIFO, on the core the `ethcap` label isolates |
+
+* **gPTP time** is `CLOCK_TAI` plus a correction that `src/gptp_time.c`
+  measures against the PHC once a second (`PTP_SYS_OFFSET_EXTENDED`). The
+  correction absorbs a kernel TAI offset that nobody set. The talker sleeps on
+  `CLOCK_TAI`, which `phc2sys` keeps on the PHC.
+* **The talker's states.** PRIMING sends silence until the buffer holds its
+  level. RUNNING sends 6 frames per PDU, or silence on an underrun, and drops
+  frames past `-M` (an overrun). IDLE sends silence while the host sends
+  nothing for 10 ms, with the pitch back at nominal. The level is judged as the
+  slot saw it: frames that arrived because a wake was late are not an excess.
+* **Frames go out tagged** by the talker itself (VID from the datapath block,
+  PCP = `SO_PRIORITY` = 3), on `eth0`, so `mqprio` puts them in class A
+  (`avb-shaper.sh`).
+* **The stream runs while MAAP holds a destination.** Gating it on an SRP
+  Listener Ready waits for SRP (#14).
+* **Reports** go to `/dev/shm/milan-media`, printed by `milan-dp`:
+  `talker_frames_tx`, `_underruns`, `_overruns`, `_late`, `_level_min/max/avg`,
+  `_pitch`, `_locked`, and `gptp_corr_ns`/`gptp_residual_ns`.
+
+**Latency, with the PTO excluded.** From a frame's USB packet to its PDU's slot
+is the buffer level: `talker_level_avg` / 48 000, about 500 us, plus up to one
+125 us slot. From slot to wire is `hw_rx_ts - (avtp_timestamp - PTO)` on a peer
+that stamps every frame (`validation/pb2-tsn/latency-peer.py`). The bridge
+latency is the sum of the two.
+
 ## Build and test on the host
 
 ```sh
@@ -64,8 +107,20 @@ make                                      # build/milan-ctrld, build/milan-dp
 make check                                # unit test + the network-namespace test
 ```
 
-`make check` runs `tests/peer.py` across a veth pair inside `unshare -rn`, so
-it needs neither root nor a real interface. The peer plays the fake ptp4l, the
+`make check` runs the unit tests (`test_ptp_mgmt`, and `test_media`: the AAF
+PDU byte for byte, and the servo in closed loop at 0, +-100 and +300 ppm), then
+two network-namespace tests across a veth pair inside `unshare -rn`, so they
+need neither root nor a real interface.
+
+`tests/run-netns-talker.sh` streams a simulated USB host running 80 ppm fast
+and records the far end. The validation kit then grades the recording:
+`aaf-analyze.py` (no sequence gap, the 125 000 ns step, the AAF fields, VLAN 2
+PCP 3) and `ramp-check.py` (the counting ramp bit for bit). The test also
+checks that the pitch cancels the host's offset and that the level holds. The
+servo's lock time and the slot-to-wire figures are board checks: without
+SCHED_FIFO the host stalls for milliseconds.
+
+`tests/peer.py`, the control-plane test, The peer plays the fake ptp4l, the
 controller, a listener, a talker and a MAAP peer, and grades what
 `milan-ctrld` sends:
 
