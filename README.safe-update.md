@@ -132,9 +132,13 @@ The same OS A/B scheme, with these differences:
   - It shipped with `CONFIG_ENV_IS_NOWHERE`. `res/uboot/pb2-ab-env.sh` gives it
     MYIR's redundant raw environment on the microSD, in the fork's older Kconfig
     names (`SYS_REDUNDAND_ENVIRONMENT`, `SYS_MMC_ENV_DEV`).
-  - The A53 SPL in `tispl.bin` reads the environment too.
-- **Bootchooser:** `res/ab/pb2-boot.cmd.in`, run by the board's `envboot`
-  before bootstd.
+  - Only U-Boot proper (`u-boot.img`) has it. The A53 SPL keeps its
+    environment nowhere, as the stock build does. The first A/B card had an
+    SPL that read it from the microSD, and never reached the bootchooser.
+- **Bootchooser:** `res/ab/pb2-boot.cmd.in`, run as `/boot.scr` by bootstd's
+  `script` bootmeth (not by `envboot`, which skips `boot.scr` when BOOTSTD is on).
+  - It lights all four user LEDs; the script's header lists what each LED
+    pattern says about how far a boot got.
   - It boots the slot's gzipped `Image.gz` (the board env sets
     `kernel_comp_addr_r`), the Ethernet Cap device tree, and the `ethcap`
     label's arguments plus `panic=5`.

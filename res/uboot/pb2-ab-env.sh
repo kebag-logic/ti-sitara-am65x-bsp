@@ -26,9 +26,9 @@
 # The fork predates the Kconfig renames, so the names here are its own
 # (SYS_REDUNDAND_ENVIRONMENT, SYS_MMC_ENV_DEV, SYS_MMC_ENV_PART).
 #
-# u-boot.img changes, and so does tispl.bin: its A53 SPL reads the environment
-# too (CONFIG_SPL_ENV_SUPPORT comes with the defconfig's USB DFU fragment).
-# tiboot3.bin is untouched.
+# Only U-Boot proper (u-boot.img) gets the environment. The A53 SPL keeps it
+# nowhere, as it did before: it needs none, and the defconfig's USB DFU
+# fragment would otherwise give it CONFIG_SPL_ENV_IS_IN_MMC too.
 #
 # Idempotent. Usage: pb2-ab-env.sh {on|off} [<u-boot-src>]  (default: on, ../../u-boot-pb)
 set -e
@@ -63,6 +63,8 @@ CONFIG_ENV_OFFSET=0x80000
 CONFIG_ENV_OFFSET_REDUND=0xC0000
 CONFIG_SYS_MMC_ENV_DEV=1
 CONFIG_SYS_MMC_ENV_PART=0
+CONFIG_SPL_ENV_IS_NOWHERE=y
+# CONFIG_SPL_ENV_IS_IN_MMC is not set
 CONF
 	echo "ab-env: redundant environment on mmc 1 at 0x80000/0xC0000 added to $(basename "$D")"
 	;;

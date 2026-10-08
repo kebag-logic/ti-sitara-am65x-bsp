@@ -1,9 +1,10 @@
 # RAUC A/B bootchooser for the PocketBeagle 2 (issue #27).
 #
-# Run from the boot partition by the board's envboot (loadbootscript loads
-# boot.scr, bootscript sources it), before bootstd: the A/B card carries no
-# extlinux.conf. build-tdm8-uac2-pb2.sh abcard fills @APPEND@ and makes
-# boot.scr with mkimage.
+# Run as /boot.scr on the boot partition by bootstd's "script" bootmeth, the
+# first in the board's bootmeths ("script extlinux efi pxe"); the A/B card
+# carries no extlinux.conf. Not by envboot: with BOOTSTD, TI's mmc.env leaves
+# loadbootscript undefined. build-tdm8-uac2-pb2.sh abcard fills @APPEND@ and
+# makes boot.scr with mkimage.
 #
 # Env contract (RAUC "uboot" backend): BOOT_ORDER="A B", and BOOT_A_LEFT /
 # BOOT_B_LEFT the attempts each slot has left. Each boot takes one attempt of
@@ -13,6 +14,20 @@
 #
 # Slot A is mmcblk1p2, slot B mmcblk1p3. Each carries its own kernel, device
 # trees and modules in /boot and /lib/modules.
+#
+# The board has no console on the Ethernet Cap side, so the four user LEDs
+# tell how far a boot got:
+#
+#   all dark          stopped before U-Boot (boot ROM, SPL)
+#   1 and 3           U-Boot is loading (its bootcmd), never got here
+#   2 and 4           U-Boot found nothing to boot
+#   all four          this script ran and handed over to the kernel
+#   1 blinking        Linux is up (its heartbeat)
+
+led led-1 on
+led led-2 on
+led led-3 on
+led led-4 on
 
 test -n "${BOOT_ORDER}" || setenv BOOT_ORDER "A B"
 test -n "${BOOT_A_LEFT}" || setenv BOOT_A_LEFT 3
