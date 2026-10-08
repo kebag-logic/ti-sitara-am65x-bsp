@@ -253,3 +253,62 @@ ptp4l -i eth0 -2 -m --tx_timestamp_timeout=20   # gPTP needs an AVB switch or pe
 (`BR2_TARGET_GENERIC_ROOT_PASSWD`), as well as with the keys in
 `/root/.ssh/authorized_keys`. Everyone knows that password, and `eth0` puts the
 board on a real network: run `passwd` before the board leaves the bench.
+
+---
+
+## 7. Updates through RAUC: the A/B card (#27)
+
+The card of §0 has one root partition, so an update means reflashing it. The
+A/B card holds two root slots instead, and is updated in place by RAUC: a
+bundle is written to the slot not running, the board reboots into it, and it
+stays there only once it is healthy. It is flashed **once**; every update after
+that is `rauc install`.
+
+| Partition | | |
+|---|---|---|
+| `mmcblk1p1` | FAT `BOOT` | `tiboot3.bin`, `tispl.bin`, `u-boot.img`, `boot.scr` (no `extlinux.conf`) |
+| `mmcblk1p2` | ext4 `rootfs.A` | slot A: the rootfs, `/boot` (`Image.gz`, the four device trees), `/lib/modules` |
+| `mmcblk1p3` | ext4 `rootfs.B` | slot B, the same |
+| `mmcblk1p4` | ext4 `data` | `/data`: what survives a slot switch, the Milan saved-state journal among it; the first boot grows it to the end of the card |
+
+How a boot picks its slot:
+
+- **U-Boot** keeps a redundant environment in the gap before the first
+  partition, at 0x80000 and 0xC0000 (`res/uboot/pb2-ab-env.sh`, on by default
+  in `./build.sh PB2`). Linux reaches it with `fw_printenv`/`fw_setenv`
+  (`/etc/fw_env.config`).
+- **`boot.scr`** (`res/ab/pb2-boot.cmd.in`) is the bootchooser of RAUC's U-Boot
+  backend. It takes one attempt of the first slot in `BOOT_ORDER` that has any
+  (`BOOT_A_LEFT`, `BOOT_B_LEFT`, 3 each), then boots that slot's kernel with
+  the `ethcap` label's arguments, `root=` the slot and `rauc.slot=`. A kernel
+  that does not boot, or panics (`panic=5`), resets the board, which costs that
+  slot an attempt.
+- **`S99bootgood`** marks the booted slot good (`rauc status mark-good`, which
+  gives it its attempts back) once the root file system is writable, `flexptpd`
+  runs and, with `AVB_STACK=native`, so do the bridge's daemons. A slot that
+  never gets there is left after its 3 attempts, and the board is back on the
+  other one, with no hands on it.
+
+Build and flash, once:
+
+```sh
+./build.sh PB2                                   # bootloaders with the A/B environment
+PB2_DEFAULT_LABEL=ethcap ./build-tdm8-uac2-pb2.sh image
+make -C ../buildroot O=$PWD/../buildroot-pb2 BR2_JLEVEL=32
+./build-tdm8-uac2-pb2.sh abcard                  # -> res/spare-sd-pb2/pocketbeagle2-ethcap-ab.img, no root needed
+sudo dd if=res/spare-sd-pb2/pocketbeagle2-ethcap-ab.img of=/dev/sdX bs=4M conv=fsync status=progress
+```
+
+Update, every time after:
+
+```sh
+./build-tdm8-uac2-pb2.sh bundle                  # -> res/rauc/pocketbeagle2-am62x.raucb, signed
+scp res/rauc/pocketbeagle2-am62x.raucb root@192.168.8.12:/tmp/
+ssh root@192.168.8.12 'rauc install /tmp/pocketbeagle2-am62x.raucb && reboot'
+ssh root@192.168.8.12 'rauc status'              # booted from the other slot, marked good
+```
+
+The bundle is a tar of one complete slot (RAUC formats the inactive slot and
+extracts it), signed with the BSP's development key (`res/rauc/`), compatible
+`pocketbeagle2-am62x`: a MYIR bundle is refused, and so is this one on a MYIR
+board.

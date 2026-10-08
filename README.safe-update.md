@@ -124,6 +124,33 @@ net recovers) before it is trusted; nothing risky touches the golden SD first.
   capsule → inactive firmware bank (built P3, needs HW validation); `bootcount`/bootchooser
   reverts either on a failed trial boot.
 
+## PocketBeagle 2 (2026-10-08, #27)
+
+The same OS A/B scheme, with these differences:
+
+- **U-Boot:** BeagleBoard's U-Boot fork.
+  - It shipped with `CONFIG_ENV_IS_NOWHERE`. `res/uboot/pb2-ab-env.sh` gives it
+    MYIR's redundant raw environment on the microSD, in the fork's older Kconfig
+    names (`SYS_REDUNDAND_ENVIRONMENT`, `SYS_MMC_ENV_DEV`).
+  - The A53 SPL in `tispl.bin` reads the environment too.
+- **Bootchooser:** `res/ab/pb2-boot.cmd.in`, run by the board's `envboot`
+  before bootstd.
+  - It boots the slot's gzipped `Image.gz` (the board env sets
+    `kernel_comp_addr_r`), the Ethernet Cap device tree, and the `ethcap`
+    label's arguments plus `panic=5`.
+  - It resets after a failed `booti`, so a bad slot burns its attempts on its
+    own: there is no serial console on the cap board.
+- **Card:** a fourth partition, `data` (`/data`), carries what must survive a
+  slot switch. S05growrootfs grows it, not the root slot, to the end of the card.
+- **Builders:** `./build-tdm8-uac2-pb2.sh abcard` and `bundle` build without
+  root (fakeroot, `mke2fs -d`, mtools).
+- **Bundles:** compatible `pocketbeagle2-am62x`, signed with the same
+  development key.
+- **Health check:** `S99bootgood` marks the slot good only once `flexptpd` and
+  the bridge run.
+
+See `README.pb2-ethcap.md` §7.
+
 ## Recovery cheat-sheet (until P1 lands)
 No DFU yet → a bad bootloader/env recovers via the **serial console** or an SD reader.
 The board's U-Boot console is on **serial-host `/dev/ttyACM0`** (CH342 `1a86:55d2` if0,
