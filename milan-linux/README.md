@@ -149,7 +149,7 @@ switch forwards a stream only for a registered talker and listener.
 
 ## Saved state (#13)
 
-`milan-ctrld -N /var/lib/milan/journal.bin` (`AVB_JOURNAL`) runs milan-fpga's
+`milan-ctrld -N /data/milan/journal.bin` (`AVB_JOURNAL`) runs milan-fpga's
 Mark II saved-state store, the KLJ2 journal (`sw/firmware/ctrl_nvm`), unchanged.
 It runs in the RISC-V platform's boot order: compose, then
 `acmp_nvm_init()`, `nvm_store_boot()`, the store's tick, and then open. So a

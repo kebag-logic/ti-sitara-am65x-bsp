@@ -69,7 +69,7 @@ static struct {
 	.entity_path = "/etc/milan/entity.conf",
 	.gptp_shm = NULL,               // "flexptpd.<interface>" unless -g says otherwise
 	.dp_name = MILAN_DP_NAME,
-	.journal = "/var/lib/milan/journal.bin",
+	.journal = "/data/milan/journal.bin",
 	.vlan = DEFAULT_VLAN,
 	.gptp_poll_ms = 100u,
 };
@@ -343,7 +343,7 @@ static void usage(FILE *to)
 		"  -e FILE    entity description (/etc/milan/entity.conf)\n"
 		"  -g NAME    flexptpd's gPTP status block, a shm_open() name (flexptpd.IFACE), \"none\" for no gPTP\n"
 		"  -d NAME    datapath block, a shm_open() name (" MILAN_DP_NAME ")\n"
-		"  -N FILE    saved-state journal (/var/lib/milan/journal.bin), \"none\" for none\n"
+		"  -N FILE    saved-state journal (/data/milan/journal.bin), \"none\" for none\n"
 		"  -V VID     VLAN of the talker's streams (2)\n"
 		"  -n         no SRP domain (a direct link, no MSRP bridge): a settled sink's talker counts as registered\n"
 		"  -s         log to syslog\n"

@@ -36,7 +36,7 @@ PTO=${AVB_PTO_NS:-2000000}
 LEVEL=${AVB_TALKER_LEVEL:-48}
 INFLIGHT=${AVB_USB_IN_FLIGHT_NS:-500000}
 SRP=${AVB_SRP_DOMAIN:-none}
-JOURNAL=${AVB_JOURNAL:-/var/lib/milan/journal.bin}
+JOURNAL=${AVB_JOURNAL:-/data/milan/journal.bin}
 RUN=/run/avb
 
 pidf() { echo "$RUN/$1.pid"; }
