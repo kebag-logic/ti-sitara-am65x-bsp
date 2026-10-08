@@ -1,0 +1,70 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 Kebag-Logic
+# SPDX-License-Identifier: Apache-2.0
+#
+# The PocketBeagle 2 USB-to-Milan bridge daemons.
+#
+#   make MILAN_FPGA=<milan-fpga tree at the pinned revision>     # host build
+#   make MILAN_FPGA=... CC=aarch64-linux-gnu-gcc                  # cross build
+#   make MILAN_FPGA=... check                                     # host tests
+#
+# The Mark II control-plane firmware is compiled from the milan-fpga tree,
+# unmodified, with the flags its own gate uses (sw/firmware/ctrl/test/
+# ctrl_build.py: C11, -Wall -Wextra -Werror -pedantic). The Linux side is GNU
+# C11, since it needs the system's socket, epoll and netlink headers.
+# tools/fetch-milan-fpga.sh fetches the pinned tree (milan-fpga.pin).
+
+MILAN_FPGA ?= .milan-fpga
+CC ?= cc
+O ?= build
+PREFIX ?= /usr
+DESTDIR ?=
+
+CTRL := $(MILAN_FPGA)/sw/firmware/ctrl
+FW_DIRS := mbx wire host port loop adp maap acmp app
+FW_INC := $(addprefix -I$(CTRL)/,$(FW_DIRS))
+FW_SRCS := mbx/mbx.c loop/ctrl_loop.c port/ctrl_debug.c port/ctrl_pool.c port/shlan_port.c \
+	adp/adp.c adp/adp_mbx.c acmp/acmp.c acmp/acmp_mbx.c maap/maap.c maap/maap_mbx.c \
+	app/ctrl_app.c host/mbx_model.c
+FW_OBJS := $(addprefix $(O)/fw/,$(notdir $(FW_SRCS:.c=.o)))
+
+FW_CFLAGS := -std=c11 -O2 -DNDEBUG -Wall -Wextra -Werror -pedantic $(FW_INC)
+OWN_CFLAGS := -std=gnu11 -O2 -Wall -Wextra -Werror -Isrc $(FW_INC) $(CFLAGS)
+
+CTRLD_SRCS := src/milan_ctrld.c src/softfab.c src/ptp_mgmt.c src/datapath.c src/entity_conf.c
+CTRLD_OBJS := $(addprefix $(O)/,$(notdir $(CTRLD_SRCS:.c=.o)))
+
+all: $(O)/milan-ctrld $(O)/milan-dp
+
+$(CTRL)/mbx/mbx.c:
+	@echo "no milan-fpga tree at MILAN_FPGA=$(MILAN_FPGA): run tools/fetch-milan-fpga.sh" >&2; exit 1
+
+$(O)/fw/%.o: | $(CTRL)/mbx/mbx.c
+	@mkdir -p $(dir $@)
+	$(CC) $(FW_CFLAGS) -c $(filter %/$(notdir $(@:.o=.c)),$(addprefix $(CTRL)/,$(FW_SRCS))) -o $@
+
+$(O)/%.o: src/%.c src/*.h | $(CTRL)/mbx/mbx.c
+	@mkdir -p $(dir $@)
+	$(CC) $(OWN_CFLAGS) -c $< -o $@
+
+$(O)/milan-ctrld: $(CTRLD_OBJS) $(FW_OBJS)
+	$(CC) $(LDFLAGS) -o $@ $^ -lrt
+
+$(O)/milan-dp: $(O)/milan_dp.o $(O)/datapath.o
+	$(CC) $(LDFLAGS) -o $@ $^ -lrt
+
+check: $(O)/milan-ctrld $(O)/milan-dp $(O)/test_ptp_mgmt
+	$(O)/test_ptp_mgmt
+	tests/run-netns.sh $(O)/milan-ctrld $(O)/milan-dp config/entity.conf
+
+$(O)/test_ptp_mgmt: tests/test_ptp_mgmt.c src/ptp_mgmt.c src/ptp_mgmt.h
+	@mkdir -p $(O)
+	$(CC) $(OWN_CFLAGS) -o $@ tests/test_ptp_mgmt.c src/ptp_mgmt.c
+
+install: $(O)/milan-ctrld $(O)/milan-dp
+	install -D -m 0755 $(O)/milan-ctrld $(DESTDIR)$(PREFIX)/sbin/milan-ctrld
+	install -D -m 0755 $(O)/milan-dp $(DESTDIR)$(PREFIX)/sbin/milan-dp
+
+clean:
+	rm -rf $(O)
+
+.PHONY: all check install clean

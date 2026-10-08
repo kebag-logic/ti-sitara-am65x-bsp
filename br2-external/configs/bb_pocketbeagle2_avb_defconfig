@@ -68,6 +68,9 @@ BR2_PACKAGE_IPERF3=y
 # cyclictest must hold its bound, and tcpdump captures AVTP on the board itself.
 BR2_PACKAGE_STRESS_NG=y
 BR2_PACKAGE_TCPDUMP=y
+# The USB-to-Milan bridge (README.pb2-tsn.md, path A): milan-ctrld, the Milan
+# control plane, built from milan-linux/ and milan-fpga at milan-fpga.pin
+BR2_PACKAGE_MILAN_BRIDGE=y
 # 512 MB of DDR, so the rootfs is sized well under the SK's 2G.
 BR2_TARGET_ROOTFS_EXT2=y
 BR2_TARGET_ROOTFS_EXT2_4=y

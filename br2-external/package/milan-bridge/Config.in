@@ -1,0 +1,12 @@
+config BR2_PACKAGE_MILAN_BRIDGE
+	bool "milan-bridge (PocketBeagle 2 USB-to-Milan bridge)"
+	select BR2_PACKAGE_MILAN_FPGA_SRC
+	select BR2_PACKAGE_LINUXPTP
+	help
+	  The daemons of the PocketBeagle 2 USB-to-Milan bridge, from
+	  milan-linux/ in this BSP: milan-ctrld, the Milan control plane
+	  (milan-fpga's Mark II control-plane firmware, unchanged, on a
+	  soft fabric over AF_PACKET, netlink and ptp4l's management
+	  socket), and milan-dp, which prints the datapath block it
+	  publishes. Started by S95avb with AVB_STACK=native through
+	  /usr/sbin/milan-bridge.sh. See README.pb2-tsn.md.

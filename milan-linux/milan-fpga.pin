@@ -1,0 +1,13 @@
+# The milan-fpga revision whose Mark II control-plane firmware (#665) the
+# PocketBeagle 2 bridge runs. KEY=VALUE, readable by sh and make. Moving the pin
+# is a reviewed change: rerun `make check`, milan-fpga's own firmware gate at
+# the new revision, and regenerate config/entity.conf.
+MILAN_FPGA_REPO=https://github.com/kebag-logic/milan-fpga
+MILAN_FPGA_REV=17f62ef64a66562384e8a93b1d6be6f86e51f95c
+# sha256 of $(MILAN_FPGA_REPO)/archive/$(MILAN_FPGA_REV).tar.gz
+MILAN_FPGA_SHA256=10e99278653b600454c110f29eca9d70e2b98554c7f116c56a188cae731e6cf9
+# the submodules gen-entity-conf.sh needs (the gitlinks at MILAN_FPGA_REV)
+PROTOCOL_PROCESSOR_REPO=https://github.com/Mister-M-alt/protocol-processor-control-plane-avb-milan
+PROTOCOL_PROCESSOR_REV=2ad2f845dd583f8310075fa2380cb60a04fd091a
+GPTP_PROCESSOR_REPO=https://github.com/Mister-M-alt/FPGA-gPTP
+GPTP_PROCESSOR_REV=5dce647ab5a01a6ecff9a982b22e3a4a1d946d3d

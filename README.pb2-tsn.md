@@ -12,7 +12,8 @@ host arecord <-  UAC2 gadget (PB2)  <-  AAF stream on eth0  <-  any Milan talker
 The target is a bridge latency under 2 ms, measured from USB ingress at the
 PB2 to the AAF frame leaving `eth0`, without the presentation time offset. The
 work is tracked in [issue #1](https://github.com/kebag-logic/ti-sitara-am65x-bsp/issues/1).
-This file covers what exists so far: the TSN foundation (#2 to #7).
+This file covers what exists so far: the TSN foundation (#2 to #7), and on
+top of it path A, the native Milan bridge (§3).
 
 > **Status:** built and checked on the host (kernel config, image contents,
 > script dry runs). Not yet run on a board. Each ticket closes only on the bench
@@ -221,7 +222,43 @@ PB2 link, ATDECC controller.
 
 ---
 
-## 3. Files
+## 3. Path A: the native Milan bridge
+
+Path A runs Milan on the PB2 without PipeWire, with **the same control-plane
+implementation as the RISC-V end station**: milan-fpga's Mark II firmware
+([milan-fpga#665](https://github.com/kebag-logic/milan-fpga/issues/665)),
+compiled unchanged against a software stand-in for the FPGA fabric. The design,
+the build and the tests are in [`milan-linux/README.md`](milan-linux/README.md).
+
+| Ticket | State |
+|---|---|
+| #8 A1, control plane on Linux | `milan-ctrld`: ADP, ACMP, MAAP. Passes milan-fpga's gate at the pin and the host network-namespace test; not yet run on the board |
+| #9 A2, entity description | `entity.conf` is generated from the 1x1 TDM8 shape; the PB2's own end-station config needs a non-FPGA target in milan-fpga's builder |
+| #10, #11, #12 A4, A3, A5, media plane | next |
+| #13 A6, saved state | next |
+| #14 A7, SRP, AECP, interop | waits for milan-fpga SRP (#690) and AECP (#665 lane F5) |
+
+With `AVB_STACK=native`, `S95avb` runs `/usr/sbin/milan-bridge.sh start` after
+gPTP. That starts `milan-ctrld -i eth0 -e /etc/milan/entity.conf -V 2 -s` at
+SCHED_FIFO `AVB_CTRLD_PRIO` (40, below `ptp4l` and `phc2sys`). It reads the
+grandmaster from `/var/run/ptp4lro` and publishes the streams in
+`/dev/shm/milan-datapath`:
+
+```sh
+/usr/sbin/milan-bridge.sh status   # state into syslog, then the datapath block:
+milan-dp
+#   entity_id=<eth0 EUI-64>  gm_id=<grandmaster>  maap_valid=1  maap_base=91e0f000....
+#   source0=stream_id:<mac>0000 dest_mac:91e0f000.... vlan:2 dest_mac_valid:1
+#   sink0=stream_id:... listening:1        (after a controller's BIND_RX settles)
+```
+
+Until AECP arrives (#14), a controller cannot enumerate the entity. Bind
+it by entity ID with ACMP: BIND_RX names the PB2's entity ID and listener
+unique ID 0, or names it as the talker.
+
+---
+
+## 4. Files
 
 | File | What |
 |---|---|
@@ -237,3 +274,5 @@ PB2 link, ATDECC controller.
 | `br2-external/board/common/rootfs-overlay/usr/sbin/tdm8-uac2.sh` | `TDM8_HS_BINT` and the gadget strings |
 | `br2-external/configs/bb_pocketbeagle2_avb_defconfig` | `stress-ng`, `tcpdump` |
 | `validation/pb2-tsn/` | the validation kit |
+| `milan-linux/` | path A: `milan-ctrld`, `milan-dp`, `milan-bridge.sh`, `config/entity.conf`, `milan-fpga.pin`, the host tests |
+| `br2-external/package/milan-fpga-src`, `milan-bridge` | the pinned milan-fpga archive, and path A's daemons, in the image |

@@ -1,0 +1,8 @@
+config BR2_PACKAGE_MILAN_FPGA_SRC
+	bool
+	help
+	  The milan-fpga tree at the revision milan-linux/milan-fpga.pin
+	  names, unpacked for the packages that compile its sources (the
+	  Mark II control-plane firmware). Installs nothing.
+
+	  https://github.com/kebag-logic/milan-fpga
