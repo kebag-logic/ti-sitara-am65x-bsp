@@ -5,7 +5,8 @@
 
 # Scheduling latency of the PB2 under load (check F1.2).
 #
-# Runs cyclictest with one measuring thread per CPU, optionally alongside
+# Runs cyclictest with one measuring thread per CPU, the isolated ones included
+# (the media plane's CPU 3 is the one that matters most), optionally alongside
 # stress-ng and an iperf3 client, and judges the per-CPU maximum against a
 # threshold. The 8 ch x 48 kHz USB audio load F1.2 also asks for is started
 # from the host (aplay into the gadget) before this script.
@@ -44,9 +45,16 @@ to_seconds() {
 	esac
 }
 
-# judge a cyclictest -q -h output: per-CPU min/avg/max, histogram overflows
+# judge a cyclictest -q -h output: per-CPU min/avg/max, histogram overflows.
+# The sample count is the "# Total:" line, or, from versions that print none
+# (2.80), the sum of the histogram rows.
 judge() { # <file> <max_us>
 	awk -v lim="$2" '
+		/^[0-9]+[ \t]/ {
+			for (i = 2; i <= NF; i++) {
+				sum[i - 2] += $i
+			}
+		}
 		/^# Min Latencies:/ { for (i = 4; i <= NF; i++) mn[i - 4] = $i + 0; n = NF - 3 }
 		/^# Avg Latencies:/ { for (i = 4; i <= NF; i++) av[i - 4] = $i + 0 }
 		/^# Max Latencies:/ { for (i = 4; i <= NF; i++) mx[i - 4] = $i + 0; have = 1 }
@@ -56,6 +64,10 @@ judge() { # <file> <max_us>
 			if (!have) { print "no \"# Max Latencies\" line: cyclictest did not finish"; print "RESULT: FAIL"; exit 1 }
 			bad = 0; worst = 0
 			for (c = 0; c < n; c++) {
+				if (!(c in tot)) {
+					tot[c] = sum[c]
+				}
+
 				v = (mx[c] > lim) ? "FAIL" : "ok"
 				if (mx[c] > lim) bad++
 				if (mx[c] > worst) worst = mx[c]
@@ -77,6 +89,17 @@ self_test() {
 	if [ "$r" -eq 1 ]; then echo "check-rt self-test: fail sample -> FAIL ok"; else echo "check-rt self-test: fail sample -> exit $r WRONG"; rc=1; fi
 	judge "$HERE/samples/cyclictest-truncated.txt" 100 >/dev/null; r=$?
 	if [ "$r" -eq 1 ]; then echo "check-rt self-test: truncated sample -> FAIL ok"; else echo "check-rt self-test: truncated sample -> exit $r WRONG"; rc=1; fi
+
+	# cyclictest 2.80 on the PB2: no "# Total:" line, so the histogram gives
+	# the count (10 min at 200 us, 3 CPUs: about 3 million samples each)
+	out=$(judge "$HERE/samples/cyclictest-nototal.txt" 100)
+	r=$?
+	if [ "$r" -eq 1 ] && ! echo "$out" | grep -q 'samples 0 '; then
+		echo "check-rt self-test: sample without a total -> FAIL, counted ok"
+	else
+		echo "check-rt self-test: sample without a total -> exit $r WRONG"
+		rc=1
+	fi
 	exit "$rc"
 }
 
@@ -115,7 +138,13 @@ SECS=$(to_seconds "$DURATION")
 trap stop_load EXIT INT TERM
 
 echo "kernel:    $(uname -r) $(uname -v)"
-echo "realtime:  $(cat /sys/kernel/realtime 2>/dev/null || echo 0)"
+# mainline PREEMPT_RT names itself in the version string; /sys/kernel/realtime
+# came with the out-of-tree patch set only
+case "$(uname -v)" in
+*PREEMPT_RT*) RT=yes ;;
+*) [ "$(cat /sys/kernel/realtime 2>/dev/null)" = 1 ] && RT=yes || RT=no ;;
+esac
+echo "realtime:  $RT"
 echo "cmdline:   $(cat /proc/cmdline)"
 if [ "$LOAD" = yes ]; then
 	if command -v stress-ng >/dev/null 2>&1; then
@@ -135,7 +164,28 @@ if [ -n "$IPERF_PEER" ]; then
 		echo "load:      iperf3 not installed, network load skipped"
 	fi
 fi
-echo "run:       cyclictest -m -S -p $PRIO -i $INTERVAL -h $HIST_MAX -q -D $DURATION > $OUT"
-cyclictest -m -S -p "$PRIO" -i "$INTERVAL" -h "$HIST_MAX" -q -D "$DURATION" > "$OUT" 2>&1
+# -S puts one thread on each CPU of the process's affinity, which isolcpus
+# leaves out of every task's default: widen it to all of them first
+NCPU=$(grep -c '^processor' /proc/cpuinfo)
+ALL="0-$((NCPU - 1))"
+
+WIDEN=
+if command -v taskset >/dev/null 2>&1; then
+	WIDEN="taskset -c $ALL"
+	echo "cpus:      $ALL (isolated: $(cat /sys/devices/system/cpu/isolated 2>/dev/null))"
+else
+	echo "cpus:      taskset missing, the isolated CPUs are not measured"
+fi
+
+echo "run:       $WIDEN cyclictest -m -S -p $PRIO -i $INTERVAL -h $HIST_MAX -q -D $DURATION > $OUT"
+$WIDEN cyclictest \
+	-m \
+	-S \
+	-p "$PRIO" \
+	-i "$INTERVAL" \
+	-h "$HIST_MAX" \
+	-q \
+	-D "$DURATION" \
+	> "$OUT" 2>&1
 stop_load
 judge "$OUT" "$MAX_US"
