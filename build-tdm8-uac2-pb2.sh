@@ -57,7 +57,7 @@
 #        probe      = ask a live board what it is (rev A1/AM6254 vs rev A0/AM6232)
 #        bootloader = verify u-boot-pb/out_bp2 is a complete HS-FS chain
 #        sdimage    = build the microSD image (wraps build-spare-sd.sh; needs sudo)
-# Env:   KVER BOARD JOBS CROSS_COMPILE PB2_DEFAULT_LABEL UBOUT_PB2 UB_VARIANT
+# Env:   KVER BOARD JOBS CROSS_COMPILE PB2_DEFAULT_LABEL PB2_ETHCAP_APPEND UBOUT_PB2 UB_VARIANT
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 KVER="${KVER:-v7.1}"
@@ -116,6 +116,13 @@ esac
 # so the microSD comes up as mmcblk1 no matter that it is the only host.
 # U-Boot agrees: the PB2 env sets mmcdev=1 / bootpart=1:2.
 DEFAULT_APPEND="console=ttyS3,115200n8 earlycon=ns16550a,mmio32,0x02800000,115200n8 no-console-suspend root=/dev/mmcblk1p2 ro rootfstype=ext4 rootwait net.ifnames=0"
+# Added to the "ethcap" label only.  CPU 3 is kept for the USB-to-Milan media
+# plane: no scheduler tick (nohz_full), no RCU callbacks (rcu_nocbs), no
+# unmanaged or managed IRQs, and out of the scheduler's load balancing.  The
+# TDM8 labels keep all four cores.  Needs CONFIG_NO_HZ_FULL and
+# CONFIG_RCU_NOCB_CPU (res/kl-pb2-am62.config).  Set it empty to boot the cap
+# without isolation.
+PB2_ETHCAP_APPEND="${PB2_ETHCAP_APPEND-isolcpus=nohz,domain,managed_irq,3 nohz_full=3 rcu_nocbs=3 irqaffinity=0-2}"
 CROSS="${CROSS_COMPILE:-aarch64-linux-gnu-}"
 # LOCALVERSION= (set but empty) stops setlocalversion appending "+" for an
 # out-of-tag tree, so the release is exactly 7.1.0-tdm8-pb2 on every rebuild.
@@ -162,6 +169,10 @@ config() {
 	for s in CONFIG_MMC_SDHCI_AM654 CONFIG_REGULATOR_GPIO CONFIG_MFD_TPS65219 \
 	         CONFIG_GPIO_DAVINCI; do
 		grep -q "^$s=y" "$KSRC/.config" || { echo "$s must be =y (microSD power path)" >&2; exit 1; }
+	done
+	# the USB-to-Milan bridge needs a real-time kernel and an isolatable core
+	for s in CONFIG_PREEMPT_RT CONFIG_NO_HZ_FULL CONFIG_RCU_NOCB_CPU CONFIG_HZ_1000; do
+		grep -q "^$s=y" "$KSRC/.config" || { echo "$s must be =y (real-time bridge)" >&2; exit 1; }
 	done
 	# the Ethernet Cap: eth0, its PHY, and the PTP clock / TSN offloads
 	for s in CONFIG_TI_K3_AM65_CPSW_NUSS CONFIG_TI_DAVINCI_MDIO CONFIG_PHY_TI_GMII_SEL \
@@ -254,7 +265,7 @@ stage() {
 		echo "    kernel /Image-$rel.gz"
 		echo "    fdtdir /"
 		echo "    fdt /ti/$DTB_ETHCAP_NAME.dtb"
-		echo "    append $append"
+		echo "    append $append${PB2_ETHCAP_APPEND:+ $PB2_ETHCAP_APPEND}"
 		[ -n "$existing" ] && echo "$existing"
 	} > "$BOOTDIR/extlinux/extlinux.conf.new"
 	mv "$BOOTDIR/extlinux/extlinux.conf.new" "$BOOTDIR/extlinux/extlinux.conf"
@@ -379,7 +390,7 @@ deploy() {
 	scp "$OUTDIR/$DTB_NAME.dtb" "$OUTDIR/$DTB_ASYNC_NAME.dtb" "$OUTDIR/$DTB_STOCK.dtb" \
 	    "$OUTDIR/$DTB_ETHCAP_NAME.dtb" "$BOARD":/tmp/
 	ssh "$BOARD" "rel='$rel' DTB='$DTB_NAME' DTB_ASYNC='$DTB_ASYNC_NAME' DTB_STOCK='$DTB_STOCK' \
-		DTB_ETHCAP='$DTB_ETHCAP_NAME' \
+		DTB_ETHCAP='$DTB_ETHCAP_NAME' ETHCAP_APPEND='$PB2_ETHCAP_APPEND' \
 		DEFAULT_LABEL='$PB2_DEFAULT_LABEL' DEFAULT_APPEND='$DEFAULT_APPEND' sh -s" <<'REMOTE'
 set -e
 # the board's tar may be BusyBox (no -z); modules go to a versioned dir so kernels coexist
@@ -442,7 +453,7 @@ label ethcap
     kernel /Image-$rel.gz
     fdtdir /
     fdt /ti/$DTB_ETHCAP.dtb
-    append $A
+    append $A${ETHCAP_APPEND:+ $ETHCAP_APPEND}
 EXL
 sync
 [ -n "$UMOUNT" ] && umount "$MNT"
