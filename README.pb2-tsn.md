@@ -50,7 +50,7 @@ After the boot, `/etc/init.d/S95avb status` reports each layer below.
 | Real-time kernel | #3 | `res/kl-pb2-am62.config` | `PREEMPT_RT`, `HZ_1000`, `NO_HZ_FULL`, `RCU_NOCB_CPU`, performance governor |
 | CPU isolation | #3 | `build-tdm8-uac2-pb2.sh` (`PB2_ETHCAP_APPEND`) | the `ethcap` label only: `isolcpus=nohz,domain,managed_irq,3 nohz_full=3 rcu_nocbs=3 irqaffinity=0-2` |
 | IRQ placement | #3 | `/usr/sbin/avb-irq.sh` | CPSW and USB interrupts on `AVB_IRQ_CPU` (2) |
-| gPTP | #4 | `/etc/avb/gPTP.cfg`, `/usr/sbin/avb-gptp.sh` | `ptp4l` on the CPTS clock of `eth0`, `phc2sys` to `CLOCK_REALTIME`, read-only socket `/var/run/ptp4lro` |
+| gPTP | #4, #19 | `/etc/avb/flexptpd.conf`, `/usr/sbin/avb-gptp.sh` | `flexptpd` (802.1AS end station) on the CPTS clock of `eth0`, its status in `/dev/shm/flexptpd.eth0` |
 | Egress | #5 | `/usr/sbin/avb-shaper.sh` | `eth0.2`, priority-to-PCP map, am65-cpsw class A/B shaper |
 | Service | #6 | `/etc/init.d/S95avb`, `/etc/avb/avb.env` | all of the above in order, then the stack named by `AVB_STACK` |
 | USB gadget | #7 | `/etc/avb/uac2-milan.env`, `S99usb_gadgets` | the bridge's UAC2 + ECM gadget, 125 us packets |
@@ -94,32 +94,57 @@ shows each IRQ and where its threads may run.
 Mainline `PREEMPT_RT` has no `/sys/kernel/realtime` (that file came with the
 out-of-tree patch set): `uname -v` reads `SMP PREEMPT_RT`.
 
-### 1.2 gPTP (#4)
+### 1.2 gPTP (#4, #19)
 
-`/etc/avb/gPTP.cfg` holds the 802.1AS attributes the other AM62x boards use
-(the pipewire-helper `gPTP.cfg`): L2, peer delay, `transportSpecific 0x1`,
-`01:80:C2:00:00:0E`, sync every 125 ms, `priority1 248` so a bench grandmaster
-wins. On top of those, `tx_timestamp_timeout 20` covers the CPTS, which delivers
-TX timestamps through a work item.
+gPTP is `flexptpd`: our fork of flexPTP,
+[kebag-logic/flexPTP](https://github.com/kebag-logic/flexPTP) (branch `gptp`),
+with an IEEE 802.1AS-2020 time-aware end station on top of flexPTP's IEEE 1588
+clock. It covers:
 
-`avb-gptp.sh start` runs `ptp4l -f /etc/avb/gPTP.cfg -i eth0` at SCHED_FIFO 53
-and `phc2sys -s eth0 -c CLOCK_REALTIME -w` at 52. Both log to syslog
-(`/var/log/messages`). `avb-gptp.sh status` prints the port state, the master
-offset, the peer delay and the grandmaster:
+- the peer delay mechanism, with neighborRateRatio and asCapable;
+- the 802.1AS BMCA, with path trace and the announce and sync receipt timeouts;
+- Sync taken only from the selected master;
+- signaling;
+- Avnu's reverse sync.
+
+It replaced linuxptp (#19 has the evaluation that chose it), and the image
+carries no `ptp4l` and no `phc2sys`.
+
+`avb-gptp.sh start` runs it on the CPTS hardware clock of `eth0`, every thread
+at SCHED_FIFO 53 (`AVB_GPTP_PRIO`):
 
 ```sh
-pmc -u -b 0 -t 1 'GET PORT_DATA_SET' 'GET TIME_STATUS_NP' 'GET PARENT_DATA_SET'
+flexptpd -i eth0 -c /etc/avb/flexptpd.conf -P 53 -q    # event log: /var/log/flexptpd.log
 ```
 
-`-t 1` is required: with `transportSpecific 0x1`, `ptp4l` ignores management
-messages that carry 0.
+`/etc/avb/flexptpd.conf` holds flexPTP CLI commands, applied once the gPTP
+preset is loaded:
+- `priority1 248`, so a bench grandmaster wins;
+- asCapable's `neighborPropDelayThresh` of 800 ns and 9 allowed lost responses;
+- the event logs;
+- reverse sync, commented out: it is for a tester linked directly to the PB2.
 
-**Buildroot's own linuxptp init scripts are removed.** The linuxptp package
-installs `S65ptp4l` and `S66phc2sys`, which run `ptp4l` on `eth0` from
-`/etc/linuxptp.cfg`. That configuration is UDPv4, end-to-end, client only: it is
-not gPTP. Those scripts would also start before the shaper takes `eth0` down
-(§1.3). The PB2 `post-build.sh` deletes both, and `S95avb` starts gPTP after the
-shaper.
+The CPTS delivers TX timestamps through a work item. flexptpd waits up to 20 ms
+for one, matched to its message by content, and gives up on it without
+stalling.
+
+flexptpd steers the PHC onto the grandmaster and publishes the port's state in
+`/dev/shm/flexptpd.eth0`. `milan-ctrld` reads it for ADP's grandmaster, and so
+does `avb-gptp.sh status`, through `milan-dp -g`:
+
+```sh
+milan-dp -g flexptpd.eth0     # port_state, as_capable, gm_identity, mean_link_delay_ns, time_error_ns, ...
+```
+
+Nothing steers the system clocks. The media plane models the PHC against
+`CLOCK_MONOTONIC_RAW` itself (milan-linux `src/gptp_time.c`).
+
+`check-gptp.sh` judges the state from that block and the offsets from the wire
+(`milan-gptp-watch`), so neither depends on the daemon's own word.
+
+`post-build.sh` still removes linuxptp's `S65ptp4l` and `S66phc2sys`, should a
+configuration bring the package back. Their stock setup (UDPv4, end-to-end) is
+not gPTP, and they would start before the shaper takes `eth0` down (§1.3).
 
 ### 1.3 Egress: VLAN, priority map and shaper (#5)
 
@@ -227,7 +252,8 @@ PB2 link, ATDECC controller.
 | Ticket | Checks | Run on the board |
 |---|---|---|
 | #3 F1 | F1.1 `uname -v` shows `PREEMPT_RT` (mainline has no `/sys/kernel/realtime`); F1.2 `check-rt.sh` for 1 h under load, max <= 100 us; F1.3 README.pb2-ethcap.md §5; F1.4 30 min TDM8 bridge on the RT kernel | `uname -v; cat /proc/cmdline` |
-| #4 F2 | F2.1 `ethtool -T`; F2.2 SLAVE within 10 s; F2.3 offset <= 100 ns at 99.9 % over 30 min; F2.4 phc2sys; F2.5 GM change; F2.6 PB2 as GM | `avb-gptp.sh status`, `check-gptp.sh` |
+| #4 F2 | F2.1 `ethtool -T`; F2.2 SLAVE within 10 s; F2.3 offset <= 100 ns at 99.9 % over 30 min; F2.4 the media time base within 1 us of the PHC (G6.2, #25, no phc2sys any more); F2.5 GM change; F2.6 PB2 as GM | `avb-gptp.sh status`, `check-gptp.sh` |
+| #19 G | gPTP on our flexPTP fork: G1 Linux platform, G2 peer delay and asCapable, G3 BMCA and grandmaster, G4 signaling, G5 reverse sync, G6 the bridge without linuxptp, G7 conformance suite and bench runs (#20 to #26) | the fork's `tests/conformance/run.sh`, `check-gptp.sh`, `milan-gptp-watch` |
 | #5 F3 | F3.1 offload accepted, per-queue counters; F3.2 tags on the tap; F3.3 rate cap; F3.4 isolation under `iperf3`; F3.5 ssh | `avb-shaper.sh status`, `check-shaper.sh` |
 | #6 F4 | F4.1 cold boot; F4.2 `tdm8` label untouched; F4.3 stream multicast reaches a socket; F4.4 stop/start | `S95avb status` |
 | #7 F5 | F5.1 bInterval 1; F5.2 bit-exact ramp through the gadget; F5.3 pitch +/-500 ppm; F5.4 <= 500 us; F5.5 TDM8 unchanged | `tdm8-uac2.sh status` |
@@ -255,8 +281,9 @@ With `AVB_STACK=native`, `S95avb` runs `/usr/sbin/milan-bridge.sh start` after
 gPTP. That starts two daemons:
 
 * `milan-ctrld -i eth0 -e /etc/milan/entity.conf -V 2 -s`, at SCHED_FIFO
-  `AVB_CTRLD_PRIO` (40, below `ptp4l` and `phc2sys`). It reads the grandmaster
-  from `/var/run/ptp4lro` and publishes the streams in `/dev/shm/milan-datapath`.
+  `AVB_CTRLD_PRIO` (40, below `flexptpd`). It reads the grandmaster from
+  flexptpd's status block `/dev/shm/flexptpd.eth0` and publishes the streams in
+  `/dev/shm/milan-datapath`.
 * `milan-mediad`, whose talker and listener threads run at SCHED_FIFO 70 and 69
   on CPU 3. It waits for the UAC2 gadget. Then the talker streams whatever the
   host plays, starting once MAAP holds a destination. The listener plays
@@ -296,7 +323,8 @@ unique ID 0, or names it as the talker.
 | `res/kl-pb2-am62.config` | the real-time block |
 | `build-tdm8-uac2-pb2.sh` | `PB2_ETHCAP_APPEND` on the `ethcap` label, the real-time config check |
 | `br2-external/board/bb-pocketbeagle2/rootfs-overlay/etc/avb/avb.env` | every setting of this file |
-| `.../etc/avb/gPTP.cfg` | 802.1AS |
+| `.../etc/avb/flexptpd.conf` | flexptpd's configuration (802.1AS) |
+| `br2-external/package/flexptp-gptp/` | flexptpd, built from our flexPTP fork at `flexptp.pin` |
 | `.../etc/avb/uac2-milan.env` | the bridge's gadget profile |
 | `.../etc/init.d/S95avb` | the service |
 | `.../usr/sbin/avb-irq.sh`, `avb-gptp.sh`, `avb-shaper.sh` | one layer each |

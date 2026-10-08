@@ -30,7 +30,7 @@ Linux:
 | TX merge | each frame the model sends goes out on the socket inside the write that committed it |
 | timer bank, TICK | the model's millisecond clock, advanced to `CLOCK_MONOTONIC` on every wake |
 | link level | rtnetlink (`IFF_UP` and `IFF_RUNNING`) |
-| gPTP plane | `ptp4l`'s read-only socket `/var/run/ptp4lro`, polled every 250 ms (`TIME_STATUS_NP`, `PORT_DATA_SET_NP`) |
+| gPTP plane | `flexptpd`'s status block `/dev/shm/flexptpd.<interface>` (`-g`), read every 100 ms under its seqlock (`src/gptp_shm.c`): the grandmaster and asCapable |
 | interrupt and sleep | `epoll`, with a timeout at the model's next deadline |
 | datapath CSR window | `/dev/shm/milan-datapath` (`src/datapath.h`): the MAAP range, each STREAM_OUTPUT's stream, each STREAM_INPUT's settled stream |
 
@@ -76,10 +76,20 @@ gPTP. No frame is resampled, dropped or repeated: the stream is bit-exact.
 | `-o` (`AVB_PTO_NS`) | 2 000 000 | presentation time offset |
 | `-P` (`AVB_MEDIAD_PRIO`), `-a` (`AVB_RT_CPU`) | 70, CPU 3 | the talker thread: SCHED_FIFO, on the core the `ethcap` label isolates |
 
-* **gPTP time** is `CLOCK_TAI` plus a correction that `src/gptp_time.c`
-  measures against the PHC once a second (`PTP_SYS_OFFSET_EXTENDED`). The
-  correction absorbs a kernel TAI offset that nobody set. The talker sleeps on
-  `CLOCK_TAI`, which `phc2sys` keeps on the PHC.
+* **gPTP time** is the PHC, which flexptpd steers onto the grandmaster.
+  Nothing steers the system clocks (there is no `phc2sys`), so
+  `src/gptp_time.c` maps `CLOCK_MONOTONIC_RAW` (a vDSO read) onto the PHC
+  with a model:
+  - it is measured once a second with `PTP_SYS_OFFSET_EXTENDED` on
+    `CLOCK_MONOTONIC_RAW`;
+  - it is a least-squares line over the last 16 measurements, anchored at the
+    newest;
+  - a measurement that misses it by more than 20 us is a clock step, and the
+    window starts over.
+
+  `tests/test_gptp.c` holds it within 250 ns of a PHC running 36.9 ppm fast
+  under +/-200 ns of read noise. The miss of each measurement is reported as
+  `gptp_residual_ns`.
 * **The talker's states.** PRIMING sends silence until the buffer holds its
   level. RUNNING sends 6 frames per PDU, or silence on an underrun, and drops
   frames past `-M` (an overrun). The level is judged as the slot saw it: frames
@@ -89,7 +99,7 @@ gPTP. No frame is resampled, dropped or repeated: the stream is bit-exact.
   pitch back at nominal.
 * **Sleeping, and gPTP jumps.** Each slot's wait is measured in gPTP time and
   slept on `CLOCK_MONOTONIC`, which no clock step moves. A slot more than 50 ms
-  ahead or behind means the time base jumped (`ptp4l`'s first lock, a
+  ahead or behind means the time base jumped (flexptpd's first lock, a
   grandmaster change), and the stream starts over on the new time base.
 * **Frames go out tagged** by the talker itself (VID from the datapath block,
   PCP = `SO_PRIORITY` = 3), on `eth0`, so `mqprio` puts them in class A
@@ -217,11 +227,11 @@ nothing flushed):
   accepted slot and restore the bindings, with no read fault, and the journal
   must still take a bind afterwards.
 
-`tests/peer.py`, the control-plane test, The peer plays the fake ptp4l, the
-controller, a listener, a talker and a MAAP peer, and grades what
-`milan-ctrld` sends:
+`tests/peer.py` is the control-plane test. The peer plays a fake flexptpd
+(its status block), the controller, a listener, a talker and a MAAP peer,
+and grades what `milan-ctrld` sends:
 
-- ADP: the identity, `entity.conf`'s fields, ptp4l's grandmaster, the reply to
+- ADP: the identity, `entity.conf`'s fields, flexptpd's grandmaster, the reply to
   DISCOVER, a grandmaster change, ENTITY_DEPARTING on SIGTERM;
 - MAAP: the PROBEs, their spacing and the ANNOUNCE, a range in the pool sized
   to the talker sources, and the DEFEND against a conflicting PROBE;
