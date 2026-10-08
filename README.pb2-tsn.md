@@ -381,3 +381,24 @@ What the bench changed:
   talker streams only once a listener registers. The stream paths through the
   switch (A3.3, A3.5, A5) therefore wait for SRP (#14); a direct cable tests
   them without it.
+
+### gPTP on flexptpd (#19)
+
+The same board and grandmaster, with `flexptpd` in place of `ptp4l` and
+`phc2sys`: our flexPTP fork's 802.1AS end station, run as the image's
+`avb-gptp.sh` does (SCHED_FIFO 53). Judged from the wire by
+`milan-gptp-watch`, the link delay at 203 ns.
+
+| Run | Result |
+|---|---|
+| 10 min, after 60 s to lock | 4800 of 4800 Syncs; offset mean 4 ns, \|offset\| p50 7 ns, p99 31 ns, max 40 ns; 100 % within 100 ns: **pass** |
+| eth0 down 2 s, then 120 s watched | link down: DISABLED (no false grandmaster); link up: asCapable, LISTENING, SLAVE to the grandmaster. Syncs again 5 s after link-up; over the 120 s, 927 Syncs, p99 46 ns, max 51 ns, 100 % within 100 ns: **pass**. No clock step: the frequency held through the drop |
+
+For comparison, the same window on the same bench:
+- linuxptp: within 54 ns, but each link drop stepped the system clock by 37 s
+  through phc2sys.
+- Excelfore's gPTP daemon: p99 121 ns.
+- upstream flexPTP: p99 24 ns, but it hung on the link drop.
+
+The fork's conformance suite (`tests/conformance/run.sh`, 50 checks of G1 to
+G5) passes in a network namespace.
