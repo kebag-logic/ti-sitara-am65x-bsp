@@ -1,0 +1,92 @@
+#!/bin/sh
+
+# AVB / Milan bring-up on the PocketBeagle 2 Ethernet Cap (issue #6), in the
+# order the hardware needs it:
+#   1. the CPSW and USB interrupts onto AVB_IRQ_CPU            (avb-irq.sh)
+#   2. VLAN, priority map and class A/B shaper; this may take
+#      eth0 down and up once, so it runs before gPTP           (avb-shaper.sh)
+#   3. stream multicast to the host port                       (allmulticast)
+#   4. gPTP: ptp4l on the CPTS clock, phc2sys                  (avb-gptp.sh)
+#   5. the stack named by AVB_STACK
+# Settings: /etc/avb/avb.env. Without eth0 (any label but "ethcap") it logs one
+# line and does nothing, so the TDM8 labels are unaffected.
+
+ENV_FILE=/etc/avb/avb.env
+AVB_INTERFACE=eth0
+AVB_STACK=native
+AVB_ALLMULTI=yes
+[ -r "$ENV_FILE" ] && . "$ENV_FILE"
+
+# the USB-to-Milan bridge (path A) installs this; until then "native" stops at gPTP
+BRIDGE=/usr/sbin/milan-bridge.sh
+
+have_if() { [ -d "/sys/class/net/$AVB_INTERFACE" ]; }
+
+stack() { # start|stop|status
+	case "$AVB_STACK" in
+	native)
+		if [ -x "$BRIDGE" ]; then
+			"$BRIDGE" "$1"
+		elif [ "$1" = start ]; then
+			echo "S95avb: AVB_STACK=native but $BRIDGE is not installed: TSN plumbing only"
+		fi
+		;;
+	pipewire)
+		[ "$1" = start ] && echo "S95avb: AVB_STACK=pipewire is not wired on this board yet"
+		;;
+	none) ;;
+	*)
+		echo "S95avb: unknown AVB_STACK=$AVB_STACK" >&2
+		;;
+	esac
+}
+
+start() {
+	if ! have_if; then
+		echo "S95avb: no $AVB_INTERFACE (not the ethcap label), nothing to do"
+		return 0
+	fi
+	/usr/sbin/avb-irq.sh
+	/usr/sbin/avb-shaper.sh start || return 1
+	if [ "$AVB_ALLMULTI" = yes ]; then
+		ip link set "$AVB_INTERFACE" allmulticast on
+	fi
+	/usr/sbin/avb-gptp.sh start || return 1
+	stack start
+}
+
+stop() {
+	have_if || return 0
+	stack stop
+	/usr/sbin/avb-gptp.sh stop
+	ip link set "$AVB_INTERFACE" allmulticast off
+	/usr/sbin/avb-shaper.sh stop
+}
+
+status() {
+	if ! have_if; then
+		echo "S95avb: no $AVB_INTERFACE (not the ethcap label)"
+		return 0
+	fi
+	echo "--- interrupts ---"
+	/usr/sbin/avb-irq.sh status
+	echo "--- shaper ---"
+	/usr/sbin/avb-shaper.sh status
+	echo "--- multicast ---"
+	if ip link show "$AVB_INTERFACE" | grep -q ALLMULTI; then echo "allmulticast on"; else echo "allmulticast off"; fi
+	echo "--- gPTP ---"
+	/usr/sbin/avb-gptp.sh status
+	echo "--- stack: $AVB_STACK ---"
+	stack status
+}
+
+case "$1" in
+start)   start ;;
+stop)    stop ;;
+restart) stop; start ;;
+status)  status ;;
+*)
+	echo "Usage: $0 {start|stop|restart|status}"
+	exit 1
+	;;
+esac

@@ -13,11 +13,21 @@ TARGET_DIR="$1"
 HERE=$(cd "$(dirname "$0")" && pwd)
 BSP=$(cd "$HERE/../../.." && pwd)          # .../ti-sitara-am65x-bsp
 
-for f in etc/init.d/S99usb_gadgets etc/init.d/S05growrootfs \
-	root/setup_gadgets.sh root/remove_usb.sh usr/sbin/tdm8-uac2.sh; do
+for f in etc/init.d/S99usb_gadgets etc/init.d/S05growrootfs etc/init.d/S95avb \
+	root/setup_gadgets.sh root/remove_usb.sh usr/sbin/tdm8-uac2.sh \
+	usr/sbin/avb-gptp.sh usr/sbin/avb-irq.sh usr/sbin/avb-shaper.sh; do
 	chmod 0755 "$TARGET_DIR/$f" 2>/dev/null || true
 done
-chmod 0644 "$TARGET_DIR/etc/tdm8/tdm8.env" 2>/dev/null || true
+for f in etc/tdm8/tdm8.env etc/avb/avb.env etc/avb/gPTP.cfg etc/avb/uac2-milan.env; do
+	chmod 0644 "$TARGET_DIR/$f" 2>/dev/null || true
+done
+
+# linuxptp installs S65ptp4l and S66phc2sys, which run ptp4l on eth0 from
+# /etc/linuxptp.cfg: UDPv4, end-to-end, client only. That is not gPTP, and it
+# would start before S95avb changes the CPSW TX channels (which takes eth0 down).
+# S95avb starts ptp4l and phc2sys itself, with /etc/avb/gPTP.cfg, after the
+# shaper (avb-gptp.sh), so the stock pair is removed.
+rm -f "$TARGET_DIR/etc/init.d/S65ptp4l" "$TARGET_DIR/etc/init.d/S66phc2sys"
 
 # sshd StrictModes: key-based root login needs 0700 dir + 0600 authorized_keys
 chmod 0700 "$TARGET_DIR/root/.ssh" 2>/dev/null || true

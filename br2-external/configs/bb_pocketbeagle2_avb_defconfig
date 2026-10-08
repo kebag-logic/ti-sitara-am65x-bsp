@@ -64,6 +64,10 @@ BR2_PACKAGE_RT_TESTS=y
 # for on the shared RGMII pins.
 BR2_PACKAGE_ETHTOOL=y
 BR2_PACKAGE_IPERF3=y
+# The TSN validation (README.pb2-tsn.md): stress-ng is the load under which
+# cyclictest must hold its bound, and tcpdump captures AVTP on the board itself.
+BR2_PACKAGE_STRESS_NG=y
+BR2_PACKAGE_TCPDUMP=y
 # 512 MB of DDR, so the rootfs is sized well under the SK's 2G.
 BR2_TARGET_ROOTFS_EXT2=y
 BR2_TARGET_ROOTFS_EXT2_4=y
