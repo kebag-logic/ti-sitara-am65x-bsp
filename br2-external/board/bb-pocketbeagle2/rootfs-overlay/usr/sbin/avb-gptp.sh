@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # SPDX-FileCopyrightText: Copyright (c) 2026 Kebag-Logic
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 
 # gPTP (802.1AS) on the PocketBeagle 2 Ethernet Cap (issue #4): ptp4l on the
 # CPTS hardware clock of eth0, and phc2sys steering CLOCK_REALTIME from it.

@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # SPDX-FileCopyrightText: Copyright (c) 2026 Kebag-Logic
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 
 # AVB egress on the PocketBeagle 2 Ethernet Cap (issue #5): the VLAN of the
 # streams, the socket-priority to PCP map, and the am65-cpsw class A/B shaper.

@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # SPDX-FileCopyrightText: Copyright (c) 2026 Kebag-Logic
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 
 # Pin the CPSW (eth0) and USB interrupts of the PocketBeagle 2 to one core
 # (issue #3). The "ethcap" label already keeps unmanaged IRQs off the isolated
@@ -18,9 +18,11 @@ if [ -r "$ENV_FILE" ]; then . "$ENV_FILE"; fi
 CPU=${AVB_IRQ_CPU:-2}
 MATCH=${AVB_IRQ_MATCH:-'8000000\.ethernet|31000000\.usb'}
 
-# "<irq> <name>" for every numbered line of /proc/interrupts whose name matches
+# "<irq> <name>" for every numbered line of /proc/interrupts whose name matches;
+# the pattern goes through the environment, since awk -v would eat its backslashes
 irqs() {
-	awk -v re="$MATCH" '
+	MATCH="$MATCH" awk '
+		BEGIN { re = ENVIRON["MATCH"] }
 		$1 ~ /^[0-9]+:$/ {
 			n = $1; sub(/:$/, "", n)
 			if ($NF ~ re) print n, $NF
