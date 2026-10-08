@@ -72,6 +72,25 @@ outside BusyBox, `cyclictest`, `linuxptp`, `tc` and `ethtool`, all in the image)
 proposed). The raw output is kept (`--out`, default `/tmp/check-rt-<date>.txt`)
 and its histogram is the evidence.
 
+## milan-gptp-watch — the offset from the wire, whatever the gPTP daemon
+
+`check-gptp.sh` asks ptp4l through `pmc`. `milan-gptp-watch` (installed with the
+bridge, built from `milan-linux/src/gptp_watch.c`) asks no daemon. It takes
+the board's own hardware receive time of each Sync from the grandmaster's side,
+and the time the matching Follow_Up carries, so it judges any gPTP stack the
+same way:
+
+```sh
+milan-gptp-watch -i eth0 -d 600 -w 30 -l 203 -g <gm clock identity>   # F2.3 over 10 min
+```
+
+`-l` is the link delay to the switch (ptp4l measured 203 ns on the bench; the
+watcher cannot see another process's Pdelay_Req transmit time). **Pass** when
+at least 90 % of the expected Syncs were judged, all with a hardware timestamp,
+|offset| <= `-t` (100 ns) for >= 99.9 % of them, and the grandmaster never
+changed (and is `-g`). On the bench, against ptp4l over 60 s: mean 0 ns,
+p99 8 ns, 480 of 480 Syncs; ptp4l's own report was rms 1–3 ns.
+
 ## check-gptp.sh — gPTP state and offsets (F2.2, F2.3, F2.5, F2.6)
 
 ```sh

@@ -40,7 +40,7 @@ MEDIAD_SRCS := src/milan_mediad.c src/talker.c src/listener.c src/aaf.c src/serv
 MEDIAD_OBJS := $(addprefix $(O)/,$(notdir $(MEDIAD_SRCS:.c=.o)))
 DP_OBJS := $(addprefix $(O)/,milan_dp.o datapath.o media.o shmblk.o)
 
-all: $(O)/milan-ctrld $(O)/milan-mediad $(O)/milan-dp
+all: $(O)/milan-ctrld $(O)/milan-mediad $(O)/milan-dp $(O)/milan-gptp-watch
 
 $(CTRL)/mbx/mbx.c:
 	@echo "no milan-fpga tree at MILAN_FPGA=$(MILAN_FPGA): run tools/fetch-milan-fpga.sh" >&2; exit 1
@@ -62,6 +62,11 @@ $(O)/milan-mediad: $(MEDIAD_OBJS)
 $(O)/milan-dp: $(DP_OBJS)
 	$(CC) $(LDFLAGS) -o $@ $^ -lrt
 
+# the gPTP judge stands alone: it needs neither the firmware nor the daemons
+$(O)/milan-gptp-watch: src/gptp_watch.c
+	@mkdir -p $(O)
+	$(CC) $(OWN_CFLAGS) $(LDFLAGS) -o $@ $<
+
 check: all $(O)/test_ptp_mgmt $(O)/test_media
 	$(O)/test_ptp_mgmt
 	$(O)/test_media
@@ -82,6 +87,7 @@ install: all
 	install -D -m 0755 $(O)/milan-ctrld $(DESTDIR)$(PREFIX)/sbin/milan-ctrld
 	install -D -m 0755 $(O)/milan-mediad $(DESTDIR)$(PREFIX)/sbin/milan-mediad
 	install -D -m 0755 $(O)/milan-dp $(DESTDIR)$(PREFIX)/sbin/milan-dp
+	install -D -m 0755 $(O)/milan-gptp-watch $(DESTDIR)$(PREFIX)/bin/milan-gptp-watch
 
 clean:
 	rm -rf $(O)

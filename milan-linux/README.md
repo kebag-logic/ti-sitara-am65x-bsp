@@ -10,6 +10,7 @@ end station**.
 | `milan-mediad` | the media plane: the AAF talker fed by the UAC2 gadget, on the media clock; the AAF listener that feeds the gadget back; and the servos that steer the USB host | #10, #11, #12 |
 | `milan-dp` | prints the datapath block `milan-ctrld` publishes and the media block `milan-mediad` publishes | #8 |
 | `milan-bridge.sh` | starts and stops them; `S95avb` runs it for `AVB_STACK=native` | #8 |
+| `milan-gptp-watch` | judges gPTP from the wire, whichever daemon runs it: the PHC's offset from the grandmaster, from the board's hardware receive time of each Sync and the time its Follow_Up carries | #4 |
 
 ## How the RISC-V firmware runs on Linux
 
