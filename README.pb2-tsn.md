@@ -64,7 +64,8 @@ gadget as before. The real-time kernel is the same for every label; only
 
 The bridge services USB every 125 us and sends 8000 AAF frames/s. The kernel
 is `PREEMPT_RT`, which is in mainline since 6.12 but still sits behind
-`CONFIG_EXPERT`. `build-tdm8-uac2-pb2.sh config` refuses a `.config` that lost
+`CONFIG_EXPERT`. Its release is `7.1.0-tdm8-pb2-rt`, so it and its modules sit
+beside an earlier `7.1.0-tdm8-pb2` (PREEMPT) kernel on a card updated in place. `build-tdm8-uac2-pb2.sh config` refuses a `.config` that lost
 `PREEMPT_RT`, `NO_HZ_FULL`, `RCU_NOCB_CPU` or `HZ_1000`.
 
 The `ethcap` label keeps CPU 3 for the media plane. CPU 3 runs no scheduler
