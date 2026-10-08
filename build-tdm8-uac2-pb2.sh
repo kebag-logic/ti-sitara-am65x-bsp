@@ -569,9 +569,10 @@ abcard() {
 	echo "  slots    $rel, rootfs $roottar"
 	echo "  sizes    boot $AB_BOOT_MB, rootfs.A/B $AB_SLOT_MB each, data $AB_DATA_MB MiB"
 
-	# the bootchooser, with the ethcap label's arguments
-	sed "s|@APPEND@|$(ab_append)|" "$HERE/res/ab/pb2-boot.cmd.in" > "$w/boot.cmd"
-	"$mkimage" -A arm64 -T script -C none -n "PB2 A/B bootchooser" -d "$w/boot.cmd" "$w/boot.scr" >/dev/null
+	# the bootchooser, with the ethcap label's arguments, as a FIT script: the
+	# board's U-Boot sources no legacy image (res/ab/pb2-mkscr.sh)
+	sed "/^setenv cargs /s|@APPEND@|$(ab_append)|" "$HERE/res/ab/pb2-boot.cmd.in" > "$w/boot.cmd"
+	"$HERE/res/ab/pb2-mkscr.sh" "$mkimage" "$w/boot.cmd" "$w/boot.scr"
 
 	# p1: the FAT, as build-spare-sd.sh makes it (mformat keeps the full
 	# total-sector count the K3 ROM wants)

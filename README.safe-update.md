@@ -137,6 +137,9 @@ The same OS A/B scheme, with these differences:
     SPL that read it from the microSD, and never reached the bootchooser.
 - **Bootchooser:** `res/ab/pb2-boot.cmd.in`, run as `/boot.scr` by bootstd's
   `script` bootmeth (not by `envboot`, which skips `boot.scr` when BOOTSTD is on).
+  - `/boot.scr` is a FIT script (`res/ab/pb2-mkscr.sh`). The board's U-Boot has
+    FIT_SIGNATURE and no LEGACY_IMAGE_FORMAT, so it turns a plain
+    `mkimage -T script` image away and falls through to "nothing to boot".
   - It lights all four user LEDs; the script's header lists what each LED
     pattern says about how far a boot got.
   - It boots the slot's gzipped `Image.gz` (the board env sets
