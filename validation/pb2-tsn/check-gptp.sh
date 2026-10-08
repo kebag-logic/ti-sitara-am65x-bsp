@@ -3,21 +3,27 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright (c) 2026 Kebag-Logic
 
-# gPTP state and offset statistics of ptp4l on the PB2 (checks F2.2, F2.3, F2.5).
+# gPTP state and offsets of flexptpd on the PB2 (checks F2.2, F2.3, F2.5, #4).
 #
-# State, through pmc on the ptp4l socket: port state, asCapable, GM present and
-# its identity. Offsets, either sampled from TIME_STATUS_NP for --window seconds
-# or parsed from a ptp4l log (-m output, one "master offset" line per Sync or
-# "rms ... max ..." summaries). Only samples after the first lock are judged.
+# State, from flexptpd's status block (milan-dp -g): the port state, asCapable,
+# a grandmaster present and its identity.
 #
-# usage: check-gptp.sh [--uds /var/run/ptp4lro] [--role slave|master] [--expect-gm ID]
-#                      [--window SECONDS] [--interval SECONDS] [--log FILE]
-#                      [--offset-ns 100] [--fraction 99.9] [--excursion-ns 1000]
-#                      [--delay-spread-ns 50] [--pmc-file FILE]
+# Offsets, from the wire, over --window seconds: milan-gptp-watch takes the
+# board's hardware receive time of each Sync and the time its Follow_Up
+# carries, whatever the daemon claims. Over the same window the status block
+# is sampled every --interval seconds: the port state must never change,
+# asCapable must stay 1, and the link delay must stay within
+# +/- --delay-spread-ns of its centre.
+#
+# usage: check-gptp.sh [--interface eth0] [--name flexptpd.IF] [--role slave|master]
+#                      [--expect-gm ID] [--window SECONDS] [--interval SECONDS]
+#                      [--link-delay-ns 203] [--offset-ns 100] [--delay-spread-ns 50]
+#                      [--status-file FILE] [--watch-file FILE]
 #        check-gptp.sh --self-test
 #
-#   --window 0 checks the state only; --log judges a ptp4l log instead of sampling;
-#   --pmc-file judges a saved pmc output instead of asking ptp4l.
+#   ID as 3cc0c6.fffe.fe0210 or 3cc0c6fffefe0210. --window 0 checks the state
+#   only. --status-file judges a saved `milan-dp -g` output instead of the
+#   block, --watch-file a saved milan-gptp-watch output instead of the wire.
 #
 # Exit 0 = pass, 1 = fail, 2 = usage error.
 
@@ -25,188 +31,236 @@ set -u
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 SELF=$HERE/$(basename "$0")
-UDS=/var/run/ptp4lro
+
+IF=eth0
+NAME=
 ROLE=slave
 EXPECT_GM=
 WINDOW=0
 INTERVAL=1
-LOG=
+LINK_DELAY_NS=203
 OFFSET_NS=100
-FRACTION=99.9
-EXCURSION_NS=1000
 DELAY_SPREAD_NS=50
-PMC_FILE=
+STATUS_FILE=
+WATCH_FILE=
 
-usage() { sed -n '/^# usage:/,/^# Exit/p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
-
-pmc_get() {
-	pmc -u -b 0 -t 1 -s "$UDS" "$@" 2>/dev/null
+usage() {
+	sed -n '/^# usage:/,/^# Exit/p' "$0" | sed 's/^# \{0,1\}//' >&2
+	exit 2
 }
 
-# key/value pairs of every pmc response field ("portState SLAVE", ...)
-pmc_fields() {
-	awk 'NF >= 2 && $1 !~ /^(sending:|[0-9a-f]+\.[0-9a-f]+\.[0-9a-f]+-[0-9]+)$/ { print $1, $2 }'
+# the status, as key=value lines
+status_now() {
+	if [ -n "$STATUS_FILE" ]; then
+		cat "$STATUS_FILE"
+	else
+		milan-dp -g "$NAME" 2>/dev/null
+	fi
 }
 
-# judge the state fields read from pmc
-judge_state() { # <file with pmc output>
-	awk -v role="$ROLE" -v gm="$EXPECT_GM" '
-		NF >= 2 { v[$1] = $2 }
-		END {
-			bad = 0
-			want = (role == "master") ? "MASTER" : "SLAVE"
-			ps = ("portState" in v) ? v["portState"] : "-"
-			printf "portState %s (want %s)\n", ps, want
-			if (ps != want) bad++
-			ac = ("asCapable" in v) ? v["asCapable"] : "-"
-			printf "asCapable %s (want 1)\n", ac
-			if (ac != "1") bad++
-			gp = ("gmPresent" in v) ? v["gmPresent"] : "-"
-			gi = ("gmIdentity" in v) ? v["gmIdentity"] : (("grandmasterIdentity" in v) ? v["grandmasterIdentity"] : "-")
-			printf "gmPresent %s gmIdentity %s", gp, gi
-			if (gm != "") printf " (want %s)", gm
-			printf "\n"
-			if (role == "slave" && gp != "true") bad++
-			if (gm != "" && tolower(gi) != tolower(gm)) bad++
-			if ("master_offset" in v) printf "master_offset %s ns\n", v["master_offset"]
-			if ("peerMeanPathDelay" in v) printf "peerMeanPathDelay %s ns\n", v["peerMeanPathDelay"]
-			print (bad ? "STATE: FAIL" : "STATE: PASS")
-			exit (bad ? 1 : 0)
-		}' "$1"
+field() { # <key> < status
+	sed -n "s/^$1=//p"
 }
 
-# judge offset/delay/state samples. Input lines: "o <offset_ns>", "d <delay_ns>",
-# "s <port state>", "r <rms> <max>" (a summary), "l" (first lock seen)
-judge_offsets() {
-	awk -v lim="$OFFSET_NS" -v frac="$FRACTION" -v exc="$EXCURSION_NS" -v spread="$DELAY_SPREAD_NS" '
-		function abs(x) { return x < 0 ? -x : x }
-		$1 == "o" { n++; a = abs($2 + 0); if (a <= lim) ok++; if (a > worst) worst = a; if (a > exc) over++ }
-		$1 == "r" { sn++; m = $3 + 0; if (m > worst) worst = m; if (m > exc) over++; if (m <= lim) sok++ }
-		$1 == "d" { dn++; x = $2 + 0; if (dn == 1 || x < dmin) dmin = x; if (dn == 1 || x > dmax) dmax = x }
-		$1 == "s" { if (last != "" && $2 != last) changes++; last = $2 }
-		$1 == "c" { changes++ }
-		END {
-			bad = 0
-			if (n + sn == 0) { print "no offset sample after lock"; print "OFFSETS: FAIL"; exit 1 }
-			if (n) {
-				pct = 100.0 * ok / n
-				printf "offset samples %d: |offset| <= %d ns for %.3f%% (want >= %s%%), worst %d ns, over %d ns: %d\n", \
-					n, lim, pct, frac, worst, exc, over
-				if (pct < frac) bad++
-			} else {
-				printf "summaries %d (no per-Sync lines): worst max %d ns, summaries with max <= %d ns: %d, over %d ns: %d\n", \
-					sn, worst, lim, sok, exc, over
-				if (sok < sn) bad++
-			}
-			if (over) bad++
-			if (dn) {
-				printf "path delay %d samples: min %d max %d ns, half spread %.1f ns (want <= %d)\n", \
-					dn, dmin, dmax, (dmax - dmin) / 2.0, spread
-				if ((dmax - dmin) / 2.0 > spread) bad++
-			}
-			printf "port state changes after lock: %d (want 0)\n", changes + 0
-			if (changes) bad++
-			print (bad ? "OFFSETS: FAIL" : "OFFSETS: PASS")
-			exit (bad ? 1 : 0)
-		}'
+# 3cc0c6.fffe.fe0210 or 3cc0c6fffefe0210 -> 3cc0c6fffefe0210
+plain_id() {
+	echo "$1" | tr -d '.:' | tr 'A-F' 'a-f'
 }
 
-# turn a ptp4l -m log into judge_offsets input, starting at the first lock
-log_samples() { # <log>
-	awk '
-		/ to SLAVE on / || / to MASTER on / || / to GRAND_MASTER on / { if (!locked) { locked = 1; print "l"; next } }
-		locked && / port [0-9]+.*: [A-Z_]+ to [A-Z_]+ on / { print "c"; next }
-		locked && /master offset/ {
-			for (i = 1; i <= NF; i++) {
-				if ($i == "offset") off = $(i + 1)
-				if ($i == "delay") dl = $(i + 1)
-			}
-			if ($0 ~ / s2 /) { print "o", off + 0; if (dl != "") print "d", dl + 0 }
-			next
+# F2.2: the port's state now
+check_state() {
+	st=$(status_now)
+
+	if [ -z "$st" ]; then
+		echo "no gPTP status block $NAME (is flexptpd running?)"
+		echo "STATE: FAIL"
+		return 1
+	fi
+
+	want=SLAVE
+	if [ "$ROLE" = master ]; then
+		want=MASTER
+	fi
+
+	ps=$(echo "$st" | field port_state)
+	ac=$(echo "$st" | field as_capable)
+	gp=$(echo "$st" | field gm_present)
+	gm=$(echo "$st" | field gm_identity)
+	own=$(echo "$st" | field own_identity)
+	delay=$(echo "$st" | field mean_link_delay_ns)
+
+	echo "portState $ps (want $want)"
+	echo "asCapable $ac (want 1)"
+	echo "gmPresent $gp gmIdentity $gm"
+	echo "meanLinkDelay $delay ns"
+
+	ok=1
+	[ "$ps" = "$want" ] || ok=0
+	[ "$ac" = 1 ] || ok=0
+	[ "$gp" = 1 ] || ok=0
+
+	if [ "$ROLE" = master ]; then
+		# the grandmaster is us
+		[ "$gm" = "$own" ] || ok=0
+	elif [ -n "$EXPECT_GM" ]; then
+		echo "expected grandmaster $(plain_id "$EXPECT_GM")"
+		[ "$gm" = "$(plain_id "$EXPECT_GM")" ] || ok=0
+	fi
+
+	if [ "$ok" = 1 ]; then
+		echo "STATE: PASS"
+		return 0
+	fi
+
+	echo "STATE: FAIL"
+	return 1
+}
+
+# the status samples of the window: state steady, asCapable kept, link delay in its band
+judge_samples() { # <file of "state ascapable delay" lines>
+	awk -v spread="$DELAY_SPREAD_NS" '
+		{
+			n++
+			if (n == 1) { first = $1 }
+			if ($1 != first) { changes++ }
+			if ($2 != 1) { notcap++ }
+			if (n == 1 || $3 < lo) { lo = $3 }
+			if (n == 1 || $3 > hi) { hi = $3 }
 		}
-		locked && / rms / && / max / {
-			for (i = 1; i <= NF; i++) {
-				if ($i == "rms") r = $(i + 1)
-				if ($i == "max") m = $(i + 1)
-				if ($i == "delay") dl = $(i + 1)
-			}
-			print "r", r + 0, m + 0
-			if (dl != "") print "d", dl + 0
+		END {
+			if (n == 0) { print "no status samples"; print "SAMPLES: FAIL"; exit 1 }
+			half = (hi - lo) / 2
+			printf "status samples %d: port state changes %d (want 0), asCapable lost in %d (want 0)\n", n, changes + 0, notcap + 0
+			printf "link delay %d..%d ns, half spread %.1f ns (want <= %d)\n", lo, hi, half, spread
+			ok = (changes + 0 == 0) && (notcap + 0 == 0) && (half <= spread)
+			print (ok ? "SAMPLES: PASS" : "SAMPLES: FAIL")
+			exit (ok ? 0 : 1)
 		}' "$1"
 }
 
-sample_window() {
-	end=$(( $(date +%s) + WINDOW ))
-	while [ "$(date +%s)" -lt "$end" ]; do
-		pmc_get 'GET TIME_STATUS_NP' 'GET PORT_DATA_SET' | awk '
-			$1 == "master_offset" { print "o", $2 }
-			$1 == "peerMeanPathDelay" { print "d", $2 }
-			$1 == "portState" { print "s", $2 }'
-		sleep "$INTERVAL"
-	done
+# F2.3: the offsets of the window, from the wire
+check_window() {
+	tmp=$(mktemp -d)
+
+	if [ -n "$WATCH_FILE" ]; then
+		cp "$WATCH_FILE" "$tmp/watch.txt"
+		status_now | awk -F= '
+			$1 == "port_state" { s = $2 }
+			$1 == "as_capable" { a = $2 }
+			$1 == "mean_link_delay_ns" { d = $2 }
+			END { print s, a, d }' > "$tmp/samples.txt"
+	else
+		gm_opt=
+		if [ -n "$EXPECT_GM" ]; then
+			gm_opt="-g $(echo "$EXPECT_GM" | tr 'A-F' 'a-f')"
+		fi
+
+		milan-gptp-watch -i "$IF" -d "$WINDOW" -l "$LINK_DELAY_NS" -t "$OFFSET_NS" -q $gm_opt > "$tmp/watch.txt" 2>&1 &
+		wpid=$!
+
+		# the status every interval while the watch runs
+		while kill -0 "$wpid" 2>/dev/null; do
+			status_now | awk -F= '
+				$1 == "port_state" { s = $2 }
+				$1 == "as_capable" { a = $2 }
+				$1 == "mean_link_delay_ns" { d = $2 }
+				END { if (s != "") print s, a, d }' >> "$tmp/samples.txt"
+			sleep "$INTERVAL"
+		done
+
+		wait "$wpid"
+	fi
+
+	sed -n '/^grandmaster\|^samples\|^offset\|^|offset|/p' "$tmp/watch.txt"
+
+	wrc=1
+	if grep -q '^RESULT: PASS' "$tmp/watch.txt"; then
+		wrc=0
+		echo "OFFSETS: PASS"
+	else
+		echo "OFFSETS: FAIL"
+	fi
+
+	judge_samples "$tmp/samples.txt"
+	src=$?
+
+	rm -rf "$tmp"
+
+	[ "$wrc" -eq 0 ] && [ "$src" -eq 0 ]
 }
 
 self_test() {
-	rc=0
 	S=$HERE/samples
-	expect() { # <want rc> <label> <cmd...>
-		w=$1; l=$2; shift 2
-		"$@" >/dev/null 2>&1; r=$?
-		if [ "$r" -eq "$w" ]; then echo "check-gptp self-test: $l -> exit $r ok"; else echo "check-gptp self-test: $l -> exit $r, want $w WRONG"; rc=1; fi
+	rc=0
+
+	run() { # <want> <label> <args...>
+		want=$1
+		label=$2
+		shift 2
+
+		"$SELF" "$@" >/dev/null 2>&1
+		r=$?
+
+		if [ "$r" -eq "$want" ]; then
+			echo "check-gptp self-test: $label -> exit $r ok"
+		else
+			echo "check-gptp self-test: $label -> exit $r, want $want WRONG"
+			rc=1
+		fi
 	}
-	expect 0 "pmc slave sample" sh "$SELF" --pmc-file "$S/pmc-slave.txt" --expect-gm 3cc0c6.fffe.fe0210
-	expect 1 "pmc wrong GM" sh "$SELF" --pmc-file "$S/pmc-slave.txt" --expect-gm 001122.fffe.334455
-	expect 1 "pmc listening sample" sh "$SELF" --pmc-file "$S/pmc-listening.txt"
-	expect 0 "ptp4l log pass sample" sh "$SELF" --pmc-file "$S/pmc-slave.txt" --log "$S/ptp4l-pass.log"
-	expect 1 "ptp4l log fail sample" sh "$SELF" --pmc-file "$S/pmc-slave.txt" --log "$S/ptp4l-fail.log"
-	expect 0 "ptp4l summary-only sample" sh "$SELF" --pmc-file "$S/pmc-slave.txt" --log "$S/ptp4l-summary.log"
+
+	run 0 "slave of the expected grandmaster" --status-file "$S/gptp-status-slave.txt" --expect-gm 3cc0c6.fffe.fe0210
+	run 1 "slave of another grandmaster" --status-file "$S/gptp-status-slave.txt" --expect-gm 3cc0c6.fffe.fe0211
+	run 1 "listening, not asCapable" --status-file "$S/gptp-status-listening.txt"
+	run 0 "the PB2 as grandmaster" --status-file "$S/gptp-status-master.txt" --role master
+	run 0 "a passing 10 min watch" --status-file "$S/gptp-status-slave.txt" --window 600 --watch-file "$S/gptp-watch-pass.txt"
+	run 1 "a watch with offsets beyond 100 ns" --status-file "$S/gptp-status-slave.txt" --window 600 --watch-file "$S/gptp-watch-fail.txt"
+
 	exit "$rc"
 }
 
 while [ $# -gt 0 ]; do
 	case "$1" in
-	--uds)             UDS=${2:?}; shift ;;
+	--interface)       IF=${2:?}; shift ;;
+	--name)            NAME=${2:?}; shift ;;
 	--role)            ROLE=${2:?}; shift ;;
 	--expect-gm)       EXPECT_GM=${2:?}; shift ;;
 	--window)          WINDOW=${2:?}; shift ;;
 	--interval)        INTERVAL=${2:?}; shift ;;
-	--log)             LOG=${2:?}; shift ;;
+	--link-delay-ns)   LINK_DELAY_NS=${2:?}; shift ;;
 	--offset-ns)       OFFSET_NS=${2:?}; shift ;;
-	--fraction)        FRACTION=${2:?}; shift ;;
-	--excursion-ns)    EXCURSION_NS=${2:?}; shift ;;
 	--delay-spread-ns) DELAY_SPREAD_NS=${2:?}; shift ;;
-	--pmc-file)        PMC_FILE=${2:?}; shift ;;
+	--status-file)     STATUS_FILE=${2:?}; shift ;;
+	--watch-file)      WATCH_FILE=${2:?}; shift ;;
 	--self-test)       self_test ;;
 	-h|--help)         usage ;;
 	*) echo "check-gptp: unknown argument $1" >&2; usage ;;
 	esac
 	shift
 done
-case "$ROLE" in slave|master) ;; *) echo "check-gptp: --role slave|master" >&2; exit 2 ;; esac
 
-TMP=${TMPDIR:-/tmp}/check-gptp.$$
-trap 'rm -f "$TMP".*' EXIT INT TERM
+case "$ROLE" in
+slave|master) ;;
+*) usage ;;
+esac
 
-if [ -n "$PMC_FILE" ]; then
-	[ -r "$PMC_FILE" ] || { echo "check-gptp: cannot read $PMC_FILE" >&2; exit 2; }
-	pmc_fields < "$PMC_FILE" > "$TMP.state"
-else
-	command -v pmc >/dev/null 2>&1 || { echo "check-gptp: pmc missing (linuxptp)" >&2; exit 2; }
-	pmc_get 'GET PORT_DATA_SET' 'GET PORT_DATA_SET_NP' 'GET TIME_STATUS_NP' 'GET PARENT_DATA_SET' \
-		| pmc_fields > "$TMP.state"
-	[ -s "$TMP.state" ] || { echo "check-gptp: no answer from ptp4l on $UDS" >&2; exit 1; }
-fi
-judge_state "$TMP.state"; rs=$?
+[ -n "$NAME" ] || NAME="flexptpd.$IF"
 
-ro=0
-if [ -n "$LOG" ]; then
-	[ -r "$LOG" ] || { echo "check-gptp: cannot read $LOG" >&2; exit 2; }
-	log_samples "$LOG" | judge_offsets; ro=$?
-elif [ "$WINDOW" -gt 0 ]; then
-	echo "sampling TIME_STATUS_NP every ${INTERVAL}s for ${WINDOW}s"
-	sample_window | judge_offsets; ro=$?
+check_state
+state_rc=$?
+
+if [ "$WINDOW" -eq 0 ]; then
+	echo "RESULT: $([ "$state_rc" -eq 0 ] && echo PASS || echo FAIL)"
+	exit "$state_rc"
 fi
 
-if [ "$rs" -eq 0 ] && [ "$ro" -eq 0 ]; then echo "RESULT: PASS"; exit 0; fi
+check_window
+window_rc=$?
+
+if [ "$state_rc" -eq 0 ] && [ "$window_rc" -eq 0 ]; then
+	echo "RESULT: PASS"
+	exit 0
+fi
+
 echo "RESULT: FAIL"
 exit 1

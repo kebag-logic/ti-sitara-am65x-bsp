@@ -74,8 +74,8 @@ and its histogram is the evidence.
 
 ## milan-gptp-watch — the offset from the wire, whatever the gPTP daemon
 
-`check-gptp.sh` asks ptp4l through `pmc`. `milan-gptp-watch` (installed with the
-bridge, built from `milan-linux/src/gptp_watch.c`) asks no daemon. It takes
+`milan-gptp-watch` (installed with the bridge, built from
+`milan-linux/src/gptp_watch.c`) asks no daemon. It takes
 the board's own hardware receive time of each Sync from the grandmaster's side,
 and the time the matching Follow_Up carries, so it judges any gPTP stack the
 same way:
@@ -84,30 +84,32 @@ same way:
 milan-gptp-watch -i eth0 -d 600 -w 30 -l 203 -g <gm clock identity>   # F2.3 over 10 min
 ```
 
-`-l` is the link delay to the switch (ptp4l measured 203 ns on the bench; the
-watcher cannot see another process's Pdelay_Req transmit time). **Pass** when
-at least 90 % of the expected Syncs were judged, all with a hardware timestamp,
-|offset| <= `-t` (100 ns) for >= 99.9 % of them, and the grandmaster never
-changed (and is `-g`). On the bench, against ptp4l over 60 s: mean 0 ns,
-p99 8 ns, 480 of 480 Syncs; ptp4l's own report was rms 1–3 ns.
+`-l` is the link delay to the switch (203 ns on the bench, as flexptpd and
+ptp4l both measure it; the watcher cannot see another process's Pdelay_Req
+transmit time). **Pass** when at least 90 % of the expected Syncs were judged,
+all with a hardware timestamp, |offset| <= `-t` (100 ns) for >= 99.9 % of them,
+and the grandmaster never changed (and is `-g`). On the bench over 10 min, with
+flexptpd: mean -2 ns, p99 26 ns, max 30 ns, 4801 of 4801 Syncs.
 
 ## check-gptp.sh — gPTP state and offsets (F2.2, F2.3, F2.5, F2.6)
 
 ```sh
 ./check-gptp.sh --expect-gm <gm clock identity>                  # F2.2: state only
-./check-gptp.sh --expect-gm <gm> --window 1800                   # F2.3: sample TIME_STATUS_NP for 30 min
-./check-gptp.sh --log /var/log/ptp4l.log                         # F2.3: judge a ptp4l -m log instead
+./check-gptp.sh --expect-gm <gm> --window 1800                   # F2.3: offsets from the wire for 30 min
 ./check-gptp.sh --role master                                    # F2.6: the PB2 as grandmaster
 ```
 
-State through `pmc -u -b 0 -t 1` on `/var/run/ptp4lro` (`--uds`): **pass** when
-`portState` is SLAVE (MASTER with `--role master`), `asCapable` 1, `gmPresent`
-true and the GM identity is `--expect-gm`. Offsets are judged only after the
-first lock: **pass** when |master offset| <= `--offset-ns` (100) for >=
-`--fraction` (99.9 %) of samples, no sample beyond `--excursion-ns` (1000), the
-path delay stays within +/-`--delay-spread-ns` (50) of its centre, and the port
-state never changes. A log with only `rms ... max ...` summaries is judged on
-each summary's max.
+The gPTP daemon is flexptpd (#19). The state comes from its status block in
+`/dev/shm/flexptpd.<interface>` (`--name`), read with `milan-dp -g`: **pass**
+when `port_state` is SLAVE (MASTER with `--role master`), `as_capable` 1,
+`gm_present` 1 and the grandmaster is `--expect-gm` (ourselves as master).
+
+With `--window`, `milan-gptp-watch` judges the offsets from the wire over the
+window (`--offset-ns`, 100), while the status block is sampled every
+`--interval` seconds: **pass** when the watch passes, the port state never
+changes, asCapable never drops and the link delay stays within
++/-`--delay-spread-ns` (50) of its centre. `--status-file` and `--watch-file`
+judge saved outputs instead.
 
 ## check-shaper.sh — the CPSW egress shaper (F3.1, F3.4)
 
@@ -204,15 +206,16 @@ BUSYBOX=/path/to/busybox validation/pb2-tsn/selftest.sh   # the board scripts un
 
 `samples/make-samples.py` regenerates every fixture (fixed seeds, so the output
 is identical each time). They are synthetic: the text fixtures follow the output
-formats of `cyclictest`, `ptp4l`, `pmc`, `tc` and `ethtool`, and the captures are
-built frame by frame. When the bench produces real outputs, add them next to
-these and extend the self-test to cover them.
+formats of `cyclictest`, `tc` and `ethtool`, and the captures are built frame by
+frame. The gPTP fixtures are real outputs from the bench, not generated. When the
+bench produces real outputs, add them next to these and extend the self-test to
+cover them.
 
 | Fixture | Judged by | Verdict |
 |---|---|---|
 | `cyclictest-pass.txt` / `-fail.txt` / `-truncated.txt` | `check-rt.sh` | pass / one CPU at 137 us / no summary |
-| `pmc-slave.txt` / `pmc-listening.txt` | `check-gptp.sh` | pass (and fail against a wrong GM) / fail |
-| `ptp4l-pass.log` / `-fail.log` / `-summary.log` | `check-gptp.sh --log` | pass / a 1.5 us excursion and a state change / pass on summaries |
+| `gptp-status-slave.txt` / `-listening.txt` / `-master.txt` | `check-gptp.sh --status-file` | pass (and fail against a wrong GM) / fail / pass as master |
+| `gptp-watch-pass.txt` / `-fail.txt` | `check-gptp.sh --watch-file` | pass (flexptpd, 10 min, p99 26 ns) / fail (another stack, 87.5 % within 100 ns) |
 | `shaper-pass/`, `shaper-fail-{rrobin,nooffload,notmoving}/` | `check-shaper.sh --files` | pass / fail each |
 | `aaf-pass.pcap` | `aaf-analyze.py` (+ `ramp-check.py` on its payload) | pass |
 | `aaf-fail.pcap` | `aaf-analyze.py` (+ `ramp-check.py` on its payload) | a lost frame, two `tv=0`, two bad steps |

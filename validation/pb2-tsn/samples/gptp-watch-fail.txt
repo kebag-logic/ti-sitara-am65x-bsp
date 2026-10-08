@@ -1,0 +1,6 @@
+watching gPTP on eth0 for 600 s (warm-up 0 s), link delay 203 ns, limit 100 ns
+grandmaster 3cc0c6.fffe.fe0210 (priority1 246, steps removed 0), expected 3cc0c6.fffe.fe0210
+samples 4800 of about 4800 expected (Sync log interval -3), missed Syncs 0, without hw timestamp 0
+offset mean 0 ns, |offset| p50 51 p99 121 p99.9 135 max 139 ns (worst signed 139)
+|offset| <= 100 ns for 87.542 % (want >= 99.9 %), grandmaster changes 0, other SDO frames 0
+RESULT: FAIL

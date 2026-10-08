@@ -5,7 +5,7 @@
 """Regenerate the committed fixtures the self-tests judge.
 
 Every fixture is synthetic and deterministic (fixed seeds): the tool outputs
-(cyclictest, ptp4l, pmc, tc, ethtool) follow the formats those tools print,
+(cyclictest, tc, ethtool) follow the formats those tools print,
 and the captures are built frame by frame. Replace a text fixture with a real
 capture from the bench whenever one is available.
 
@@ -72,90 +72,9 @@ def cyclictest(maxes, total=18_000_000, truncated=False):
     return "\n".join(out) + "\n"
 
 
-# ----------------------------------------------------------------- ptp4l ----
-
-def ptp4l_log(kind):
-    rnd = random.Random({"pass": 2, "fail": 3, "summary": 4}[kind])
-    t = 100.0
-    L = []
-
-    def line(msg, dt=0.0):
-        nonlocal t
-        t += dt
-        L.append(f"ptp4l[{t:.3f}]: {msg}")
-
-    line("selected /dev/ptp0 as PTP clock")
-    line("port 1 (eth0): INITIALIZING to LISTENING on INIT_COMPLETE", 0.001)
-    line("port 0 (/var/run/ptp4l): INITIALIZING to LISTENING on INIT_COMPLETE", 0.001)
-    line("port 0 (/var/run/ptp4lro): INITIALIZING to LISTENING on INIT_COMPLETE", 0.001)
-    line("port 1 (eth0): new foreign master 3cc0c6.fffe.fe0210-1", 1.5)
-    line("selected best master clock 3cc0c6.fffe.fe0210", 4.0)
-    line("port 1 (eth0): LISTENING to UNCALIBRATED on RS_SLAVE", 0.0)
-    for off in (-41234, -9876, -1650):  # before the lock: must not be judged
-        line(f"master offset {off:10d} s2 freq {-17000 + off // 100:+7d} path delay {380:9d}", 0.125)
-    line("port 1 (eth0): UNCALIBRATED to SLAVE on MASTER_CLOCK_SELECTED", 0.125)
-    if kind == "summary":
-        for _ in range(120):
-            r = rnd.randint(2, 9)
-            line(f"rms {r:4d} max {r + rnd.randint(2, 20):4d} freq {-17354 + rnd.randint(-5, 5):+6d} +/- "
-                 f"{rnd.randint(1, 6):3d} delay {380 + rnd.randint(-3, 3):5d} +/- {rnd.randint(0, 2):3d}", 1.0)
-        return "\n".join(L) + "\n"
-    for i in range(8 * 120):
-        off = int(rnd.gauss(0, 15))
-        off = max(-60, min(60, off))
-        dl = 380 + rnd.randint(-8, 8)
-        if kind == "fail" and i == 500:
-            off = 1500
-        line(f"master offset {off:10d} s2 freq {-17354 + rnd.randint(-6, 6):+7d} path delay {dl:9d}", 0.125)
-        if kind == "fail" and i == 700:
-            line("port 1 (eth0): SLAVE to UNCALIBRATED on SYNCHRONIZATION_FAULT", 0.0)
-            line("port 1 (eth0): UNCALIBRATED to SLAVE on MASTER_CLOCK_SELECTED", 0.5)
-    return "\n".join(L) + "\n"
-
-
-def pmc_output(slave):
-    me = "020000.fffe.000012-1"
-    gm = "3cc0c6.fffe.fe0210"
-    st = "SLAVE" if slave else "LISTENING"
-    return f"""sending: GET PORT_DATA_SET
-\t{me} seq 0 RESPONSE MANAGEMENT PORT_DATA_SET
-\t\tportIdentity            {me}
-\t\tportState               {st}
-\t\tlogMinDelayReqInterval  0
-\t\tpeerMeanPathDelay       {380 if slave else 0}
-\t\tlogAnnounceInterval     0
-\t\tannounceReceiptTimeout  3
-\t\tlogSyncInterval         -3
-\t\tdelayMechanism          2
-\t\tlogMinPdelayReqInterval 0
-\t\tversionNumber           2
-sending: GET PORT_DATA_SET_NP
-\t{me} seq 1 RESPONSE MANAGEMENT PORT_DATA_SET_NP
-\t\tneighborPropDelayThresh 800
-\t\tasCapable               {1 if slave else 0}
-sending: GET TIME_STATUS_NP
-\t{me} seq 2 RESPONSE MANAGEMENT TIME_STATUS_NP
-\t\tmaster_offset              {-3 if slave else 0}
-\t\tingress_time               {1791450000123456789 if slave else 0}
-\t\tcumulativeScaledRateOffset +0.000000000
-\t\tscaledLastGmPhaseChange    0
-\t\tgmTimeBaseIndicator        0
-\t\tlastGmPhaseChange          0x0000'0000000000000000.0000
-\t\tgmPresent                  {"true" if slave else "false"}
-\t\tgmIdentity                 {gm if slave else me[:-2]}
-sending: GET PARENT_DATA_SET
-\t{me} seq 3 RESPONSE MANAGEMENT PARENT_DATA_SET
-\t\tparentPortIdentity                    {gm + "-1" if slave else me}
-\t\tparentStats                           0
-\t\tobservedParentOffsetScaledLogVariance 0xffff
-\t\tobservedParentClockPhaseChangeRate    0x7fffffff
-\t\tgrandmasterPriority1                  {246 if slave else 248}
-\t\tgm.ClockClass                         {6 if slave else 248}
-\t\tgm.ClockAccuracy                      0x20
-\t\tgm.OffsetScaledLogVariance            0x4e5d
-\t\tgrandmasterPriority2                  248
-\t\tgrandmasterIdentity                   {gm if slave else me[:-2]}
-"""
+# ------------------------------------------------------------------ gPTP ----
+# The gPTP fixtures (gptp-status-*.txt, gptp-watch-*.txt) are not generated:
+# they are `milan-dp -g` and milan-gptp-watch outputs from the bench.
 
 
 # ---------------------------------------------------------------- shaper ----
@@ -306,11 +225,6 @@ def main():
     write("cyclictest-pass.txt", cyclictest([48, 52, 61, 39]))
     write("cyclictest-fail.txt", cyclictest([48, 137, 61, 39]))
     write("cyclictest-truncated.txt", cyclictest([48, 52, 61, 39], truncated=True))
-    write("ptp4l-pass.log", ptp4l_log("pass"))
-    write("ptp4l-fail.log", ptp4l_log("fail"))
-    write("ptp4l-summary.log", ptp4l_log("summary"))
-    write("pmc-slave.txt", pmc_output(True))
-    write("pmc-listening.txt", pmc_output(False))
     shaper_dir("pass")
     shaper_dir("fail-rrobin", rrobin=True)
     shaper_dir("fail-nooffload", offloaded=False)
