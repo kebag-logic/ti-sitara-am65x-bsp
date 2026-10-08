@@ -15,9 +15,10 @@ work is tracked in [issue #1](https://github.com/kebag-logic/ti-sitara-am65x-bsp
 This file covers what exists so far: the TSN foundation (#2 to #7), and on
 top of it path A, the native Milan bridge (§3).
 
-> **Status:** built and checked on the host (kernel config, image contents,
-> script dry runs). Not yet run on a board. Each ticket closes only on the bench
-> evidence its *Validation* section names.
+> **Status:** brought up on a rev B board on the bench (§5). The
+> foundation runs at the first boot, and the control plane answers the real
+> Milan entities. Streams through the AVB switch wait for SRP (#14). Each
+> ticket closes only on the evidence its *Validation* section names.
 
 ---
 
@@ -77,11 +78,21 @@ isolation:
 PB2_ETHCAP_APPEND= PB2_DEFAULT_LABEL=ethcap ./build-tdm8-uac2-pb2.sh image
 ```
 
-`avb-irq.sh` then pins the two interrupt sources the bridge's traffic uses
-(`AVB_IRQ_MATCH`: the CPSW at `8000000.ethernet` and the USB controller at
-`31000000.usb`) to `AVB_IRQ_CPU`. CPUs 0 and 1 serve everything else. On
-`PREEMPT_RT` each handler is an `irq/<n>-<name>` thread that follows its IRQ's
-affinity. `avb-irq.sh status` shows where each one landed.
+`avb-irq.sh` then pins the interrupts the bridge's traffic uses to
+`AVB_IRQ_CPU`, so CPUs 0 and 1 serve everything else. `AVB_IRQ_MATCH` names
+them: the CPSW at `8000000.ethernet`, and the USB controller, which registers
+as `dwc3` and `xhci-hcd`. On `PREEMPT_RT` each handler is an `irq/<n>-<name>`
+thread that follows its IRQ's affinity; the kernel refuses `sched_setaffinity`
+on IRQ threads.
+
+The CPSW's TX and RX channel interrupts (`8000000.ethernet-tx0/-tx1/-rx0`) come
+through the K3 interrupt aggregator (MSI-INTA), which refuses an affinity. Their
+threads keep CPUs 0–3 in their mask. On the bench they run on CPUs 0 and 1
+only, because CPU 3 has a scheduling domain of its own. `avb-irq.sh status`
+shows each IRQ and where its threads may run.
+
+Mainline `PREEMPT_RT` has no `/sys/kernel/realtime` (that file came with the
+out-of-tree patch set): `uname -v` reads `SMP PREEMPT_RT`.
 
 ### 1.2 gPTP (#4)
 
@@ -215,7 +226,7 @@ PB2 link, ATDECC controller.
 
 | Ticket | Checks | Run on the board |
 |---|---|---|
-| #3 F1 | F1.1 `/sys/kernel/realtime` = 1; F1.2 `check-rt.sh` for 1 h under load, max <= 100 us; F1.3 README.pb2-ethcap.md §5; F1.4 30 min TDM8 bridge on the RT kernel | `cat /sys/kernel/realtime; uname -v` |
+| #3 F1 | F1.1 `uname -v` shows `PREEMPT_RT` (mainline has no `/sys/kernel/realtime`); F1.2 `check-rt.sh` for 1 h under load, max <= 100 us; F1.3 README.pb2-ethcap.md §5; F1.4 30 min TDM8 bridge on the RT kernel | `uname -v; cat /proc/cmdline` |
 | #4 F2 | F2.1 `ethtool -T`; F2.2 SLAVE within 10 s; F2.3 offset <= 100 ns at 99.9 % over 30 min; F2.4 phc2sys; F2.5 GM change; F2.6 PB2 as GM | `avb-gptp.sh status`, `check-gptp.sh` |
 | #5 F3 | F3.1 offload accepted, per-queue counters; F3.2 tags on the tap; F3.3 rate cap; F3.4 isolation under `iperf3`; F3.5 ssh | `avb-shaper.sh status`, `check-shaper.sh` |
 | #6 F4 | F4.1 cold boot; F4.2 `tdm8` label untouched; F4.3 stream multicast reaches a socket; F4.4 stop/start | `S95avb status` |
@@ -296,3 +307,49 @@ unique ID 0, or names it as the talker.
 | `validation/pb2-tsn/` | the validation kit |
 | `milan-linux/` | path A: `milan-ctrld`, `milan-dp`, `milan-bridge.sh`, `config/entity.conf`, `milan-fpga.pin`, the host tests |
 | `br2-external/package/milan-fpga-src`, `milan-bridge` | the pinned milan-fpga archive, and path A's daemons, in the image |
+
+---
+
+## 5. Bench log
+
+The rev B board on the bench: `eth0` on the AVB switch, with the grandmaster
+`3cc0c6.fffe.fe0210`, a Milan reference device, the FPGA end station and an
+I210 host. This machine is the USB host, playing into the bridge's UAC2 gadget.
+The image was built from branch `pb2-tsn`.
+
+The first boot, with no manual step:
+
+| Layer | Seen on the board |
+|---|---|
+| kernel | `7.1.0-tdm8-pb2-rt SMP PREEMPT_RT`, CPU 3 isolated (`/proc/cmdline`) |
+| gPTP | `ptp4l` SLAVE to the grandmaster through the switch, about 6 s after link-up; peer delay 202 ns; rms offset 28–36 ns once settled. `phc2sys` holds `CLOCK_REALTIME` within about 110 ns of the PHC |
+| shaper | `p0-rx-ptype-rrobin` off (the driver's default is on); 2 TX channels; hardware `mqprio`, class A 17 Mbit/s; the talker's PDUs counted on TC1 |
+| control plane | ADP AVAILABLE with the grandmaster; MAAP holds 2 addresses. From the I210 host (`milan-linux/tests/acmp.py`): PROBE_TX answered SUCCESS with the stream, the MAAP address and VLAN 2 (99 us on the board, 0.3 ms round trip); TALKER_UNKNOWN_ID for source 9; GET_TX_STATE and GET_RX_STATE; BIND_RX to the FPGA end station's talker → probe, settled on its stream, UNBIND_RX |
+| USB | the host sees "PocketBeagle 2 USB-Milan bridge" at high speed: OUT and IN data endpoints asynchronous, bInterval 1 (125 us), 224-byte packets; feedback endpoint at 1 ms |
+| talker | `aplay` of the counting ramp: the servo locks within 20 s. The board's own capture of 160 000 PDUs (20 s): VLAN 2 PCP 3, AVTP step exactly 125 000 ns throughout, AAF fields as Milan's, departure jitter 17 us p99 and 29 us p99.9, 0 bit errors in the ramp. Worst send delay after a slot: 15 us on CPU 3 |
+
+What the bench changed:
+
+* **The buffer level target is 48 frames (1 ms), not 24.** Behind this host's
+  USB delivery (a VM with USB passthrough), 24 frames ran dry 52 times a minute.
+  48 frames never did over the minutes measured, with 31 frames to spare at the
+  worst, and the bridge latency stays inside 2 ms. Under load on the USB host
+  itself, it still underruns: a host that drops USB packets loses frames before
+  the bridge sees them.
+* **The servo's lock band is one USB packet (+-6 frames).** Real delivery holds
+  the 50 ms average within +-1 frame, with bursts of +5 after a gap.
+* **The talker sleeps on `CLOCK_MONOTONIC`, and restarts its stream on a gPTP
+  jump.** At the first lock, `ptp4l` steps the PHC to the grandmaster's time, and
+  `phc2sys` then steps the system clock. An absolute sleep on `CLOCK_TAI`
+  slept through days of the step.
+* **The talker goes IDLE when no frame arrives for 10 ms, not when the buffer is
+  empty.** A host that stops leaves a few frames, fewer than a PDU.
+* **ADP and ACMP from other entities arrive priority-tagged (VID 0).** The kernel
+  moves the tag to the packet's metadata, so AF_PACKET sees them untagged. The
+  Mark II filter admits only what concerns the entity: ADP from a bound talker,
+  ACMP addressed to it, MAAP that conflicts with its range.
+* **Through the AVB switch, streams need SRP.** The switch forwards neither the
+  PB2's stream nor any other to a port without an MSRP registration, and a Milan
+  talker streams only once a listener registers. The stream paths through the
+  switch (A3.3, A3.5, A5) therefore wait for SRP (#14); a direct cable tests
+  them without it.
