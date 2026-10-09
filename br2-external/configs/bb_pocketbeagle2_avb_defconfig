@@ -78,6 +78,10 @@ BR2_PACKAGE_STRESS_NG=y
 BR2_PACKAGE_TCPDUMP=y
 # taskset and chrt, to place the validation's load and measurements
 BR2_PACKAGE_UTIL_LINUX_SCHEDUTILS=y
+# htop, the board's process viewer: per-core load, and the real-time threads'
+# priorities and CPUs at a glance (the talker on the isolated CPU 3).
+# /etc/profile.d/htop.sh makes it what `top` runs in a login shell.
+BR2_PACKAGE_HTOP=y
 # The USB-to-Milan bridge (README.pb2-tsn.md, path A): milan-ctrld, the Milan
 # control plane, built from milan-linux/ and milan-fpga at milan-fpga.pin
 BR2_PACKAGE_MILAN_BRIDGE=y

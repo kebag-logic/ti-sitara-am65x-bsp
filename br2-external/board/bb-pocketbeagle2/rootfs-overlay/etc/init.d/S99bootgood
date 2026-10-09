@@ -12,12 +12,19 @@
 # The verdict goes to /run/bootgood for that deadline: "good", "unhealthy",
 # or "uncommitted" (healthy, but nothing could mark it).
 #
-# Healthy means: every CPU core came up (the bridge's talker runs on the
-# isolated CPU 3; a bootloader that held cores 1-3 left Linux on CPU 0
-# alone), the root file system is writable, and on a board wearing the
-# Ethernet Cap (AVB_INTERFACE exists), gPTP (flexptpd) runs and, with
-# AVB_STACK=native, so do the bridge's daemons. The check waits up to
-# BOOTGOOD_WAIT_S for them, in the background, so the boot is not held up.
+# Healthy means:
+#
+#   - every CPU core came up: the bridge's talker runs on the isolated CPU 3,
+#     and a bootloader that held cores 1-3 once left Linux on CPU 0 alone;
+#   - S04watchdog's daemon pets the hardware watchdog: a slot that cannot
+#     would be reset by RTI after being marked good, and loop forever on
+#     attempts it keeps getting back;
+#   - the root file system is writable;
+#   - on a board wearing the Ethernet Cap (AVB_INTERFACE exists), gPTP
+#     (flexptpd) runs and, with AVB_STACK=native, so do the bridge's daemons.
+#
+# The check waits up to BOOTGOOD_WAIT_S for them, in the background, so the
+# boot is not held up.
 #
 # Not on an A/B card (no rauc.slot= on the command line): nothing to do.
 
@@ -46,6 +53,8 @@ running() {
 
 healthy() {
 	[ "$(cat /sys/devices/system/cpu/online)" = "$(cat /sys/devices/system/cpu/possible)" ] || return 1
+
+	[ -s /run/watchdog.pid ] && kill -0 "$(cat /run/watchdog.pid)" 2>/dev/null || return 1
 
 	touch /.bootgood-probe 2>/dev/null || return 1
 	rm -f /.bootgood-probe
