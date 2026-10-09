@@ -1,0 +1,153 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: Copyright (c) 2026 Kebag-Logic
+# SPDX-License-Identifier: Apache-2.0
+#
+# The hardware watchdog, and a RAUC slot's boot deadline (issue #27).
+#
+# The watchdog is RTI0 (e000000.watchdog), the AM62's windowed watchdog of A53
+# core 0. Its expiry goes through the ESM, which the R5 SPL routes to a SoC
+# reset. busybox `watchdog` pets it every WATCHDOG_PERIOD_S:
+#
+#   - the driver's timeout is fixed at 60 s, and the kernel holds back a pet
+#     that comes before the open window (52 % of the timeout), so a short
+#     period is safe;
+#   - once started, RTI cannot be stopped (the driver sets nowayout): a hung
+#     board, or a petting daemon that dies, resets the board within 60 s. The
+#     bootchooser counts that boot as one of the slot's attempts.
+#
+# The boot deadline, on an A/B card (rauc.slot= on the command line): a slot
+# that is not healthy BOOT_DEADLINE_S after this script ran is rebooted, so it
+# uses up its attempts and the bootchooser falls back to the other slot.
+#
+#   - S99bootgood leaves its verdict in /run/bootgood. A boot that never gets
+#     that far (an init script that hangs) has none, and counts as unhealthy.
+#   - When the other slot has no attempts left, the board stays up: a reboot
+#     would only come back here.
+#
+# On shutdown only the deadline is cancelled. The daemon keeps petting through
+# the other stop scripts until init's final kill, so a shutdown that hangs
+# still ends in a reset.
+
+ENV_FILE=${AVB_ENV:-/etc/avb/avb.env}
+if [ -r "$ENV_FILE" ]; then
+	. "$ENV_FILE"
+fi
+
+RTI=e000000.watchdog
+PERIOD_S=${WATCHDOG_PERIOD_S:-5}
+
+# S99bootgood waits up to BOOTGOOD_WAIT_S for the board to get healthy
+DEADLINE_S=${BOOT_DEADLINE_S:-$((${BOOTGOOD_WAIT_S:-90} + 60))}
+
+PIDFILE=/run/watchdog.pid
+DEADLINE_PIDFILE=/run/bootdeadline.pid
+
+log() {
+	logger -t watchdog "$*"
+	echo "watchdog: $*"
+}
+
+booted_slot() {
+	sed -n 's/.*rauc\.slot=\([AB]\).*/\1/p' /proc/cmdline
+}
+
+other_slot() {
+	if [ "$1" = A ]; then
+		echo B
+	else
+		echo A
+	fi
+}
+
+# /dev/watchdogN of RTI0
+rti_dev() {
+	for w in /sys/class/watchdog/watchdog*; do
+		if [ "$(basename "$(readlink "$w/device")")" = "$RTI" ]; then
+			echo "/dev/$(basename "$w")"
+			return 0
+		fi
+	done
+
+	return 1
+}
+
+start_watchdog() {
+	modprobe rti_wdt 2>/dev/null
+
+	# udev makes the node: give it up to 5 s
+	i=0
+	while ! dev=$(rti_dev) || [ ! -c "$dev" ]; do
+		i=$((i + 1))
+		if [ "$i" -gt 50 ]; then
+			log "no $RTI watchdog: not started"
+			return 1
+		fi
+		usleep 100000
+	done
+
+	start-stop-daemon -S -q -b -m -p "$PIDFILE" -x "$(command -v watchdog)" -- \
+		-F -t "$PERIOD_S" "$dev"
+
+	log "petting $dev ($RTI) every $PERIOD_S s; without it, a reset after 60 s"
+}
+
+deadline() {
+	slot=$1
+
+	sleep "$DEADLINE_S"
+
+	verdict=$(cat /run/bootgood 2>/dev/null)
+	case "$verdict" in
+	good|uncommitted)
+		return 0
+		;;
+	esac
+
+	other=$(other_slot "$slot")
+	left=$(fw_printenv -n "BOOT_${other}_LEFT" 2>/dev/null)
+
+	if [ "${left:-0}" -gt 0 ] 2>/dev/null; then
+		log "slot $slot not healthy $DEADLINE_S s into the boot (${verdict:-no verdict}): rebooting, slot $other has $left attempts left"
+		reboot
+	else
+		log "slot $slot not healthy $DEADLINE_S s into the boot (${verdict:-no verdict}), and slot $other has no attempts left: staying up"
+	fi
+}
+
+start_deadline() {
+	slot=$(booted_slot)
+	[ -n "$slot" ] || return 0
+
+	deadline "$slot" &
+	echo $! > "$DEADLINE_PIDFILE"
+
+	log "slot $slot: rebooted unless healthy within $DEADLINE_S s"
+}
+
+stop_deadline() {
+	if [ -f "$DEADLINE_PIDFILE" ]; then
+		kill "$(cat "$DEADLINE_PIDFILE")" 2>/dev/null
+		rm -f "$DEADLINE_PIDFILE"
+	fi
+}
+
+case "$1" in
+start)
+	start_watchdog
+	start_deadline
+	;;
+stop)
+	stop_deadline
+	;;
+restart|reload)
+	;;
+status)
+	echo "device: $(rti_dev) ($RTI)"
+	echo "daemon: $(cat "$PIDFILE" 2>/dev/null)"
+	echo "verdict: $(cat /run/bootgood 2>/dev/null)"
+	;;
+*)
+	echo "usage: $0 {start|stop|status}" >&2
+	exit 1
+	;;
+esac

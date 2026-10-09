@@ -14,6 +14,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 BSP=$(cd "$HERE/../../.." && pwd)          # .../ti-sitara-am65x-bsp
 
 for f in etc/init.d/S99usb_gadgets etc/init.d/S05growrootfs etc/init.d/S95avb etc/init.d/S99bootgood \
+	etc/init.d/S12watchdog \
 	root/setup_gadgets.sh root/remove_usb.sh usr/sbin/tdm8-uac2.sh \
 	usr/sbin/avb-gptp.sh usr/sbin/avb-irq.sh usr/sbin/avb-shaper.sh; do
 	chmod 0755 "$TARGET_DIR/$f" 2>/dev/null || true

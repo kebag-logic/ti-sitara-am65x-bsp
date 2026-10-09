@@ -285,9 +285,19 @@ How a boot picks its slot:
   slot an attempt.
 - **`S99bootgood`** marks the booted slot good (`rauc status mark-good`, which
   gives it its attempts back) once the root file system is writable, `flexptpd`
-  runs and, with `AVB_STACK=native`, so do the bridge's daemons. A slot that
-  never gets there is left after its 3 attempts, and the board is back on the
-  other one, with no hands on it.
+  runs and, with `AVB_STACK=native`, so do the bridge's daemons. It leaves its
+  verdict in `/run/bootgood`.
+- **`S12watchdog`** starts the hardware watchdog, and the boot deadline:
+  - the watchdog is RTI0, petted by busybox `watchdog`. A board that hangs,
+    or loses the daemon, resets within 60 s. Once started, it cannot be
+    stopped;
+  - on an A/B slot, a slot that is not healthy 150 s into the boot
+    (`BOOT_DEADLINE_S`) is rebooted.
+
+  So a slot that never gets healthy, or hangs, is left after its 3 attempts,
+  and the board is back on the other one, with no hands on it. When the
+  other slot has no attempts left either, the board stays up rather than
+  loop.
 
 Build and flash, once:
 

@@ -5,8 +5,12 @@
 
 # Commit a healthy boot of a RAUC slot (issue #27): `rauc status mark-good`
 # gives the booted slot its attempts back, so the U-Boot bootchooser keeps
-# booting it. A slot that boots but never gets healthy is not marked: after
-# its attempts (3) the bootchooser goes back to the other slot.
+# booting it. A slot that boots but never gets healthy is not marked, and
+# S12watchdog's boot deadline reboots it: after its attempts (3) the
+# bootchooser goes back to the other slot.
+#
+# The verdict goes to /run/bootgood for that deadline: "good", "unhealthy",
+# or "uncommitted" (healthy, but nothing could mark it).
 #
 # Healthy means: the root file system is writable, and on a board wearing the
 # Ethernet Cap (AVB_INTERFACE exists), gPTP (flexptpd) runs and, with
@@ -27,6 +31,11 @@ log() {
 
 booted_slot() {
 	sed -n 's/.*rauc\.slot=\([AB]\).*/\1/p' /proc/cmdline
+}
+
+# Leave the verdict for S12watchdog's boot deadline.
+verdict() {
+	echo "$1" > /run/bootgood
 }
 
 running() {
@@ -58,6 +67,7 @@ commit() {
 		i=$((i + 5))
 		if [ "$i" -gt "$WAIT_S" ]; then
 			log "slot $slot not healthy after ${WAIT_S} s: left unmarked, the bootchooser falls back after its attempts"
+			verdict unhealthy
 			return 1
 		fi
 		sleep 5
@@ -65,16 +75,19 @@ commit() {
 
 	if rauc status mark-good >/dev/null 2>&1; then
 		log "slot $slot healthy: marked good"
+		verdict good
 		return 0
 	fi
 
 	# rauc missing or broken must not drain a healthy slot
 	if fw_setenv "BOOT_${slot}_LEFT" 3 2>/dev/null; then
 		log "slot $slot healthy: rauc unavailable, BOOT_${slot}_LEFT=3 set directly"
+		verdict good
 		return 0
 	fi
 
 	log "slot $slot healthy, but neither rauc nor fw_setenv could commit it"
+	verdict uncommitted
 	return 1
 }
 
