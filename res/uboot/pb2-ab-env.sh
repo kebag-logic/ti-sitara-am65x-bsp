@@ -43,6 +43,13 @@
 #     seconds, well inside its 60 s. WATCHDOG would also change the A53
 #     SPL (the hash functions then pause between chunks to pet), which
 #     stays byte-identical to the stock build's this way.
+#   - U-Boot's device tree keeps RTI0 only. With WDT, U-Boot probes every
+#     watchdog at start-up, autostart or not, and probing an RTI powers it
+#     on through TI SCI as exclusive (k3-am62-main.dtsi's power-domains),
+#     a claim U-Boot never gives back before booti. RTI1-3 belong to A53
+#     cores 1-3: with them claimed, TF-A could not start those cores, and
+#     Linux came up on CPU0 alone ("CPU1: failed to come online"). Linux
+#     has its own device tree, and still sees all five.
 #
 # Idempotent. Usage: pb2-ab-env.sh {on|off} [<u-boot-src>]  (default: on, ../../u-boot-pb)
 set -e
@@ -52,9 +59,54 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 UB=${2:-$(cd "$HERE/../.." && pwd)/u-boot-pb}
 D="$UB/configs/am6232_pocketbeagle2_a53_defconfig"
 MARK="# --- kebag-logic: A/B environment for RAUC (res/uboot/pb2-ab-env.sh) ---"
+DT="$UB/arch/arm/dts/k3-am6232-pocketbeagle2-u-boot.dtsi"
+DT_MARK="/* --- kebag-logic: U-Boot keeps RTI0 only (res/uboot/pb2-ab-env.sh) --- */"
+DT_END="/* --- kebag-logic: end of RTI0 only --- */"
 
 [ -f "$UB/Makefile" ] || { echo "not a U-Boot tree: $UB" >&2; exit 1; }
 [ -f "$D" ] || { echo "no $D - not a PocketBeagle 2 U-Boot tree" >&2; exit 1; }
+[ -f "$DT" ] || { echo "no $DT - not a PocketBeagle 2 U-Boot tree" >&2; exit 1; }
+
+# a sed address for a line holding exactly <text>
+line_re() {
+	printf '%s' "$1" | sed 's/[][\/.*^$]/\\&/g'
+}
+
+dt_present() {
+	grep -qF "$DT_MARK" "$DT"
+}
+
+dt_on() {
+	dt_present && return 0
+
+	cat >> "$DT" <<DTS
+$DT_MARK
+&main_rti1 {
+	status = "disabled";
+};
+
+&main_rti2 {
+	status = "disabled";
+};
+
+&main_rti3 {
+	status = "disabled";
+};
+
+&main_rti15 {
+	status = "disabled";
+};
+$DT_END
+DTS
+	echo "ab-env: U-Boot's device tree keeps RTI0 only ($(basename "$DT"))"
+}
+
+dt_off() {
+	dt_present || return 0
+
+	sed -i "/^$(line_re "$DT_MARK")\$/,/^$(line_re "$DT_END")\$/d" "$DT"
+	echo "ab-env: RTI override removed from $(basename "$DT")"
+}
 
 present() {
 	grep -qF "$MARK" "$D"
@@ -62,6 +114,8 @@ present() {
 
 case "$MODE" in
 on)
+	dt_on
+
 	if present; then
 		echo "ab-env: already in $(basename "$D")"
 		exit 0
@@ -89,13 +143,15 @@ CONF
 	echo "ab-env: redundant environment on mmc 1 at 0x80000/0xC0000, and the RTI watchdog, added to $(basename "$D")"
 	;;
 off)
+	dt_off
+
 	if ! present; then
 		echo "ab-env: not in $(basename "$D")"
 		exit 0
 	fi
 
 	# the block runs from the marker to the end of the file
-	sed -i "/^$(printf '%s' "$MARK" | sed 's/[][\/.*^$]/\\&/g')\$/,\$d" "$D"
+	sed -i "/^$(line_re "$MARK")\$/,\$d" "$D"
 	echo "ab-env: removed from $(basename "$D")"
 	;;
 *)
