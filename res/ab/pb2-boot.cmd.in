@@ -4,7 +4,9 @@
 # first in the board's bootmeths ("script extlinux efi pxe"); the A/B card
 # carries no extlinux.conf. Not by envboot: with BOOTSTD, TI's mmc.env leaves
 # loadbootscript undefined. build-tdm8-uac2-pb2.sh abcard fills @APPEND@ and
-# makes boot.scr with mkimage.
+# makes boot.scr with mkimage. @BOOTVER@ is the bootloader build: it ends up
+# on the kernel command line (pb2.boot=), so Linux can tell which boot
+# partition it came from.
 #
 # Env contract (RAUC "uboot" backend): BOOT_ORDER="A B", and BOOT_A_LEFT /
 # BOOT_B_LEFT the attempts each slot has left. Each boot takes one attempt of
@@ -38,7 +40,7 @@ test -n "${pb2_dtb}" || setenv pb2_dtb k3-am62-pocketbeagle2-ethcap.dtb
 
 # the "ethcap" label's arguments, and a reboot 5 s after a panic, so a kernel
 # that dies uses up an attempt instead of the board
-setenv cargs "@APPEND@ panic=5"
+setenv cargs "@APPEND@ panic=5 pb2.boot=@BOOTVER@"
 
 setenv bootslot ""
 
@@ -75,6 +77,15 @@ ext4load mmc 1:${rootpart} ${kernel_addr_r} /boot/Image.gz
 ext4load mmc 1:${rootpart} ${fdt_addr_r} /boot/${pb2_dtb}
 
 setenv bootargs "${cargs} root=/dev/mmcblk1p${rootpart} ro rauc.slot=${bootslot}"
+
+# the hardware watchdog (RTI0), from here on: a kernel that hangs before
+# Linux takes it over (rti_wdt, then S04watchdog) resets the board, which
+# costs this slot an attempt. 60 s, the timeout Linux keeps. U-Boot does not
+# pet it, so this is the last step before booti.
+if wdt dev watchdog@e000000; then
+	wdt start 60000
+fi
+
 booti ${kernel_addr_r} - ${fdt_addr_r}
 
 # booti only returns on failure: count the attempt and try again

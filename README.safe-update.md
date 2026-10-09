@@ -149,13 +149,21 @@ The same OS A/B scheme, with these differences:
     own: there is no serial console on the cap board.
 - **Card:** a fourth partition, `data` (`/data`), carries what must survive a
   slot switch. S05growrootfs grows it, not the root slot, to the end of the card.
-- **Builders:** `./build-tdm8-uac2-pb2.sh abcard` and `bundle` build without
-  root (fakeroot, `mke2fs -d`, mtools).
+- **Bootloader updates:** the boot partition is RAUC's `bootloader.0` slot
+  (`boot-mbr-switch`), in a region twice its size that the card reserves.
+  - RAUC writes the unused half, then moves p1 onto it with one MBR write.
+  - Atomic, but with no fallback: a bootloader that does not boot needs the
+    card reflashed. So bootloader bundles (`bootbundle`) stay separate, and
+    are tested first.
+- **Builders:** `./build-tdm8-uac2-pb2.sh abcard`, `bundle` and `bootbundle`
+  build without root (fakeroot, `mke2fs -d`, mtools).
 - **Bundles:** compatible `pocketbeagle2-am62x`, signed with the same
   development key.
 - **Health check:** `S99bootgood` marks the slot good only once `flexptpd` and
   the bridge run.
-- **Watchdog:** `S12watchdog` does two things:
+- **Watchdog:** the bootchooser starts RTI0 as its last step before `booti`
+  (U-Boot has the driver and `wdt`, but no autostart, and does not pet it).
+  `S04watchdog` then does two things:
   - it pets RTI0; without that, the board resets within about 90 s;
   - it reboots a slot that is not healthy 150 s into the boot, unless the
     other slot has no attempts left.

@@ -28,8 +28,14 @@
 #       both get their attempts back and A goes again
 #   B2  each boot reads /boot/Image.gz and the device tree from its own slot
 #   B3  BOOT_ORDER="B A", as `rauc install` leaves it: B boots first
+#   B4  the board's U-Boot starts RTI0 only from the script (CMD_WDT and
+#       WDT_K3_RTI, no WATCHDOG_AUTOSTART), as its last step before booti
+#   B5  the card leaves the boot region's second half free, as large as p1,
+#       for RAUC's bootloader slot (boot-mbr-switch)
 #
-# Usage: test-pb2-bootchooser.sh <ab.img>     env: SANDBOX_O (sandbox build dir)
+# Usage: test-pb2-bootchooser.sh <ab.img>
+# Env:   SANDBOX_O (sandbox build dir), UBOUT_PB2 (the bootloaders the card
+#        was built with, as for build-tdm8-uac2-pb2.sh; default u-boot-pb/out_bp2)
 # Exit 0 = pass.
 set -e
 
@@ -38,9 +44,10 @@ BSP=$(cd "$HERE/../.." && pwd)
 IMG=${1:?usage: $0 <ab.img>}
 UB_SRC="$BSP/u-boot-pb"
 O=${SANDBOX_O:-$BSP/u-boot-pb/out_sandbox}
+UBOUT=${UBOUT_PB2:-$UB_SRC/out_bp2}
 MKIMAGE="$UB_SRC/out_bp2/a53/tools/mkimage"
 
-BOARD_CONFIG="$UB_SRC/out_bp2/a53/.config"
+BOARD_CONFIG="$UBOUT/a53/.config"
 
 [ -s "$IMG" ] || { echo "no image $IMG" >&2; exit 2; }
 [ -s "$BOARD_CONFIG" ] || { echo "no board U-Boot build ($BOARD_CONFIG): ./build.sh PB2" >&2; exit 2; }
@@ -90,6 +97,7 @@ W=$(mktemp -d)
 trap 'rm -rf "$W"' EXIT
 
 sed -e 's|@APPEND@|console=ttyS3 rootwait|' \
+    -e 's|@BOOTVER@|sandbox|' \
     -e 's|mmc 1:|host 0:|g' \
     -e 's|^\treset$|\texit|' \
     -e 's|^reset$|exit|' \
@@ -183,5 +191,36 @@ slots=$(echo "$out" | awk '{ printf "%s ", $1 }')
 echo "BOOT_ORDER=\"B A\": $slots"
 
 check B3 "after rauc install, B boots first" "$([ "$slots" = "B " ] && echo 1 || echo 0)"
+
+# ---- B4 ----
+
+# autostart would start every RTI in the device tree, and Linux pets only RTI0
+wdt_ok=0
+if grep -q '^CONFIG_CMD_WDT=y' "$BOARD_CONFIG" &&
+   grep -q '^CONFIG_WDT_K3_RTI=y' "$BOARD_CONFIG" &&
+   ! grep -q '^CONFIG_WATCHDOG_AUTOSTART=y' "$BOARD_CONFIG"; then
+	wdt_ok=1
+fi
+
+# U-Boot does not pet it: nothing may come between the start and booti
+order_ok=0
+if awk '/^\twdt start / { w = NR } /^booti / { b = NR } END { exit !(w && b && w < b && b - w <= 3) }' "$W/card.cmd"; then
+	order_ok=1
+fi
+
+check B4 "the board's U-Boot starts RTI0 only from the script ($wdt_ok), right before booti ($order_ok)" \
+	"$([ "$wdt_ok$order_ok" = 11 ] && echo 1 || echo 0)"
+
+# ---- B5 ----
+
+# p1 at 1 MiB; no other partition anywhere in the region (twice p1)
+parts=$(sfdisk -d "$IMG" | awk -F'[=,]' '/start=/ { gsub(/ /, "", $2); gsub(/ /, "", $4); print $2, $4 }')
+p1_start=$(echo "$parts" | awk 'NR == 1 { print $1 }')
+p1_size=$(echo "$parts" | awk 'NR == 1 { print $2 }')
+region_end=$((2048 + 2 * p1_size))
+inside=$(echo "$parts" | awk -v end="$region_end" 'NR > 1 && $1 < end { n++ } END { print n + 0 }')
+
+check B5 "p1 at sector $p1_start, $p1_size sectors; partitions starting inside the region (to sector $region_end): $inside" \
+	"$([ "$p1_start" = 2048 ] && [ "$inside" = 0 ] && echo 1 || echo 0)"
 
 exit "$fail"

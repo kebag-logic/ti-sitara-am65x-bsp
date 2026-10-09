@@ -6,7 +6,7 @@
 # Commit a healthy boot of a RAUC slot (issue #27): `rauc status mark-good`
 # gives the booted slot its attempts back, so the U-Boot bootchooser keeps
 # booting it. A slot that boots but never gets healthy is not marked, and
-# S12watchdog's boot deadline reboots it: after its attempts (3) the
+# S04watchdog's boot deadline reboots it: after its attempts (3) the
 # bootchooser goes back to the other slot.
 #
 # The verdict goes to /run/bootgood for that deadline: "good", "unhealthy",
@@ -33,7 +33,7 @@ booted_slot() {
 	sed -n 's/.*rauc\.slot=\([AB]\).*/\1/p' /proc/cmdline
 }
 
-# Leave the verdict for S12watchdog's boot deadline.
+# Leave the verdict for S04watchdog's boot deadline.
 verdict() {
 	echo "$1" > /run/bootgood
 }

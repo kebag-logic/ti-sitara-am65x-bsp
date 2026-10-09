@@ -26,6 +26,11 @@
 #   - When the other slot has no attempts left, the board stays up: a reboot
 #     would only come back here.
 #
+# It runs before S05growrootfs, whose first boot can take a while, and loads
+# rti_wdt itself rather than wait for udev (S10): when the bootchooser started
+# RTI0 before booti, nothing pets it until here. /dev is devtmpfs, so the
+# node needs no udev.
+#
 # On shutdown only the deadline is cancelled. The daemon keeps petting through
 # the other stop scripts until init's final kill, so a shutdown that hangs
 # still ends in a reset.

@@ -59,6 +59,7 @@
 #        sdimage    = build the microSD image (wraps build-spare-sd.sh; needs sudo)
 #        abcard     = build the RAUC A/B microSD image, flashed once (no root needed)
 #        bundle     = build a signed RAUC bundle for an A/B card (no root needed)
+#        bootbundle = build a signed RAUC bundle of the boot partition (no root needed)
 # Env:   KVER BOARD JOBS CROSS_COMPILE PB2_DEFAULT_LABEL PB2_ETHCAP_APPEND UBOUT_PB2 UB_VARIANT
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -473,6 +474,10 @@ REMOTE
 #                                          boot.scr (the bootchooser,
 #                                          res/ab/pb2-boot.cmd.in), and no
 #                                          extlinux.conf
+#                       --  (unused)       as large as p1: RAUC's bootloader
+#                                          slot (boot-mbr-switch) writes a
+#                                          new boot partition here, then
+#                                          moves p1 onto it
 #                       p2  ext4 rootfs.A  a complete slot: the rootfs, /boot
 #                       p3  ext4 rootfs.B  (Image.gz and the four device
 #                                          trees), /lib/modules
@@ -482,6 +487,11 @@ REMOTE
 #                     (res/uboot/pb2-ab-env.sh, on by default in ./build.sh PB2).
 # bundle [out.raucb]  a signed RAUC bundle of one complete slot, compatible
 #                     pocketbeagle2-am62x: rauc install <bundle> on the board.
+# bootbundle [out.raucb]
+#                     a signed RAUC bundle of the boot partition: the
+#                     bootloaders of ./build.sh PB2 and the bootchooser.
+#                     Atomic, but with no fallback: a bootloader that does
+#                     not boot needs the card reflashed. Test it first.
 #
 # Both are built without root: fakeroot keeps the rootfs's owners, mke2fs -d
 # fills the ext4 slots, mtools the FAT, sfdisk and dd the image file.
@@ -495,10 +505,66 @@ RAUC_KEY="${RAUC_KEY:-$HERE/res/rauc/rauc-dev.key.pem}"
 # host-rauc and mksquashfs, from a Buildroot output that built them
 BR_HOST="${BR_HOST:-$HERE/../buildroot/output/host}"
 
+# The boot region: p1 and an unused half as large, from 1 MiB. It must match
+# the bootloader slot's region-size in the image's /etc/rauc/system.conf.
+AB_REGION_MB=$((2 * AB_BOOT_MB))
+
 # The "ethcap" label's kernel arguments, without root= and ro: the bootchooser
 # adds the slot's own.
 ab_append() {
 	echo "$DEFAULT_APPEND${PB2_ETHCAP_APPEND:+ $PB2_ETHCAP_APPEND}" | sed 's/ root=[^ ]*//; s/ ro / /'
+}
+
+# The bootloader build, for pb2.boot= on the kernel command line: the BSP
+# revision (its U-Boot config and bootchooser) and the build time.
+ab_bootver() {
+	echo "$(git -C "$HERE" describe --always --dirty)-$(date +%Y%m%d%H%M)"
+}
+
+# The boot region in a system.conf must be the one the card reserves. <system.conf>
+ab_check_region() {
+	local size
+	size=$(sed -n 's/^region-size=//p' "$1")
+
+	if [ "$size" != "${AB_REGION_MB}M" ]; then
+		echo "$1: region-size=$size, but the card's boot region is ${AB_REGION_MB}M (AB_BOOT_MB=$AB_BOOT_MB)" >&2
+		exit 1
+	fi
+}
+
+# The boot partition, exactly AB_BOOT_MB: RAUC gives p1 half the region, and
+# the K3 ROM wants the FAT's total-sector count to match its partition. Made
+# as build-spare-sd.sh makes it (mformat keeps that count; mkfs.vfat 4.2 does
+# not). <work dir>: leaves boot.cmd, boot.scr and boot.vfat there.
+ab_boot_vfat() {
+	local w="$1" r5 mkimage
+	r5="$UBOUT_PB2/r5/tiboot3-am62x-$UB_VARIANT-evm.bin"
+	mkimage="$UBOUT_PB2/a53/tools/mkimage"
+
+	for f in "$r5" "$UBOUT_PB2/a53/tispl.bin" "$UBOUT_PB2/a53/u-boot.img" "$mkimage"; do
+		[ -s "$f" ] || { echo "missing: $f (./build.sh PB2)" >&2; exit 1; }
+	done
+
+	# a bootloader without the A/B environment would forget every attempt
+	grep -q '^CONFIG_ENV_IS_IN_MMC=y' "$UBOUT_PB2/a53/.config" || {
+		echo "$UBOUT_PB2 keeps no environment: rebuild with PB2_AB_ENV=on ./build.sh PB2" >&2
+		exit 1
+	}
+
+	# the bootchooser, with the ethcap label's arguments and the bootloader
+	# build, as a FIT script: the board's U-Boot sources no legacy image
+	# (res/ab/pb2-mkscr.sh)
+	sed -e "/^setenv cargs /s|@APPEND@|$(ab_append)|" \
+	    -e "/^setenv cargs /s|@BOOTVER@|$(ab_bootver)|" \
+	    "$HERE/res/ab/pb2-boot.cmd.in" > "$w/boot.cmd"
+	"$HERE/res/ab/pb2-mkscr.sh" "$mkimage" "$w/boot.cmd" "$w/boot.scr"
+
+	truncate -s "${AB_BOOT_MB}M" "$w/boot.vfat"
+	mformat -i "$w/boot.vfat" -R 6 -F -v BOOT ::
+	mcopy -i "$w/boot.vfat" "$r5" ::/tiboot3.bin
+	mcopy -i "$w/boot.vfat" "$UBOUT_PB2/a53/tispl.bin" ::/tispl.bin
+	mcopy -i "$w/boot.vfat" "$UBOUT_PB2/a53/u-boot.img" ::/u-boot.img
+	mcopy -i "$w/boot.vfat" "$w/boot.scr" ::/boot.scr
 }
 
 # Check what a slot is made of, and print the kernel release.
@@ -544,44 +610,25 @@ ab_slot_tree() {
 }
 
 abcard() {
-	local out roottar rel r5 w mkimage
+	local out roottar rel w
 	roottar="${ROOTTAR:-$HERE/../buildroot-pb2/images/rootfs.tar.gz}"
 	out="${1:-$HERE/res/spare-sd-pb2/pocketbeagle2-ethcap-ab.img}"
-	r5="$UBOUT_PB2/r5/tiboot3-am62x-$UB_VARIANT-evm.bin"
-	mkimage="$UBOUT_PB2/a53/tools/mkimage"
 
 	rel=$(ab_inputs "$roottar")
-
-	for f in "$r5" "$UBOUT_PB2/a53/tispl.bin" "$UBOUT_PB2/a53/u-boot.img" "$mkimage"; do
-		[ -s "$f" ] || { echo "missing: $f (./build.sh PB2)" >&2; exit 1; }
-	done
-
-	# a bootloader without the A/B environment would forget every attempt
-	grep -q '^CONFIG_ENV_IS_IN_MMC=y' "$UBOUT_PB2/a53/.config" || {
-		echo "$UBOUT_PB2 keeps no environment: rebuild with PB2_AB_ENV=on ./build.sh PB2" >&2
-		exit 1
-	}
 
 	w=$(mktemp -d)
 	trap 'rm -rf "$w"' EXIT
 
+	# the slot's RAUC config must reserve the region this card leaves
+	tar -xzf "$roottar" -O ./etc/rauc/system.conf > "$w/system.conf"
+	ab_check_region "$w/system.conf"
+
 	echo "building $out"
 	echo "  slots    $rel, rootfs $roottar"
-	echo "  sizes    boot $AB_BOOT_MB, rootfs.A/B $AB_SLOT_MB each, data $AB_DATA_MB MiB"
+	echo "  sizes    boot $AB_BOOT_MB (region $AB_REGION_MB), rootfs.A/B $AB_SLOT_MB each, data $AB_DATA_MB MiB"
 
-	# the bootchooser, with the ethcap label's arguments, as a FIT script: the
-	# board's U-Boot sources no legacy image (res/ab/pb2-mkscr.sh)
-	sed "/^setenv cargs /s|@APPEND@|$(ab_append)|" "$HERE/res/ab/pb2-boot.cmd.in" > "$w/boot.cmd"
-	"$HERE/res/ab/pb2-mkscr.sh" "$mkimage" "$w/boot.cmd" "$w/boot.scr"
-
-	# p1: the FAT, as build-spare-sd.sh makes it (mformat keeps the full
-	# total-sector count the K3 ROM wants)
-	truncate -s "${AB_BOOT_MB}M" "$w/boot.vfat"
-	mformat -i "$w/boot.vfat" -R 6 -F -v BOOT ::
-	mcopy -i "$w/boot.vfat" "$r5" ::/tiboot3.bin
-	mcopy -i "$w/boot.vfat" "$UBOUT_PB2/a53/tispl.bin" ::/tispl.bin
-	mcopy -i "$w/boot.vfat" "$UBOUT_PB2/a53/u-boot.img" ::/u-boot.img
-	mcopy -i "$w/boot.vfat" "$w/boot.scr" ::/boot.scr
+	# p1: the boot partition, in the region's first half
+	ab_boot_vfat "$w"
 
 	# p2, p3: the same slot twice; p4: an empty data file system
 	mkdir "$w/slot"
@@ -596,15 +643,17 @@ abcard() {
 	mke2fs -q -t ext4 -L data "$w/data.ext4" "${AB_DATA_MB}M"
 
 	# the card: an MBR (the K3 ROM finds the FAT through it), partitions
-	# aligned on 1 MiB, each written at its start
+	# aligned on 1 MiB, each written at its start. The region's second half
+	# stays empty: no partition may reach into it, so every start is given
+	# (sfdisk would fill the first free gap, which is that half).
 	rm -f "$out"
-	truncate -s "$((1 + AB_BOOT_MB + 2 * AB_SLOT_MB + AB_DATA_MB + 1))M" "$out"
+	truncate -s "$((1 + AB_REGION_MB + 2 * AB_SLOT_MB + AB_DATA_MB + 1))M" "$out"
 	sfdisk -q "$out" <<SF
 label: dos
 start=2048, size=$((AB_BOOT_MB * 2048)), type=c, bootable
-size=$((AB_SLOT_MB * 2048)), type=83
-size=$((AB_SLOT_MB * 2048)), type=83
-size=$((AB_DATA_MB * 2048)), type=83
+start=$(((1 + AB_REGION_MB) * 2048)), size=$((AB_SLOT_MB * 2048)), type=83
+start=$(((1 + AB_REGION_MB + AB_SLOT_MB) * 2048)), size=$((AB_SLOT_MB * 2048)), type=83
+start=$(((1 + AB_REGION_MB + 2 * AB_SLOT_MB) * 2048)), size=$((AB_DATA_MB * 2048)), type=83
 SF
 
 	local n=1 start
@@ -621,6 +670,56 @@ SF
 	sfdisk -l "$out" | sed -n '/^Device/,$p'
 	echo "flash once: sudo dd if=$out of=/dev/sdX bs=4M conv=fsync status=progress"
 	echo "then update with: $0 bundle && rauc install <bundle> on the board"
+}
+
+# A signed bundle of the boot partition alone, for RAUC's bootloader slot.
+bootbundle() {
+	local out w version
+	out="${1:-$HERE/res/rauc/pocketbeagle2-am62x-boot.raucb}"
+	version="${VERSION:-boot-$(ab_bootver)}"
+
+	export PATH="$BR_HOST/bin:$PATH"
+	command -v rauc >/dev/null || { echo "no rauc: make -C ../buildroot host-rauc (or BR_HOST=)" >&2; exit 1; }
+	command -v mksquashfs >/dev/null || { echo "no mksquashfs in $BR_HOST/bin" >&2; exit 1; }
+
+	for f in "$RAUC_CERT" "$RAUC_KEY"; do
+		[ -s "$f" ] || { echo "missing: $f" >&2; exit 1; }
+	done
+
+	# the images' RAUC config must reserve the region this partition is for
+	ab_check_region "$HERE/br2-external/board/bb-pocketbeagle2/rootfs-overlay/etc/rauc/system.conf"
+
+	w=$(mktemp -d)
+	trap 'rm -rf "$w"' EXIT
+
+	echo "building $out ($RAUC_COMPATIBLE $version)"
+
+	mkdir "$w/content"
+	ab_boot_vfat "$w"
+	mv "$w/boot.vfat" "$w/content/boot.vfat"
+
+	cat > "$w/content/manifest.raucm" <<MF
+[update]
+compatible=$RAUC_COMPATIBLE
+version=$version
+
+[bundle]
+format=plain
+
+[image.bootloader]
+filename=boot.vfat
+MF
+
+	mkdir -p "$(dirname "$out")"
+	rm -f "$out"
+	rauc bundle --cert="$RAUC_CERT" --key="$RAUC_KEY" "$w/content" "$out"
+	rauc info --keyring="$RAUC_CERT" "$out" | sed -n '1,12p'
+
+	rm -rf "$w"
+	trap - EXIT
+
+	echo "built $out ($(du -h "$out" | cut -f1))"
+	echo "install: scp $out <board>:/data/ && ssh <board> rauc install /data/$(basename "$out")"
 }
 
 bundle() {
@@ -693,7 +792,8 @@ bootloader) bootloader ;;
 sdimage) shift 2>/dev/null; sdimage "$@" ;;
 abcard) shift 2>/dev/null; abcard "$@" ;;
 bundle) shift 2>/dev/null; bundle "$@" ;;
+bootbundle) shift 2>/dev/null; bootbundle "$@" ;;
 all)    fetch; shim; dts; config; dtb; build; deploy ;;
 image)  fetch; shim; dts; config; dtb; build; stage ;;
-*) echo "Usage: $0 {fetch|shim|dts|config|dtb|build|stage|deploy|probe|bootloader|sdimage|abcard|bundle|all|image}"; exit 1 ;;
+*) echo "Usage: $0 {fetch|shim|dts|config|dtb|build|stage|deploy|probe|bootloader|sdimage|abcard|bundle|bootbundle|all|image}"; exit 1 ;;
 esac

@@ -14,7 +14,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 BSP=$(cd "$HERE/../../.." && pwd)          # .../ti-sitara-am65x-bsp
 
 for f in etc/init.d/S99usb_gadgets etc/init.d/S05growrootfs etc/init.d/S95avb etc/init.d/S99bootgood \
-	etc/init.d/S12watchdog \
+	etc/init.d/S04watchdog \
 	root/setup_gadgets.sh root/remove_usb.sh usr/sbin/tdm8-uac2.sh \
 	usr/sbin/avb-gptp.sh usr/sbin/avb-irq.sh usr/sbin/avb-shaper.sh; do
 	chmod 0755 "$TARGET_DIR/$f" 2>/dev/null || true
@@ -22,6 +22,10 @@ done
 for f in etc/tdm8/tdm8.env etc/avb/avb.env etc/avb/flexptpd.conf etc/avb/uac2-milan.env; do
 	chmod 0644 "$TARGET_DIR/$f" 2>/dev/null || true
 done
+
+# Overlay files that were renamed: Buildroot copies the overlay into target/
+# but never deletes, so the old name would stay and run too.
+rm -f "$TARGET_DIR/etc/init.d/S12watchdog"            # now S04watchdog
 
 # The RAUC A/B card's data partition (issue #27): state that has to survive a
 # slot switch lives there, the Milan saved-state journal among it. nofail: a

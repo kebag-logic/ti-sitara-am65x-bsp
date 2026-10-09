@@ -30,6 +30,20 @@
 # nowhere, as it did before: it needs none, and the defconfig's USB DFU
 # fragment would otherwise give it CONFIG_SPL_ENV_IS_IN_MMC too.
 #
+# U-Boot proper also gets the RTI watchdog driver and the `wdt` command, so
+# the bootchooser can start RTI0 just before booti: a kernel that hangs
+# before Linux takes the watchdog over resets the board, and costs its slot
+# an attempt.
+#
+#   - WATCHDOG_AUTOSTART is off. It would start every RTI in the device tree
+#     (one per A53 core, and the DM R5's), and Linux pets only RTI0; it
+#     would also run while someone sits at the console.
+#   - WATCHDOG (U-Boot petting what it started) is off: RTI0 is started as
+#     the last step before booti, and Linux's rti_wdt takes it over within
+#     seconds, well inside its 60 s. WATCHDOG would also change the A53
+#     SPL (the hash functions then pause between chunks to pet), which
+#     stays byte-identical to the stock build's this way.
+#
 # Idempotent. Usage: pb2-ab-env.sh {on|off} [<u-boot-src>]  (default: on, ../../u-boot-pb)
 set -e
 
@@ -65,8 +79,14 @@ CONFIG_SYS_MMC_ENV_DEV=1
 CONFIG_SYS_MMC_ENV_PART=0
 CONFIG_SPL_ENV_IS_NOWHERE=y
 # CONFIG_SPL_ENV_IS_IN_MMC is not set
+CONFIG_WDT=y
+CONFIG_WDT_K3_RTI=y
+CONFIG_CMD_WDT=y
+# CONFIG_WATCHDOG is not set
+# CONFIG_WATCHDOG_AUTOSTART is not set
+# CONFIG_SPL_WDT is not set
 CONF
-	echo "ab-env: redundant environment on mmc 1 at 0x80000/0xC0000 added to $(basename "$D")"
+	echo "ab-env: redundant environment on mmc 1 at 0x80000/0xC0000, and the RTI watchdog, added to $(basename "$D")"
 	;;
 off)
 	if ! present; then

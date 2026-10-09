@@ -267,6 +267,7 @@ that is `rauc install`.
 | Partition | | |
 |---|---|---|
 | `mmcblk1p1` | FAT `BOOT` | `tiboot3.bin`, `tispl.bin`, `u-boot.img`, `boot.scr` (no `extlinux.conf`) |
+| (unused) | | as large as p1, right after it: RAUC writes the next boot partition here (see below) |
 | `mmcblk1p2` | ext4 `rootfs.A` | slot A: the rootfs, `/boot` (`Image.gz`, the four device trees), `/lib/modules` |
 | `mmcblk1p3` | ext4 `rootfs.B` | slot B, the same |
 | `mmcblk1p4` | ext4 `data` | `/data`: what survives a slot switch, the Milan saved-state journal among it; the first boot grows it to the end of the card |
@@ -282,13 +283,17 @@ How a boot picks its slot:
   (`BOOT_A_LEFT`, `BOOT_B_LEFT`, 3 each), then boots that slot's kernel with
   the `ethcap` label's arguments, `root=` the slot and `rauc.slot=`. A kernel
   that does not boot, or panics (`panic=5`), resets the board, which costs that
-  slot an attempt.
+  slot an attempt. Its last step before `booti` starts the hardware watchdog
+  (RTI0, 60 s), so a kernel that hangs before Linux takes the watchdog over
+  resets the board too. `pb2.boot=` on the kernel command line names the
+  bootloader build.
 - **`S99bootgood`** marks the booted slot good (`rauc status mark-good`, which
   gives it its attempts back) once the root file system is writable, `flexptpd`
   runs and, with `AVB_STACK=native`, so do the bridge's daemons. It leaves its
   verdict in `/run/bootgood`.
-- **`S12watchdog`** starts the hardware watchdog, and the boot deadline:
-  - the watchdog is RTI0, petted by busybox `watchdog`. A board that hangs,
+- **`S04watchdog`** pets the hardware watchdog, and starts the boot deadline:
+  - the watchdog is RTI0, petted by busybox `watchdog`; the script runs
+    before S05growrootfs and loads `rti_wdt` itself. A board that hangs,
     or loses the daemon, resets within about 90 s: 60 s from the last pet
     the windowed RTI took, which can land up to 31 s after the hang. Once
     started, it cannot be stopped;
@@ -323,3 +328,26 @@ The bundle is a tar of one complete slot (RAUC formats the inactive slot and
 extracts it), signed with the BSP's development key (`res/rauc/`), compatible
 `pocketbeagle2-am62x`: a MYIR bundle is refused, and so is this one on a MYIR
 board.
+
+### The bootloader
+
+The boot partition is RAUC's `bootloader.0` slot (`boot-mbr-switch`). The card
+reserves twice its size from 1 MiB (`region-size=600M`). RAUC writes a new
+boot partition into the half p1 does not use, then moves p1 onto it in the
+MBR, keeping its type and active flag: one sector write, so a power cut leaves
+the old bootloader or the new one, never half of one. U-Boot's environment
+sits before the region, so the slots' attempts survive the switch.
+
+```sh
+./build.sh PB2                                   # tiboot3, tispl, u-boot.img
+./build-tdm8-uac2-pb2.sh bootbundle              # -> res/rauc/pocketbeagle2-am62x-boot.raucb, signed
+scp res/rauc/pocketbeagle2-am62x-boot.raucb root@192.168.8.12:/data/
+ssh root@192.168.8.12 'rauc install /data/pocketbeagle2-am62x-boot.raucb && reboot'
+ssh root@192.168.8.12 'cat /proc/cmdline'       # pb2.boot= names the new build
+```
+
+The switch is atomic, but nothing falls back from it: a bootloader that does
+not boot needs the card reflashed in a reader. Bootloader bundles therefore
+stay separate from the slot bundles. Each one is tested first, with
+`res/ab/test-pb2-bootchooser.sh` on a card image built from the same
+bootloaders, and on a bench card.
