@@ -289,8 +289,9 @@ How a boot picks its slot:
   verdict in `/run/bootgood`.
 - **`S12watchdog`** starts the hardware watchdog, and the boot deadline:
   - the watchdog is RTI0, petted by busybox `watchdog`. A board that hangs,
-    or loses the daemon, resets within 60 s. Once started, it cannot be
-    stopped;
+    or loses the daemon, resets within about 90 s: 60 s from the last pet
+    the windowed RTI took, which can land up to 31 s after the hang. Once
+    started, it cannot be stopped;
   - on an A/B slot, a slot that is not healthy 150 s into the boot
     (`BOOT_DEADLINE_S`) is rebooted.
 

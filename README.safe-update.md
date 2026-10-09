@@ -155,10 +155,12 @@ The same OS A/B scheme, with these differences:
   development key.
 - **Health check:** `S99bootgood` marks the slot good only once `flexptpd` and
   the bridge run.
-- **Watchdog:** `S12watchdog` pets RTI0 (a reset after 60 s without it), and
-  reboots a slot that is not healthy 150 s into the boot, unless the other
-  slot has no attempts left. A slot that hangs, or never gets healthy, so
-  falls back by itself.
+- **Watchdog:** `S12watchdog` does two things:
+  - it pets RTI0; without that, the board resets within about 90 s;
+  - it reboots a slot that is not healthy 150 s into the boot, unless the
+    other slot has no attempts left.
+
+  So a slot that hangs, or never gets healthy, falls back by itself.
 
 See `README.pb2-ethcap.md` §7.
 

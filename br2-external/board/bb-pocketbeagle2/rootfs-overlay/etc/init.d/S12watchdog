@@ -9,11 +9,13 @@
 # reset. busybox `watchdog` pets it every WATCHDOG_PERIOD_S:
 #
 #   - the driver's timeout is fixed at 60 s, and the kernel holds back a pet
-#     that comes before the open window (52 % of the timeout), so a short
-#     period is safe;
+#     that comes before the open window (52 % of the timeout, 31 s), so a
+#     short period is safe;
 #   - once started, RTI cannot be stopped (the driver sets nowayout): a hung
-#     board, or a petting daemon that dies, resets the board within 60 s. The
-#     bootchooser counts that boot as one of the slot's attempts.
+#     board, or a petting daemon that dies, resets the board. That takes
+#     60 s from the last pet the kernel let through, which can itself land
+#     up to 31 s after the hang: about 90 s at worst. The bootchooser counts
+#     that boot as one of the slot's attempts.
 #
 # The boot deadline, on an A/B card (rauc.slot= on the command line): a slot
 # that is not healthy BOOT_DEADLINE_S after this script ran is rebooted, so it
@@ -88,7 +90,7 @@ start_watchdog() {
 	start-stop-daemon -S -q -b -m -p "$PIDFILE" -x "$(command -v watchdog)" -- \
 		-F -t "$PERIOD_S" "$dev"
 
-	log "petting $dev ($RTI) every $PERIOD_S s; without it, a reset after 60 s"
+	log "petting $dev ($RTI) every $PERIOD_S s; without it, a reset within about 90 s"
 }
 
 deadline() {
