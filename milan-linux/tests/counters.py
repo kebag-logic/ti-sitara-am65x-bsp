@@ -246,7 +246,9 @@ def main() -> int:
             for index, (q, r, want) in enumerate(((q0, r0, want0), (q1, r1, want1))):
                 d = delta(q, r)
                 ok = all(lo <= d.get(k, 0) <= hi for k, (lo, hi) in want.items())
-                g.check(f"{name}: STREAM_INPUT {index} {', '.join(f'{k} +{lo}' + (f'..{hi}' if hi != lo else '') for k, (lo, hi) in want.items() if k != 'FRAMES_RX') or 'nothing but FRAMES_RX'}",
+                moved = [f"{k} +{lo}" + (f"..{hi}" if hi != lo else "") for k, (lo, hi) in want.items()
+                         if k != "FRAMES_RX"]
+                g.check(f"{name}: STREAM_INPUT {index} {', '.join(moved) or 'nothing but FRAMES_RX'}",
                         ok and all(k in want for k in d), str(d))
                 g.check(f"{name}: STREAM_INPUT {index} MEDIA_LOCKED = MEDIA_UNLOCKED (+1)",
                         r[0] in (r[1], r[1] + 1), f"{r[0]}/{r[1]}")

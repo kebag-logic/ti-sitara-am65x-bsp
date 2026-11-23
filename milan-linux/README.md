@@ -120,7 +120,9 @@ gPTP. No frame is resampled, dropped or repeated: the stream is bit-exact.
   Listener Ready waits for SRP (#14).
 * **Reports** go to `/dev/shm/milan-media`, printed by `milan-dp`:
   `talker_frames_tx`, `_underruns`, `_overruns`, `_late`, `_level_min/max/avg`,
-  `_pitch`, `_locked`, and `gptp_corr_ns`/`gptp_residual_ns`.
+  `_pitch`, `_locked`, and `gptp_corr_ns`/`gptp_residual_ns`; and
+  `milan_stream_output0`, STREAM_OUTPUT 0's Milan counters (Milan v1.2 Table
+  5.4), which GET_COUNTERS serves ([AECP-STATUS.md](AECP-STATUS.md)).
 
 **Latency, with the PTO excluded.** From a frame's USB packet to its PDU's slot
 is the buffer level: `talker_level_avg` / 48 000, about 500 us, plus up to one
@@ -142,14 +144,36 @@ presentation error:
   nought.
 * After that, the servo holds it at nought through `Playback Pitch 1000000`. A
   stream running late makes the gadget send faster.
-* An error past 1 ms is jumped instead (MEDIA_RESET): silence inserted, or
-  frames dropped.
+* An error past 1 ms is jumped instead (`listener_jumps`): silence inserted,
+  or frames dropped, which interrupts the playback (STREAM_INTERRUPTED, once
+  for a run of jumps).
+* A toggle of the PDUs' mr bit (a media clock restart, IEEE 1722-2016
+  4.4.4.3) places the stream again. While tu is set (4.4.4.7), or tv clear,
+  PDUs are played as they come, with no jump and no servo step. A PDU stamped
+  more than 4 x PTO ahead is too far in the future to process, and is dropped.
 
-It keeps Milan's STREAM_INPUT counters (v1.2 5.3.7) in the media block:
-`listener_frames_rx`, `_seq_mismatch`, `_late_timestamp`, `_early_timestamp`,
-`_unsupported_format`, `_media_locked`, `_media_unlocked`, `_media_resets` and
-`_stream_interrupted`. It also reports `_align_min/max/avg_ns`, the presentation
-error, and `_margin_min_ns`, how early the PDUs arrive.
+The media block holds each event's raw count: `listener_frames_rx` (PDUs),
+`_seq_mismatch`, `_late_timestamp`, `_early_timestamp`, `_unsupported_format`,
+`_media_locked`, `_media_unlocked`, `_jumps`, `_stream_interrupted`,
+`_timestamp_uncertain` and `_media_restarts`. `milan_stream_input0` holds the
+Milan counters GET_COUNTERS serves (v1.2 5.3.8.10, Table 5.6): most count
+500 ms observation intervals in which the event happened, and all are zeroed
+when the input goes from not bound to bound. It also reports
+`_align_min/max/avg_ns`, the presentation error, and `_margin_min_ns`, how
+early the PDUs arrive.
+
+## The CRF input (STREAM_INPUT 1)
+
+milan-mediad's CRF receive path (`src/crf_rx.c`) receives the CRF stream
+`milan-ctrld` settled STREAM_INPUT 1 on, and counts it as the listener counts
+its own: sequence, mr, tu, the Milan CRF format (Milan v1.2 Table 7.1), its
+timestamps late or early. It tracks the media clock the stream carries: locked
+(MEDIA_LOCKED) once 25 timestamps in a row step on the format's 2 ms grid,
+unlocked when one leaves it, when mr toggles, or when the stream stops
+(STREAM_INTERRUPTED). Nothing clocks from it: the talker and the listener keep
+their own gPTP-derived clock. `milan-dp` prints `crf_*` and
+`milan_stream_input1`. `-r` names the roles (`talker,listener,crf`, all three
+by default); without `crf`, STREAM_INPUT 1 has no counter valid.
 
 **No SRP domain (`-n`, `AVB_SRP_DOMAIN=none`).** A Milan listener that has
 settled waits TMR_NO_TK (10 s) for its talker's MSRP registration, and probes
@@ -212,15 +236,15 @@ make                                          # build/milan-ctrld, build/milan-d
 make check                                    # config/ current, unit tests, network-namespace tests
 ```
 
-The pin is provisional while milan-fpga#983's revision has no published
-archive (`milan-fpga.pin`): `MILAN_FPGA_LOCAL=<milan-fpga checkout>
-tools/fetch-milan-fpga.sh --with-submodules` takes the pinned revision and its
-submodules' gitlinks from a local checkout by `git archive`, unchecked.
+The pin names the published head of milan-fpga PR #986.
+`tools/fetch-milan-fpga.sh` verifies its archive hash; no local checkout is
+required. The pin must move to the upstream merge commit after #986 lands.
 
-`make check` runs the unit tests (`test_ptp_mgmt`, and `test_media`: the AAF
-PDU byte for byte, and the servo in closed loop at 0, +-100 and +300 ppm), then
-two network-namespace tests across a veth pair inside `unshare -rn`, so they
-need neither root nor a real interface.
+`make check` runs the unit tests (`test_gptp`, and `test_media`: the AAF
+PDU and the CRF PDU byte for byte, the Milan observation-interval counter, and
+the servo in closed loop at 0, +-100 and +300 ppm), then the network-namespace
+tests across a veth pair inside `unshare -rn`, so they need neither root nor a
+real interface.
 
 `tests/run-netns-talker.sh` streams a simulated USB host running 80 ppm fast
 and records the far end. The validation kit then grades the recording:
@@ -278,7 +302,23 @@ about), runs GET_MILAN_INFO, ACQUIRE and LOCK, the Milan v1.2 5.4 command set as
 the firmware implements it, an unsolicited notification and GET_COUNTERS over a
 media block with known counters, then binds STREAM_INPUT 0 and STREAM_INPUT 1
 with BIND_RX. It also starts milan-ctrld over a KLJ2 journal file and checks the
-move to KLJ3.
+move to KLJ3. The DUT's MAC is not the generated image's placeholder, so the
+board's identity in ENTITY, AVB_INTERFACE and ADP is checked as milan-ctrld
+writes it at run time. Last, CLOCK_DOMAIN's LOCKED and UNLOCKED are checked
+against a flexptpd that stops updating its block, leaves it mid-write, or is
+replaced by a new block.
+
+`tests/run-netns-counters.sh` runs milan-ctrld and milan-mediad (talker, AAF
+listener and CRF input, on a simulated USB host) against a talker on the other
+end that binds both inputs and sends AAF and CRF streams. Into those it puts a
+lost PDU, tu, an mr toggle, another format, a late backlog, early stamps and
+an interruption, one at a time. It reads each counter's change back over
+GET_COUNTERS, and checks the zeroing at a new binding and the talker's
+STREAM_OUTPUT counters.
+
+`make check-compat` enumerates the entity with a controller on la_avdecc 4.3.x
+(`tests/milan-compat/`, which says how to build the library). It passes only
+for a Milan-compatible entity with no compatibility event, warning or error.
 
 milan-fpga's own gate (`python3 sw/firmware/ctrl/test/test_ctrl_firmware.py`)
 must pass at the pinned revision too. It needs a git checkout with the

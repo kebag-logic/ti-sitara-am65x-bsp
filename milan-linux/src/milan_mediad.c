@@ -329,7 +329,8 @@ int main(int argc, char **argv)
 		.sink = 1,
 		.early_ns = 4 * (int64_t)opt.pto_ns,
 		.interrupt_ns = opt.interrupt_ns,
-		.rt_priority = lcfg.rt_priority,
+		// below the listener: it carries no audio
+		.rt_priority = lcfg.rt_priority > 1 ? lcfg.rt_priority - 1 : lcfg.rt_priority,
 		.cpu = opt.cpu,
 		.clk = &clk,
 		.dp = dp,

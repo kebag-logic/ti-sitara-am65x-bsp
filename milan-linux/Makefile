@@ -4,8 +4,14 @@
 # The PocketBeagle 2 USB-to-Milan bridge daemons.
 #
 #   make MILAN_FPGA=<milan-fpga tree at the pinned revision>     # host build
-#   make MILAN_FPGA=... CC=aarch64-linux-gnu-gcc                  # cross build
+#   make MILAN_FPGA=... CC=aarch64-linux-gnu-gcc \
+#        CFLAGS=-I<sysroot>/include LDFLAGS=-L<sysroot>/lib       # cross build
 #   make MILAN_FPGA=... check                                     # host tests
+#   make MILAN_FPGA=... LA_AVDECC_SRC=... LA_AVDECC_BUILD=... check-compat
+#
+# milan-mediad links alsa-lib: a cross build needs the target's (a sysroot
+# holding alsa/asoundlib.h and libasound.so). check-compat enumerates the
+# entity with la_avdecc's controller (tests/milan-compat/README.md).
 #
 # The Mark II control-plane firmware is compiled from the milan-fpga tree,
 # unmodified, with the flags its own gate uses (sw/firmware/ctrl/test/
@@ -90,6 +96,13 @@ $(O)/milan-gptp-watch: src/gptp_watch.c
 check-config:
 	tools/gen-config.sh --check $(MILAN_FPGA)
 
+# the entity as a la_avdecc 4.3.x controller sees it: a source tree and its
+# CMake build of la_avdecc_controller_static (tests/milan-compat/build.sh)
+check-compat: all
+	tests/milan-compat/build.sh $(LA_AVDECC_SRC) $(LA_AVDECC_BUILD) $(O)/milan-compat
+	tests/milan-compat/run-netns-compat.sh $(O) $(O)/milan-compat config/entity.conf 15
+	tests/milan-compat/run-netns-compat.sh $(O) $(O)/milan-compat config/entity.conf 15 streams
+
 check: all check-config $(O)/test_media $(O)/test_gptp
 	$(O)/test_media
 	$(O)/test_gptp
@@ -118,4 +131,4 @@ install: all
 clean:
 	rm -rf $(O)
 
-.PHONY: all check check-config install clean
+.PHONY: all check check-compat check-config install clean

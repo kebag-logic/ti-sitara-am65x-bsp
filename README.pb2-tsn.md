@@ -314,9 +314,10 @@ A controller enumerates the entity over AECP (#29): one AAF input, the CRF
 input and one AAF output, under the pinned entity_model_id
 `0x001BC50AC1000100`, from the board's own end-station config
 (`milan-linux/config/endstation_pb2_bridge.yaml`). It binds STREAM_INPUT 0 (AAF)
-or 1 (CRF) with BIND_RX. The media plane plays STREAM_INPUT 0 only, and does
-not clock from the CRF input, so no Milan conformance is claimed:
-`milan-linux/AECP-STATUS.md` lists what is and is not met.
+or 1 (CRF) with BIND_RX. The media plane plays STREAM_INPUT 0, counts both
+inputs and the output for GET_COUNTERS, and does not clock from the CRF input,
+so no Milan conformance is claimed: `milan-linux/AECP-STATUS.md` lists what is
+and is not met, and how a la_avdecc controller finds the entity.
 
 ---
 
