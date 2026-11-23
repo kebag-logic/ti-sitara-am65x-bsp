@@ -1,0 +1,280 @@
+Public manifest: 183 entries; 0 mismatches []
+Embedded commit signature present: False
+Detached signature paths: []
+
+RECEIPT make-check-1.log
+test_media: PASS (0 failures)
+test_gptp: PASS (0 failures)
+[PASS] datapath: sink 0 listening to the talker's stream: stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:1
+[PASS] milan-ctrld exits 0: rc 0
+peer: PASS (0 failed)
+[PASS] datapath: sink 0 listening to stream 0200000000020000: stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:1
+[PASS] datapath: sink 1 listening to stream 0200000000020001: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:1
+[PASS] datapath: each sink bound once (bound:1 binds:1): ['stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:1', 'stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:1']
+[PASS] milan-ctrld exits 0: rc 0
+aecp: PASS (0 failed)
+[PASS] datapath: sink 0 listening to stream 0200000000020000: stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:1
+[PASS] datapath: sink 1 listening to stream 0200000000020001: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:1
+[PASS] datapath: sink 1 listening to stream 0200000000020001: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:2
+[PASS] burst: milan-mediad zeroed each input for its latest binding (its bind count is the datapath's): supported_format=3 crf_timestamp_uncertain=5 crf_media_restarts=1 crf_media_locked=6 crf_media_unlocked=5 crf_stream_interrupted=2 crf_grid_breaks=0 crf_rate_ppb=0 crf_step_err_max_ns=0 crf_margin_min_ns=47847557 milan_stream_output0=valid:01f binds:0 2 1 0 0 2 0 0 0 0 0 0 0 milan_stream_input0=valid:f3f binds:3 0 0 0 0 0 0 0 0 0 0 0 2 milan_stream_input1=valid:f3f binds:3 1 0 0 0 0 0 0 0 0 0 0 2 
+[PASS] burst: both inputs listening again: ['stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:3', 'stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:3']
+[PASS] rebind 1 of 5: settled again: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:4
+[PASS] rebind 2 of 5: settled again: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:5
+[PASS] rebind 3 of 5: settled again: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:6
+[PASS] rebind 4 of 5: settled again: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:7
+[PASS] rebind 5 of 5: settled again: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:8
+counters: PASS (0 failed)
+rxfail: PASS (0 failed)
+RESULT: PASS
+RESULT: PASS
+[PASS] B settled on A's stream: stream_id:0200000000010000 dest_mac:91e0f0002820 vlan:2 listening:1 bound:1 binds:1
+RESULT: PASS
+[PASS] bound: stream_id:0200000000010000 dest_mac:91e0f0002820 vlan:2 listening:1 bound:1 binds:1
+[PASS] A6.1 the restored binding is counted on from the killed process's bind count: binds 1 -> 2: stream_id:0200000000010000 dest_mac:91e0f0002820 vlan:2 listening:1 bound:1 binds:2
+[PASS] A6.2 an unbind survives a power cut: stream_id:0000000000000000 dest_mac:000000000000 vlan:0 listening:0 bound:0 binds:2
+[PASS] A6.2 restarted unbound: not bound, the bind count kept: binds 2 -> 2: stream_id:0000000000000000 dest_mac:000000000000 vlan:0 listening:0 bound:0 binds:2
+[PASS] after them, a bind still survives a power cut: stream_id:0200000000010000 dest_mac:91e0f0002820 vlan:2 listening:1 bound:1 binds:18
+TAIL [PASS] A6.3 20 power cuts: every boot judged an accepted slot, no read fault: 23 boots, last: saved state at boot ($VALIDATION_STORAGE/pb2aecp-a830/r4/tmp/tmp.BDgko90lc4/b.bin): slot B seq 4 (A 3, B 4) | bindings restored, rest restored | phase 1 dirty 0 pending 0 | commits 0 ok, 0 failed, 0 skipped | unread 0x0 read faults 0 legacy 0x0
+[PASS] after them, a bind still survives a power cut: stream_id:0200000000010000 dest_mac:91e0f0002820 vlan:2 listening:1 bound:1 binds:18
+nvm: PASS
+
+RECEIPT make-check-2.log
+test_media: PASS (0 failures)
+test_gptp: PASS (0 failures)
+[PASS] datapath: sink 0 listening to the talker's stream: stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:1
+[PASS] milan-ctrld exits 0: rc 0
+peer: PASS (0 failed)
+[PASS] datapath: sink 0 listening to stream 0200000000020000: stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:1
+[PASS] datapath: sink 1 listening to stream 0200000000020001: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:1
+[PASS] datapath: each sink bound once (bound:1 binds:1): ['stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:1', 'stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:1']
+[PASS] milan-ctrld exits 0: rc 0
+aecp: PASS (0 failed)
+[PASS] datapath: sink 0 listening to stream 0200000000020000: stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:1
+[PASS] datapath: sink 1 listening to stream 0200000000020001: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:1
+[PASS] datapath: sink 1 listening to stream 0200000000020001: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:2
+[PASS] burst: milan-mediad zeroed each input for its latest binding (its bind count is the datapath's): supported_format=3 crf_timestamp_uncertain=5 crf_media_restarts=1 crf_media_locked=6 crf_media_unlocked=5 crf_stream_interrupted=2 crf_grid_breaks=0 crf_rate_ppb=0 crf_step_err_max_ns=0 crf_margin_min_ns=49355519 milan_stream_output0=valid:01f binds:0 2 1 0 0 2 0 0 0 0 0 0 0 milan_stream_input0=valid:f3f binds:3 0 0 0 0 0 0 0 0 0 0 0 2 milan_stream_input1=valid:f3f binds:3 1 0 0 0 0 0 0 0 0 0 0 2 
+[PASS] burst: both inputs listening again: ['stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:3', 'stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:3']
+[PASS] rebind 1 of 5: settled again: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:4
+[PASS] rebind 2 of 5: settled again: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:5
+[PASS] rebind 3 of 5: settled again: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:6
+[PASS] rebind 4 of 5: settled again: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:7
+[PASS] rebind 5 of 5: settled again: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:8
+counters: PASS (0 failed)
+rxfail: PASS (0 failed)
+RESULT: PASS
+RESULT: PASS
+[PASS] B settled on A's stream: stream_id:0200000000010000 dest_mac:91e0f0002820 vlan:2 listening:1 bound:1 binds:1
+RESULT: PASS
+[PASS] bound: stream_id:0200000000010000 dest_mac:91e0f0002820 vlan:2 listening:1 bound:1 binds:1
+[PASS] A6.1 the restored binding is counted on from the killed process's bind count: binds 1 -> 2: stream_id:0200000000010000 dest_mac:91e0f0002820 vlan:2 listening:1 bound:1 binds:2
+[PASS] A6.2 an unbind survives a power cut: stream_id:0000000000000000 dest_mac:000000000000 vlan:0 listening:0 bound:0 binds:2
+[PASS] A6.2 restarted unbound: not bound, the bind count kept: binds 2 -> 2: stream_id:0000000000000000 dest_mac:000000000000 vlan:0 listening:0 bound:0 binds:2
+[PASS] after them, a bind still survives a power cut: stream_id:0200000000010000 dest_mac:91e0f0002820 vlan:2 listening:1 bound:1 binds:18
+TAIL [PASS] A6.3 20 power cuts: every boot judged an accepted slot, no read fault: 23 boots, last: saved state at boot ($VALIDATION_STORAGE/pb2aecp-a830/r4/tmp/tmp.zNyJ2PYXLI/b.bin): slot B seq 4 (A 3, B 4) | bindings restored, rest restored | phase 1 dirty 0 pending 0 | commits 0 ok, 0 failed, 0 skipped | unread 0x0 read faults 0 legacy 0x0
+[PASS] after them, a bind still survives a power cut: stream_id:0200000000010000 dest_mac:91e0f0002820 vlan:2 listening:1 bound:1 binds:18
+nvm: PASS
+
+RECEIPT make-check-ad9c0f09-run1-listener-rate.log
+test_media: PASS (0 failures)
+test_gptp: PASS (0 failures)
+[PASS] datapath: sink 0 listening to the talker's stream: stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:1
+[PASS] milan-ctrld exits 0: rc 0
+peer: PASS (0 failed)
+[PASS] datapath: sink 0 listening to stream 0200000000020000: stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:1
+[PASS] datapath: sink 1 listening to stream 0200000000020001: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:1
+[PASS] datapath: each sink bound once (bound:1 binds:1): ['stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:1', 'stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:1']
+[PASS] milan-ctrld exits 0: rc 0
+aecp: PASS (0 failed)
+[PASS] datapath: sink 0 listening to stream 0200000000020000: stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:1
+[PASS] datapath: sink 1 listening to stream 0200000000020001: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:1
+[PASS] datapath: sink 1 listening to stream 0200000000020001: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:2
+[PASS] burst: milan-mediad zeroed each input for its latest binding (its bind count is the datapath's): supported_format=3 crf_timestamp_uncertain=5 crf_media_restarts=1 crf_media_locked=6 crf_media_unlocked=5 crf_stream_interrupted=2 crf_grid_breaks=0 crf_rate_ppb=0 crf_step_err_max_ns=0 crf_margin_min_ns=47865653 milan_stream_output0=valid:01f binds:0 2 1 0 0 2 0 0 0 0 0 0 0 milan_stream_input0=valid:f3f binds:3 0 0 0 0 0 0 0 0 0 0 0 2 milan_stream_input1=valid:f3f binds:3 1 0 0 0 0 0 0 0 0 0 0 2 
+[PASS] burst: both inputs listening again: ['stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:3', 'stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:3']
+counters: PASS (0 failed)
+rxfail: PASS (0 failed)
+RESULT: PASS
+RESULT: PASS
+[PASS] B settled on A's stream: stream_id:0200000000010000 dest_mac:91e0f0002820 vlan:2 listening:1 bound:1 binds:1
+[FAIL] FRAMES_RX at 8000/s: 81095 PDUs in 10 s
+RESULT: PASS
+listener: FAIL
+TAIL listener active, locked stream 0200000000010000 | FRAMES_RX 146106 SEQ_NUM_MISMATCH 0 LATE 0 EARLY 0 UNSUPPORTED 0 MEDIA_LOCKED 1 MEDIA_UNLOCKED 0 jumps 0 STREAM_INTERRUPTED 0 tu 0 mr toggles 0 | underruns 0 pitch 1000035 | presentation error -57590..68632 avg -14857 ns, least margin 47040755 ns
+listener: FAIL
+make: *** [Makefile:114: check] Error 1
+
+RECEIPT make-check-ad9c0f09-run2-counters-capture.log
+test_media: PASS (0 failures)
+test_gptp: PASS (0 failures)
+[PASS] datapath: sink 0 listening to the talker's stream: stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:1
+[PASS] milan-ctrld exits 0: rc 0
+peer: PASS (0 failed)
+[PASS] datapath: sink 0 listening to stream 0200000000020000: stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:1
+[PASS] datapath: sink 1 listening to stream 0200000000020001: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:1
+[PASS] datapath: each sink bound once (bound:1 binds:1): ['stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:1', 'stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:1']
+[PASS] milan-ctrld exits 0: rc 0
+aecp: PASS (0 failed)
+[PASS] datapath: sink 0 listening to stream 0200000000020000: stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:1
+[PASS] datapath: sink 1 listening to stream 0200000000020001: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:1
+[PASS] datapath: sink 1 listening to stream 0200000000020001: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:2
+[PASS] burst: milan-mediad zeroed each input for its latest binding (its bind count is the datapath's): supported_format=3 crf_timestamp_uncertain=5 crf_media_restarts=1 crf_media_locked=6 crf_media_unlocked=5 crf_stream_interrupted=2 crf_grid_breaks=0 crf_rate_ppb=0 crf_step_err_max_ns=0 crf_margin_min_ns=47561325 milan_stream_output0=valid:01f binds:0 2 1 0 0 2 0 0 0 0 0 0 0 milan_stream_input0=valid:f3f binds:3 0 0 0 0 0 0 0 0 0 0 0 2 milan_stream_input1=valid:f3f binds:3 1 0 0 0 0 0 0 0 0 0 0 2 
+[PASS] burst: both inputs listening again: ['stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:3', 'stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:3']
+[FAIL] rebind 3 of 5: GET_COUNTERS STREAM_INPUT 1 at once after the BIND_RX response (-1.0 ms): valid 0xf3f, all zero: 0xf3f [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+[FAIL] rebind 4 of 5: unbound, STREAM_INPUT 1 kept its FRAMES_RX: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+counters: FAIL (2 failed)
+TAIL talker idle stream 021a2b3c4d5e0000 -> 91e0f00000b4 | PDUs 264449 underruns 0 overruns 0 late 234267 send errors 0 | level 43..50 avg 47.38 (target 48) pitch 1000000 | worst send delay 2467520 ns | gPTP rate +0.000 ppm residual 0 ns
+
+make: *** [Makefile:111: check] Error 1
+
+RECEIPT neg-counters-mutant-cache.log
+[PASS] datapath: sink 0 listening to stream 0200000000020000: stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:1
+[PASS] datapath: sink 1 listening to stream 0200000000020001: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:1
+[FAIL] 80 ms held, then the backlog: STREAM_INPUT 0 MEDIA_LOCKED +0..9, MEDIA_UNLOCKED +0..9, STREAM_INTERRUPTED +0..1, LATE_TIMESTAMP +1..2: {'MEDIA_UNLOCKED': 1, 'STREAM_INTERRUPTED': 2, 'LATE_TIMESTAMP': 1, 'FRAMES_RX': 4}
+[PASS] datapath: sink 1 listening to stream 0200000000020001: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:2
+[FAIL] burst: GET_COUNTERS STREAM_INPUT 0 at once after the last BIND_RX response, milan-mediad held: valid 0xf3f, all zero: 0xf3f [3, 3, 6, 2, 1, 1, 0, 0, 1, 1, 5, 43]
+[FAIL] burst: GET_COUNTERS STREAM_INPUT 1 at once after the last BIND_RX response, milan-mediad held: valid 0xf3f, all zero: 0xf3f [1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 5]
+[PASS] burst: milan-mediad zeroed each input for its latest binding (its bind count is the datapath's): supported_format=3 crf_timestamp_uncertain=5 crf_media_restarts=1 crf_media_locked=6 crf_media_unlocked=5 crf_stream_interrupted=2 crf_grid_breaks=0 crf_rate_ppb=0 crf_step_err_max_ns=0 crf_margin_min_ns=48864966 milan_stream_output0=valid:01f binds:0 2 1 0 0 2 0 0 0 0 0 0 0 milan_stream_input0=valid:f3f binds:3 0 0 0 0 0 0 0 0 0 0 0 2 milan_stream_input1=valid:f3f binds:3 1 0 0 0 0 0 0 0 0 0 0 2 
+[PASS] burst: both inputs listening again: ['stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:3', 'stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:3']
+[FAIL] rebind 1 of 5: GET_COUNTERS STREAM_INPUT 1 at once after the BIND_RX response (0.1 ms): valid 0xf3f, all zero: 0xf3f [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5]
+[PASS] rebind 1 of 5: settled again: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:4
+[FAIL] rebind 2 of 5: GET_COUNTERS STREAM_INPUT 1 at once after the BIND_RX response (0.1 ms): valid 0xf3f, all zero: 0xf3f [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2]
+[PASS] rebind 2 of 5: settled again: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:5
+[FAIL] rebind 3 of 5: GET_COUNTERS STREAM_INPUT 1 at once after the BIND_RX response (10.5 ms): valid 0xf3f, all zero: 0xf3f [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2]
+[PASS] rebind 3 of 5: settled again: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:6
+[FAIL] rebind 4 of 5: GET_COUNTERS STREAM_INPUT 1 at once after the BIND_RX response (10.1 ms): valid 0xf3f, all zero: 0xf3f [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2]
+[PASS] rebind 4 of 5: settled again: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:7
+[FAIL] rebind 5 of 5: GET_COUNTERS STREAM_INPUT 1 at once after the BIND_RX response (0.1 ms): valid 0xf3f, all zero: 0xf3f [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2]
+[PASS] rebind 5 of 5: settled again: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:8
+counters: FAIL (8 failed)
+TAIL listener active, locked stream 0200000000020000 | FRAMES_RX 57387 SEQ_NUM_MISMATCH 2 LATE 65 EARLY 3047 UNSUPPORTED 3 MEDIA_LOCKED 4 MEDIA_UNLOCKED 3 jumps 65 STREAM_INTERRUPTED 7 tu 5 mr toggles 1 | underruns 6044 pitch 1000005 | presentation error -18845..109508 avg 8212 ns, least margin 48557158 ns
+talker idle stream 021a2b3c4d5e0000 -> 91e0f00000b4 | PDUs 247066 underruns 0 overruns 0 late 217582 send errors 0 | level 44..47 avg 45.10 (target 48) pitch 1000000 | worst send delay 64413 ns | gPTP rate +0.000 ppm residual 0 ns
+
+
+RECEIPT neg-counters-mutant-drain.log
+[PASS] datapath: sink 0 listening to stream 0200000000020000: stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:1
+[PASS] datapath: sink 1 listening to stream 0200000000020001: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:1
+[PASS] datapath: sink 1 listening to stream 0200000000020001: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:2
+[FAIL] burst: milan-mediad running again, both count from zero for the new binding: no SEQ_NUM_MISMATCH, FRAMES_RX 1 to 3: [[0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 2], [1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 2]]
+[PASS] burst: milan-mediad zeroed each input for its latest binding (its bind count is the datapath's): supported_format=3 crf_timestamp_uncertain=5 crf_media_restarts=1 crf_media_locked=6 crf_media_unlocked=5 crf_stream_interrupted=2 crf_grid_breaks=0 crf_rate_ppb=0 crf_step_err_max_ns=0 crf_margin_min_ns=47936302 milan_stream_output0=valid:01f binds:0 2 1 0 0 2 0 0 0 0 0 0 0 milan_stream_input0=valid:f3f binds:3 0 0 1 0 0 0 0 0 0 1 0 2 milan_stream_input1=valid:f3f binds:3 1 0 0 1 0 0 0 0 0 1 0 2 
+[PASS] burst: both inputs listening again: ['stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:3', 'stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:3']
+[PASS] rebind 1 of 5: settled again: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:4
+[PASS] rebind 2 of 5: settled again: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:5
+[PASS] rebind 3 of 5: settled again: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:6
+[PASS] rebind 4 of 5: settled again: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:7
+[PASS] rebind 5 of 5: settled again: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:8
+counters: FAIL (1 failed)
+TAIL listener active, locked stream 0200000000020000 | FRAMES_RX 58084 SEQ_NUM_MISMATCH 2 LATE 876 EARLY 3004 UNSUPPORTED 3 MEDIA_LOCKED 4 MEDIA_UNLOCKED 3 jumps 873 STREAM_INTERRUPTED 6 tu 5 mr toggles 1 | underruns 5920 pitch 999970 | presentation error -63908..50129 avg -44481 ns, least margin 47881032 ns
+talker idle stream 021a2b3c4d5e0000 -> 91e0f00000b4 | PDUs 246348 underruns 0 overruns 0 late 217617 send errors 0 | level 43..48 avg 43.53 (target 48) pitch 1000000 | worst send delay 2513955 ns | gPTP rate +0.000 ppm residual 0 ns
+
+
+RECEIPT neg-nvm-mutant-carry.log
+[PASS] bound: stream_id:0200000000010000 dest_mac:91e0f0002820 vlan:2 listening:1 bound:1 binds:1
+[FAIL] A6.1 the restored binding is counted on from the killed process's bind count: binds 1 -> 1: stream_id:0200000000010000 dest_mac:91e0f0002820 vlan:2 listening:1 bound:1 binds:1
+[PASS] A6.2 an unbind survives a power cut: stream_id:0000000000000000 dest_mac:000000000000 vlan:0 listening:0 bound:0 binds:0
+[FAIL] A6.2 restarted unbound: not bound, the bind count kept: binds 1 -> 0: stream_id:0000000000000000 dest_mac:000000000000 vlan:0 listening:0 bound:0 binds:0
+[PASS] after them, a bind still survives a power cut: stream_id:0200000000010000 dest_mac:91e0f0002820 vlan:2 listening:1 bound:1 binds:1
+nvm: FAIL
+TAIL sink 0: bound, talker 020000fffe000001/0, acmp status 0
+sink 0: bound, talker 020000fffe000001/0, acmp status 0
+nvm: FAIL
+
+RECEIPT r901-edge-probes-head.log
+[PASS] datapath: sink 0 listening to stream 0200000000020000: stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:1
+[PASS] datapath: sink 1 listening to stream 0200000000020001: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:1
+REBIND before stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:1 [2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 4, 10]
+REBIND after stream_id:0000000000000000 dest_mac:000000000000 vlan:0 listening:0 bound:1 binds:2 [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+[PASS] burst rebind zeroed earlier EARLY_TIMESTAMP: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+[PASS] datapath: sink 1 listening to stream 0200000000020001: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:3
+SERIAL after stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:3 [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
+counters: PASS (0 failed)
+TAIL SERIAL after stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:3 [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
+[PASS] separated rebind zeroes earlier EARLY_TIMESTAMP
+counters: PASS (0 failed)
+
+RECEIPT r901-edge-probes-afc3506.log
+[PASS] datapath: sink 0 listening to stream 0200000000020000: stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:1
+[PASS] datapath: sink 1 listening to stream 0200000000020001: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:1
+REBIND before stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:1 [2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 4, 10]
+REBIND after stream_id:0000000000000000 dest_mac:000000000000 vlan:0 listening:0 bound:1 binds:1 [2, 2, 1, 0, 0, 0, 0, 0, 0, 0, 4, 11]
+[FAIL] burst rebind counted
+[FAIL] burst rebind zeroed earlier EARLY_TIMESTAMP: [2, 2, 1, 0, 0, 0, 0, 0, 0, 0, 4, 11]
+[PASS] datapath: sink 1 listening to stream 0200000000020001: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:2
+SERIAL after stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:2 [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
+counters: FAIL (2 failed)
+TAIL listener active, locked stream 0200000000020000 | FRAMES_RX 10542 SEQ_NUM_MISMATCH 0 LATE 0 EARLY 3037 UNSUPPORTED 0 MEDIA_LOCKED 2 MEDIA_UNLOCKED 1 jumps 0 STREAM_INTERRUPTED 1 tu 0 mr toggles 0 | underruns 4700 pitch 999998 | presentation error -56059..61754 avg 4500 ns, least margin 41141386 ns
+talker idle stream 021a2b3c4d5e0000 -> 91e0f00000b4 | PDUs 57378 underruns 0 overruns 0 late 51019 send errors 0 | level 44..49 avg 47.23 (target 48) pitch 1000000 | worst send delay 2040304 ns | gPTP rate +0.000 ppm residual 0 ns
+
+
+RECEIPT r901-startup-probe-head.log
+counters: PASS (0 failed)
+TAIL missing interface STREAM_INPUT 1 valid 0x0 values [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+[PASS] failed receive path has no valid counters 1
+counters: PASS (0 failed)
+
+RECEIPT r901-startup-probe-afc3506.log
+[FAIL] failed receive path has no valid counters 0
+counters: FAIL (1 failed)
+TAIL listener idle stream 0000000000000000 | FRAMES_RX 0 SEQ_NUM_MISMATCH 0 LATE 0 EARLY 0 UNSUPPORTED 0 MEDIA_LOCKED 0 MEDIA_UNLOCKED 0 jumps 0 STREAM_INTERRUPTED 0 tu 0 mr toggles 0 | underruns 0 pitch 1000000 | presentation error 0..0 avg 0 ns, least margin 0 ns
+talker idle stream 0000000000000000 -> 000000000000 | PDUs 0 underruns 0 overruns 0 late 0 send errors 0 | level 0..0 avg 0.00 (target 48) pitch 1000000 | worst send delay 0 ns | gPTP rate +0.000 ppm residual 0 ns
+
+
+RECEIPT compat-default-options.log
+tests/milan-compat/build.sh $VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src $VALIDATION_STORAGE/pb2aecp-a830/r4/lavdecc-build $VALIDATION_STORAGE/pb2aecp-a830/r4/compat-default/milan-compat
+online: entity 021a2bfffe3c4d5e model 001bc50ac1000100, compatibility IEEE17221|Milan, Milan 1.2.0.0, subscribed to unsolicited notifications, GET_DYNAMIC_INFO not used
+final: entity 021a2bfffe3c4d5e, compatibility IEEE17221|Milan, Milan 1.2.0.0, 0 compatibility events, 0 warnings/errors logged, 0 query errors, fatal enumeration error no
+verdict: PASS - Milan 1.2.0.0 compatible, zero compatibility events, warnings or errors
+sink0=stream_id:0000000000000000 dest_mac:000000000000 vlan:0 listening:0 bound:0 binds:0
+sink1=stream_id:0000000000000000 dest_mac:000000000000 vlan:0 listening:0 bound:0 binds:0
+milan_stream_output0=valid:01f binds:0 1 0 0 0 33 0 0 0 0 0 0 0
+milan_stream_input0=valid:f3f binds:0 0 0 0 0 0 0 0 0 0 0 0 0
+milan_stream_input1=valid:f3f binds:0 0 0 0 0 0 0 0 0 0 0 0 0
+online: entity 021a2bfffe3c4d5e model 001bc50ac1000100, compatibility IEEE17221|Milan, Milan 1.2.0.0, subscribed to unsolicited notifications, GET_DYNAMIC_INFO not used
+final: entity 021a2bfffe3c4d5e, compatibility IEEE17221|Milan, Milan 1.2.0.0, 0 compatibility events, 0 warnings/errors logged, 0 query errors, fatal enumeration error no
+verdict: PASS - Milan 1.2.0.0 compatible, zero compatibility events, warnings or errors
+sink0=stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:1
+sink1=stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:1
+milan_stream_output0=valid:01f binds:0 1 0 0 0 39 0 0 0 0 0 0 0
+milan_stream_input0=valid:f3f binds:1 1 0 0 0 0 0 0 0 0 0 0 38
+milan_stream_input1=valid:f3f binds:1 1 0 0 0 0 0 0 0 0 0 0 37
+TAIL --- talker.log
+talker: 2 PROBE_TX answered, 38850 AAF and 9713 CRF PDUs sent
+compat: PASS
+
+RECEIPT compat-strict-options.log
+tests/milan-compat/build.sh $VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src $VALIDATION_STORAGE/pb2aecp-a830/lavdecc/build-strict $VALIDATION_STORAGE/pb2aecp-a830/r4/compat-strict/milan-compat
+online: entity 021a2bfffe3c4d5e model 001bc50ac1000100, compatibility IEEE17221|Milan, Milan 1.2.0.0, subscribed to unsolicited notifications, GET_DYNAMIC_INFO not used
+final: entity 021a2bfffe3c4d5e, compatibility IEEE17221|Milan, Milan 1.2.0.0, 0 compatibility events, 0 warnings/errors logged, 0 query errors, fatal enumeration error no
+verdict: PASS - Milan 1.2.0.0 compatible, zero compatibility events, warnings or errors
+sink0=stream_id:0000000000000000 dest_mac:000000000000 vlan:0 listening:0 bound:0 binds:0
+sink1=stream_id:0000000000000000 dest_mac:000000000000 vlan:0 listening:0 bound:0 binds:0
+milan_stream_output0=valid:01f binds:0 1 0 0 0 33 0 0 0 0 0 0 0
+milan_stream_input0=valid:f3f binds:0 0 0 0 0 0 0 0 0 0 0 0 0
+milan_stream_input1=valid:f3f binds:0 0 0 0 0 0 0 0 0 0 0 0 0
+online: entity 021a2bfffe3c4d5e model 001bc50ac1000100, compatibility IEEE17221|Milan, Milan 1.2.0.0, subscribed to unsolicited notifications, GET_DYNAMIC_INFO not used
+final: entity 021a2bfffe3c4d5e, compatibility IEEE17221|Milan, Milan 1.2.0.0, 0 compatibility events, 0 warnings/errors logged, 0 query errors, fatal enumeration error no
+verdict: PASS - Milan 1.2.0.0 compatible, zero compatibility events, warnings or errors
+sink0=stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:1
+sink1=stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:1
+milan_stream_output0=valid:01f binds:0 1 0 0 0 39 0 0 0 0 0 0 0
+milan_stream_input0=valid:f3f binds:1 1 0 0 0 0 0 0 0 0 0 0 38
+milan_stream_input1=valid:f3f binds:1 1 0 0 0 0 0 0 0 0 0 0 37
+TAIL --- talker.log
+talker: 2 PROBE_TX answered, 38840 AAF and 9710 CRF PDUs sent
+compat: PASS
+
+RECEIPT cross-build-1.log
+TAIL aarch64-linux-gnu-gcc -L$VALIDATION_STORAGE/pb2aecp-a830/sysroot-aarch64/lib -o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/milan-dp $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/milan_dp.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/datapath.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/media.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/shmblk.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/gptp_shm.o -lrt
+aarch64-linux-gnu-gcc -L$VALIDATION_STORAGE/pb2aecp-a830/sysroot-aarch64/lib -o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/milan-mediad $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/milan_mediad.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/talker.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/listener.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/crf_rx.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/rxsock.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/aaf.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/crf.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/servo.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/gptp_time.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/audio_alsa.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/audio_sim.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/datapath.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/media.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/shmblk.o -lasound -lpthread -lm -lrt
+aarch64-linux-gnu-gcc -L$VALIDATION_STORAGE/pb2aecp-a830/sysroot-aarch64/lib -o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/milan-ctrld $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/milan_ctrld.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/softfab.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/gptp_shm.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/datapath.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/shmblk.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/entity_conf.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/nvm_file.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/aecp_far.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/media.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/fw/mbx.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/fw/ctrl_loop.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/fw/ctrl_pool.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/fw/ctrl_debug.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/fw/shlan_port.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/fw/adp.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/fw/adp_mbx.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/fw/maap.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/fw/maap_mbx.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/fw/maap_csr.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/fw/acmp.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/fw/acmp_mbx.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/fw/acmp_nvm.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/fw/ctrl_app.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/fw/mbx_model.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/fw/aecp.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/fw/aecp_commands.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/fw/aecp_maps.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/fw/aecp_image.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/fw/aecp_state.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/fw/aecp_mbx.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/fw/aecp_nvm.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/fw/aecp_face.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/fw/ctrl_app_aecp.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/fw/nvm_klj2.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-1/fw/nvm_store.o -lpthread -lrt
+
+RECEIPT cross-build-2.log
+TAIL aarch64-linux-gnu-gcc -L$VALIDATION_STORAGE/pb2aecp-a830/sysroot-aarch64/lib -o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/milan-dp $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/milan_dp.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/datapath.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/media.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/shmblk.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/gptp_shm.o -lrt
+aarch64-linux-gnu-gcc -L$VALIDATION_STORAGE/pb2aecp-a830/sysroot-aarch64/lib -o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/milan-mediad $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/milan_mediad.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/talker.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/listener.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/crf_rx.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/rxsock.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/aaf.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/crf.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/servo.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/gptp_time.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/audio_alsa.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/audio_sim.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/datapath.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/media.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/shmblk.o -lasound -lpthread -lm -lrt
+aarch64-linux-gnu-gcc -L$VALIDATION_STORAGE/pb2aecp-a830/sysroot-aarch64/lib -o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/milan-ctrld $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/milan_ctrld.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/softfab.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/gptp_shm.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/datapath.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/shmblk.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/entity_conf.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/nvm_file.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/aecp_far.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/media.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/fw/mbx.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/fw/ctrl_loop.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/fw/ctrl_pool.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/fw/ctrl_debug.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/fw/shlan_port.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/fw/adp.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/fw/adp_mbx.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/fw/maap.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/fw/maap_mbx.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/fw/maap_csr.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/fw/acmp.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/fw/acmp_mbx.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/fw/acmp_nvm.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/fw/ctrl_app.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/fw/mbx_model.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/fw/aecp.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/fw/aecp_commands.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/fw/aecp_maps.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/fw/aecp_image.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/fw/aecp_state.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/fw/aecp_mbx.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/fw/aecp_nvm.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/fw/aecp_face.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/fw/ctrl_app_aecp.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/fw/nvm_klj2.o $VALIDATION_STORAGE/pb2aecp-a830/r4/cross-2/fw/nvm_store.o -lpthread -lrt
+
+Archived binaries:
+8bfa76f2fb2c41f1cb2edb252c4496342e8e74986a9a1e10222c577af053ad2b SHA256SUMS
+532966e838a57e5944dc487a2d9be9779ecc37ff264f947d7e6d28a622a6dac9 entity.conf
+83cc00f83f63a1de1f3a02286c0558f1f93f6047936770be6e471e9864f38e4a milan-bridge.sh
+c2824e617bc51c9ae242ddfc859e83a6364d8c2daa722c25de7a21e66ef7a529 milan-dp
+8ea48e0503e9a29ba215c21e8e3f00fa2cd9676ec65056f7814b1376428b888c milan-gptp-watch
+8bef6f7693e34341c80a4e7138bdca1d8790d61d337850a47e43a048ec833f27 milan-mediad

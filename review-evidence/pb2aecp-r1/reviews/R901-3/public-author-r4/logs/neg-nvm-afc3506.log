@@ -1,0 +1,50 @@
+[PASS] bound: stream_id:0200000000010000 dest_mac:91e0f0002820 vlan:2 listening:1 bound:1 binds:1
+[PASS] A6.1 binding survives a power cut; fast connect without a controller: settled 3439 ms after the restart; saved state at boot ($VALIDATION_STORAGE/pb2aecp-a830/r4/tmp/tmp.C3wqHybtiJ/b.bin): slot A seq 1 (A 1, B 0) | bindings restored, rest restored | phase 1 dirty 0 pending 0 | commits 0 ok, 0 failed, 0 skipped | unread 0x0 read faults 0 legacy 0x0
+[FAIL] A6.1 the restored binding is counted on from the killed process's bind count: binds 1 -> 1: stream_id:0200000000010000 dest_mac:91e0f0002820 vlan:2 listening:1 bound:1 binds:1
+[PASS] A6.2 an unbind survives a power cut: stream_id:0000000000000000 dest_mac:000000000000 vlan:0 listening:0 bound:0 binds:0
+tests/run-netns-nvm.sh: line 58: [: : integer expected
+[FAIL] A6.2 restarted unbound: not bound, the bind count kept: binds 1 -> 0: stream_id:0000000000000000 dest_mac:000000000000 vlan:0 listening:0 bound:0 binds:0
+[PASS] A6.3 20 power cuts: every boot judged an accepted slot, no read fault: 23 boots, last: saved state at boot ($VALIDATION_STORAGE/pb2aecp-a830/r4/tmp/tmp.C3wqHybtiJ/b.bin): slot B seq 4 (A 3, B 4) | bindings restored, rest restored | phase 1 dirty 0 pending 0 | commits 0 ok, 0 failed, 0 skipped | unread 0x0 read faults 0 legacy 0x0
+[PASS] after them, a bind still survives a power cut: stream_id:0200000000010000 dest_mac:91e0f0002820 vlan:2 listening:1 bound:1 binds:1
+--- B ---
+entity 020000fffe000002 on veth1 (mac 020000000002, model 001bc50ac1000100, 1 sources, 2 sinks, no SRP domain): AECP open
+link up, grandmaster 0000000000000000 domain 0
+sink 0: unbound, talker 0000000000000000/0, acmp status 0
+MAAP: 1 addresses from 91e0f0005041
+AEM image: 5784 bytes, 32 descriptors, generated CRC e937544f verified; this board's identity 020000fffe000002, CRC aa629e5c
+saved state at boot ($VALIDATION_STORAGE/pb2aecp-a830/r4/tmp/tmp.C3wqHybtiJ/b.bin): slot B seq 4 (A 3, B 4) | bindings restored, rest restored | phase 1 dirty 0 pending 0 | commits 0 ok, 0 failed, 0 skipped | unread 0x0 read faults 0 legacy 0x0
+MAAP: no addresses
+entity 020000fffe000002 on veth1 (mac 020000000002, model 001bc50ac1000100, 1 sources, 2 sinks, no SRP domain): AECP open
+link up, grandmaster 0000000000000000 domain 0
+sink 0: bound, talker 020000fffe000001/0, acmp status 0
+sink 0: listening to stream 0200000000010000 at 91e0f0002820, VLAN 2
+sink 0: bound, talker 020000fffe000001/0, acmp status 0
+sink 0: bound, talker 020000fffe000001/0, acmp status 0
+MAAP: 1 addresses from 91e0f0005041
+AEM image: 5784 bytes, 32 descriptors, generated CRC e937544f verified; this board's identity 020000fffe000002, CRC aa629e5c
+saved state at boot ($VALIDATION_STORAGE/pb2aecp-a830/r4/tmp/tmp.C3wqHybtiJ/b.bin): slot B seq 4 (A 3, B 4) | bindings restored, rest restored | phase 1 dirty 0 pending 0 | commits 0 ok, 0 failed, 0 skipped | unread 0x0 read faults 0 legacy 0x0
+MAAP: no addresses
+entity 020000fffe000002 on veth1 (mac 020000000002, model 001bc50ac1000100, 1 sources, 2 sinks, no SRP domain): AECP open
+link up, grandmaster 0000000000000000 domain 0
+MAAP: 1 addresses from 91e0f0005041
+AEM image: 5784 bytes, 32 descriptors, generated CRC e937544f verified; this board's identity 020000fffe000002, CRC aa629e5c
+saved state at boot ($VALIDATION_STORAGE/pb2aecp-a830/r4/tmp/tmp.C3wqHybtiJ/b.bin): slot B seq 4 (A 3, B 4) | bindings restored, rest restored | phase 1 dirty 0 pending 0 | commits 0 ok, 0 failed, 0 skipped | unread 0x0 read faults 0 legacy 0x0
+MAAP: no addresses
+entity 020000fffe000002 on veth1 (mac 020000000002, model 001bc50ac1000100, 1 sources, 2 sinks, no SRP domain): AECP open
+link up, grandmaster 0000000000000000 domain 0
+sink 0: bound, talker 020000fffe000001/0, acmp status 0
+sink 0: listening to stream 0200000000010000 at 91e0f0002820, VLAN 2
+sink 0: bound, talker 020000fffe000001/0, acmp status 0
+sink 0: bound, talker 020000fffe000001/0, acmp status 0
+MAAP: 1 addresses from 91e0f0005041
+AEM image: 5784 bytes, 32 descriptors, generated CRC e937544f verified; this board's identity 020000fffe000002, CRC aa629e5c
+saved state at boot ($VALIDATION_STORAGE/pb2aecp-a830/r4/tmp/tmp.C3wqHybtiJ/b.bin): slot A seq 5 (A 5, B 4) | bindings restored, rest restored | phase 1 dirty 0 pending 0 | commits 0 ok, 0 failed, 0 skipped | unread 0x0 read faults 0 legacy 0x0
+MAAP: no addresses
+entity 020000fffe000002 on veth1 (mac 020000000002, model 001bc50ac1000100, 1 sources, 2 sinks, no SRP domain): AECP open
+link up, grandmaster 0000000000000000 domain 0
+MAAP: 1 addresses from 91e0f0005041
+sink 0: bound, talker 020000fffe000001/0, acmp status 0
+sink 0: listening to stream 0200000000010000 at 91e0f0002820, VLAN 2
+sink 0: bound, talker 020000fffe000001/0, acmp status 0
+sink 0: bound, talker 020000fffe000001/0, acmp status 0
+nvm: FAIL

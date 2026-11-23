@@ -1,0 +1,1464 @@
+diff --git a/br2-external/package/milan-fpga-src/milan-fpga-src.hash b/br2-external/package/milan-fpga-src/milan-fpga-src.hash
+index 7df22a3..c870df4 100644
+--- a/br2-external/package/milan-fpga-src/milan-fpga-src.hash
++++ b/br2-external/package/milan-fpga-src/milan-fpga-src.hash
+@@ -1,4 +1,4 @@
+ # milan-linux/milan-fpga.pin: MILAN_FPGA_SHA256, TSN_C_STACK_SHA256, LWSRP_SHA256
+ sha256  a0662e54f7204c1b3a780010092f1e7077b3949722dda823d262b717c264cb62  715589c1db7cf67e2f3259fd7083ebc7f0923376.tar.gz
+ sha256  4c9ad613b3a1742dd20851ee7fe8d81ce8c436df48b521aa807c9f6d1d9383c9  08ee86e812a0eb5e1dc6cd61b494d8baf3491348.tar.gz
+-sha256  c5b3b01c19db771bb6e6c379a7510489c5450b8214d9df5499b8d4a4957c0ee2  66b4def34dcbc0d371ce4eb339d3d0226875befa.tar.gz
++sha256  2d948089927a58f351176d3c1b8ef535b6533b007b400adc548ed7a5c806f2ac  58f7673b8c57a80230e716bc1774ff9cc2f71ddc.tar.gz
+diff --git a/milan-linux/AECP-STATUS.md b/milan-linux/AECP-STATUS.md
+index d05a211..fcd4f14 100644
+--- a/milan-linux/AECP-STATUS.md
++++ b/milan-linux/AECP-STATUS.md
+@@ -82,18 +82,36 @@ within 50 ms of its end. IEEE 1722.1-2021's per-event definitions
+ 
+ | Stream | Who counts it | What it counts |
+ | --- | --- | --- |
+-| STREAM_INPUT 0, AAF | milan-mediad's listener | FRAMES_RX: intervals with a PDU of the bound stream. SEQ_NUM_MISMATCH: with a non-sequential sequence_num. MEDIA_RESET: with the mr bit toggled (IEEE 1722-2016 4.4.4.3). TIMESTAMP_UNCERTAIN: with tu set (4.4.4.7). UNSUPPORTED_FORMAT: with a PDU not 8 channels, 32-bit, 48 kHz. LATE_TIMESTAMP and EARLY_TIMESTAMP: with a valid (tv) stamp in the past, or more than 4 x PTO ahead. MEDIA_LOCKED, MEDIA_UNLOCKED: the presentation servo's lock. STREAM_INTERRUPTED: no PDU for 10 ms, or a run of jumps to put the stream back on time |
+-| STREAM_INPUT 1, CRF | milan-mediad's CRF receive path (`src/crf_rx.c`) | the same header counters for CRF PDUs (IEEE 1722-2016 10.4); UNSUPPORTED_FORMAT for a PDU not in the Milan CRF format (Milan v1.2 Table 7.1); LATE and EARLY on its timestamp; MEDIA_LOCKED once 25 stamps in a row step on the 2 ms grid of the format, MEDIA_UNLOCKED when a step leaves it, mr toggles, or the stream stops (STREAM_INTERRUPTED) |
++| STREAM_INPUT 0, AAF | milan-mediad's listener | FRAMES_RX: intervals with a PDU of the bound stream. SEQ_NUM_MISMATCH: with a non-sequential sequence_num. MEDIA_RESET: with the mr bit toggled (IEEE 1722-2016 4.4.4.3). TIMESTAMP_UNCERTAIN: with tu set (4.4.4.7). UNSUPPORTED_FORMAT: with a PDU not 8 channels, 32-bit, 48 kHz. LATE_TIMESTAMP and EARLY_TIMESTAMP: with a valid (tv) stamp in the past, or more than 4 x PTO ahead. MEDIA_LOCKED, MEDIA_UNLOCKED: the presentation servo's lock. STREAM_INTERRUPTED: no PDU played for 10 ms (none arriving, or only ones too far ahead or of another format), or a run of jumps to put the stream back on time |
++| STREAM_INPUT 1, CRF | milan-mediad's CRF receive path (`src/crf_rx.c`) | the same header counters for CRF PDUs (IEEE 1722-2016 10.4); UNSUPPORTED_FORMAT for a PDU not in the Milan CRF format (Milan v1.2 Table 7.1); LATE and EARLY on its timestamp; MEDIA_LOCKED once 25 stamps in a row step on the 2 ms grid of the format, MEDIA_UNLOCKED when a step leaves it, mr toggles, or the stream stops (STREAM_INTERRUPTED: no Milan PDU processed for 10 ms, none arriving or only ones too far ahead) |
+ | STREAM_OUTPUT 0, AAF | milan-mediad's talker | STREAM_START, STREAM_STOP; FRAMES_TX: intervals in which it sent; MEDIA_RESET and TIMESTAMP_UNCERTAIN: intervals in which what it sent had mr toggled or tu set. Its PDUs never toggle mr (its media clock is gPTP's slot grid, and a gPTP step starts a new stream) and never set tu, so both stay 0. The last three are zeroed at each start (Table 5.4) |
+ 
+-A STREAM_INPUT's counters are zeroed when it goes from not bound to bound
+-(Milan v1.2 5.3.8.10): milan-ctrld counts those changes per sink in the
+-datapath block, and GET_COUNTERS reads zero for a binding milan-mediad has not
+-yet zeroed its counters for. MEDIA_LOCKED is always MEDIA_UNLOCKED or one more.
+-A media program that is not running (milan-mediad absent, or run without its
+-`crf` role) leaves its stream's counters not valid: nothing is reported valid
+-that nothing counts. `tests/run-netns-counters.sh` puts each fault into real
+-AAF and CRF streams and reads the counters back over AECP.
++A STREAM_INPUT's counters are zeroed each time it goes from not bound to bound
++(Milan v1.2 5.3.8.10), however fast the bindings follow one another.
++milan-ctrld counts those changes per sink in the datapath block where the
++binding is owned: the publication block's BINDING.BOUND, which ACMP writes
++before it answers BIND_RX or UNBIND_RX (the soft fabric sees each edge in the
++write that makes it). So a burst that unbinds and binds again inside one loop
++pass counts each binding, and the count is in the block before the response
++leaves. A binding the saved state restores at boot counts too, on from the
++count the previous milan-ctrld left in the block. GET_COUNTERS compares the
++media block's count with the datapath block's as it answers, so it reads zero
++for a binding milan-mediad has not yet zeroed its counters for, from the
++moment the binding is made. milan-mediad zeroes an input when it sees the count
++move, and drops what its socket still holds from before. MEDIA_LOCKED is
++always MEDIA_UNLOCKED or one more.
++
++Nothing is reported valid that nothing counts. A media program that is not
++running (milan-mediad absent, or run without its `crf` role) leaves its
++stream's counters not valid, and so does an input whose receive socket cannot
++be set up (no such interface, or a socket, filter, bind or receive timeout that
++fails): it marks its counters valid only once the socket is set up. A failed
++setup closes what it opened and is logged once with its step; milan-mediad runs
++on with its other streams, and the input stays not received until milan-mediad
++is restarted. `tests/run-netns-counters.sh` puts each fault into real AAF and
++CRF streams and reads the counters back over AECP, with a burst of bindings
++queued while both daemons are held, and GET_COUNTERS at once after a BIND_RX
++response. `tests/run-netns-rxfail.sh` makes each setup step fail in each input.
+ 
+ CLOCK_DOMAIN LOCKED and UNLOCKED follow flexptpd's lock while its status block
+ is live: its update count must be seen to move. 2 s without a move (a stopped
+@@ -162,10 +180,10 @@ was left unfixed, so none is listed as unfixable.
+ 
+ | Criterion | State |
+ | --- | --- |
+-| Pin: milan-fpga moved to dev-soft-core, with `make check` and the firmware gate | **open.** The pin is PR #986's published head, not its merge into dev-soft-core, which has not happened. `make check` passes at it. milan-fpga's firmware gate at the pin was run in part (milan-fpga#983's receipts list which); gate 1b, the shards and the mutation campaigns were not completed |
++| Pin: milan-fpga moved to dev-soft-core, with `make check` and the firmware gate | **open.** The pin is PR #986's published round-2 head, not its merge into dev-soft-core, which has not happened: #986 is still in review, with a fix to its `ctrl_loop.h` in progress. `make check` passes at it. milan-fpga's firmware gate at the pin was run in part (milan-fpga#983's receipts list which); gate 1b, the shards and the mutation campaigns were not completed |
+ | Host test: enumeration against the daemon on a veth pair | met: `tests/run-netns-aecp.sh`, and the la_avdecc run above |
+-| Board: a controller enumerates the board without errors | **open.** The owner's controller enumerated the earlier build on the board and reported the STREAM_INPUT counters error. This build fixes it on the veth pair, and has not been installed on the board |
+-| Install: under the RAUC flow, or a documented manual install | **open.** The Buildroot packages are in the defconfig, but the Buildroot image build has not been run with the published archive. The cross-built binaries and their install list are in the change's receipts |
++| Board: a controller enumerates the board without errors | **open.** The owner's controller enumerated the f405a57 build on the board and reported the STREAM_INPUT counters error. The 49b2035 build is installed on the board: read from a controller, STREAM_INPUT 0 and 1 report all ten counters valid and STREAM_OUTPUT 0 its five. Its enumeration by the owner's controller is not recorded. This build is not installed on the board |
++| Install: under the RAUC flow, or a documented manual install | **partly met.** A manual install is documented in the change's receipts: the cross-built binaries and their list, milan-ctrld, milan-mediad and milan-dp together. The 49b2035 build was installed on the board that way; this build is not. The Buildroot packages are in the defconfig, but the Buildroot image build has not been run with the published archive |
+ 
+ ## Evidence
+ 
+@@ -177,12 +195,17 @@ was left unfixed, so none is listed as unfixable.
+   5.4 command set, an unsolicited notification, GET_COUNTERS of every stream as
+   the media block marks it, BIND_RX on STREAM_INPUT 0 and 1 and the zeroing at
+   bind, the KLJ2-to-KLJ3 journal move, and CLOCK_DOMAIN against a flexptpd that
+-  stops, sticks or is replaced; `tests/counters.py` (the counters under faults);
+-  the talker, listener and saved-state power-cut suites.
++  stops, sticks or is replaced; `tests/counters.py` (the counters under faults,
++  a burst of bindings, GET_COUNTERS at once after BIND_RX); `tests/rxfail.py`
++  (each receive setup failure, in each input); the talker, listener and
++  saved-state power-cut suites, the last with the bind count a restored
++  binding moves.
+ - `make check-compat`: the la_avdecc run above.
+ - The aarch64 cross build of all four programs (milan-mediad against the
+   target's alsa-lib).
+ 
+-Not done: nothing was installed on a board. The Buildroot image build has not
+-been run with the published archive. milan-fpga's own firmware gate at the pin
++Not done: this build was not installed on a board (the 49b2035 build is, by
++the documented manual install), and no enumeration of the board by the owner's
++controller is recorded. The Buildroot image build has not been run with the
++published archive. milan-fpga's own firmware gate at the pin
+ was run in part (milan-fpga#983's receipts list which).
+diff --git a/milan-linux/Makefile b/milan-linux/Makefile
+index 7dbd3ba..5e012b1 100644
+--- a/milan-linux/Makefile
++++ b/milan-linux/Makefile
+@@ -58,7 +58,7 @@ OWN_CFLAGS := -std=gnu11 -O2 -Wall -Wextra -Werror -Isrc $(FW_INC) $(SHAPE) $(CF
+ CTRLD_SRCS := src/milan_ctrld.c src/softfab.c src/gptp_shm.c src/datapath.c src/shmblk.c src/entity_conf.c \
+ 	src/nvm_file.c src/aecp_far.c src/media.c
+ CTRLD_OBJS := $(addprefix $(O)/,$(notdir $(CTRLD_SRCS:.c=.o)))
+-MEDIAD_SRCS := src/milan_mediad.c src/talker.c src/listener.c src/crf_rx.c src/aaf.c src/crf.c src/servo.c \
++MEDIAD_SRCS := src/milan_mediad.c src/talker.c src/listener.c src/crf_rx.c src/rxsock.c src/aaf.c src/crf.c src/servo.c \
+ 	src/gptp_time.c src/audio_alsa.c src/audio_sim.c src/datapath.c src/media.c src/shmblk.c
+ MEDIAD_OBJS := $(addprefix $(O)/,$(notdir $(MEDIAD_SRCS:.c=.o)))
+ DP_OBJS := $(addprefix $(O)/,milan_dp.o datapath.o media.o shmblk.o gptp_shm.o)
+@@ -103,12 +103,13 @@ check-compat: all
+ 	tests/milan-compat/run-netns-compat.sh $(O) $(O)/milan-compat config/entity.conf 15
+ 	tests/milan-compat/run-netns-compat.sh $(O) $(O)/milan-compat config/entity.conf 15 streams
+ 
+-check: all check-config $(O)/test_media $(O)/test_gptp
++check: all check-config $(O)/test_media $(O)/test_gptp $(O)/rxfail.so
+ 	$(O)/test_media
+ 	$(O)/test_gptp
+ 	tests/run-netns.sh $(O)/milan-ctrld $(O)/milan-dp config/entity.conf
+ 	tests/run-netns-aecp.sh $(O)/milan-ctrld $(O)/milan-dp config/entity.conf
+ 	tests/run-netns-counters.sh $(O) config/entity.conf
++	tests/run-netns-rxfail.sh $(O) config/entity.conf
+ 	tests/run-netns-talker.sh $(O)
+ 	tests/run-netns-listener.sh $(O)
+ 	tests/run-netns-nvm.sh $(O)
+@@ -117,6 +118,11 @@ $(O)/test_gptp: tests/test_gptp.c src/gptp_time.c src/gptp_shm.c src/gptp_time.h
+ 	@mkdir -p $(O)
+ 	$(CC) $(OWN_CFLAGS) -o $@ tests/test_gptp.c src/gptp_time.c src/gptp_shm.c -lrt
+ 
++# a media input's receive socket setup made to fail, one step in one thread (tests/rxfail.py)
++$(O)/rxfail.so: tests/rxfail.c
++	@mkdir -p $(O)
++	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -shared -fPIC -o $@ $< -ldl
++
+ $(O)/test_media: tests/test_media.c src/aaf.c src/crf.c src/servo.c src/media.c src/shmblk.c src/aaf.h src/crf.h \
+ 		src/servo.h src/media.h
+ 	@mkdir -p $(O)
+diff --git a/milan-linux/README.md b/milan-linux/README.md
+index 38295c7..7aff61c 100644
+--- a/milan-linux/README.md
++++ b/milan-linux/README.md
+@@ -158,7 +158,11 @@ The media block holds each event's raw count: `listener_frames_rx` (PDUs),
+ `_timestamp_uncertain` and `_media_restarts`. `milan_stream_input0` holds the
+ Milan counters GET_COUNTERS serves (v1.2 5.3.8.10, Table 5.6): most count
+ 500 ms observation intervals in which the event happened, and all are zeroed
+-when the input goes from not bound to bound. It also reports
++each time the input goes from not bound to bound (`milan-dp`'s `binds`: each
++binding milan-ctrld publishes, however fast they come). A PDU stamped too far
++ahead is not played, so a run of them interrupts the playback as a gap does.
++Its counters are valid only once its receive socket is set up; a setup that
++fails is logged with its step, and the input reports none valid. It also reports
+ `_align_min/max/avg_ns`, the presentation error, and `_margin_min_ns`, how
+ early the PDUs arrive.
+ 
+@@ -314,7 +318,15 @@ end that binds both inputs and sends AAF and CRF streams. Into those it puts a
+ lost PDU, tu, an mr toggle, another format, a late backlog, early stamps and
+ an interruption, one at a time. It reads each counter's change back over
+ GET_COUNTERS, and checks the zeroing at a new binding and the talker's
+-STREAM_OUTPUT counters.
++STREAM_OUTPUT counters. Last, with milan-ctrld and milan-mediad held, it queues
++UNBIND_RX and BIND_RX twice on STREAM_INPUT 0 and once on STREAM_INPUT 1, and
++checks that each binding is counted and both inputs read zero at once; then
++GET_COUNTERS sent the moment a BIND_RX response is seen reads zero, five times.
++
++`tests/run-netns-rxfail.sh` starts milan-mediad again for each step of an
++input's receive socket setup, made to fail in one input by `tests/rxfail.c`
++(an LD_PRELOAD library), and checks that the input reports none valid while
++the other counts, that the step is logged, and that nothing is left open.
+ 
+ `make check-compat` enumerates the entity with a controller on la_avdecc 4.3.x
+ (`tests/milan-compat/`, which says how to build the library). It passes only
+diff --git a/milan-linux/config/entity.conf b/milan-linux/config/entity.conf
+index 0a20945..7ed7c29 100644
+--- a/milan-linux/config/entity.conf
++++ b/milan-linux/config/entity.conf
+@@ -1,6 +1,6 @@
+ # milan-ctrld entity description: the struct adp_entity fields (adp.h)
+ # GENERATED by milan-linux/tools/gen-entity-conf.sh from
+-#   endstation_pb2_bridge.yaml at milan-fpga 66b4def34dcbc0d371ce4eb339d3d0226875befa, through sw/firmware/ctrl/adp/adp_entity.py.
++#   endstation_pb2_bridge.yaml at milan-fpga 58f7673b8c57a80230e716bc1774ff9cc2f71ddc, through sw/firmware/ctrl/adp/adp_entity.py.
+ # DO NOT EDIT: regenerate. entity_id and mac come from the interface at run time.
+ entity_model_id=0x1BC50AC1000100
+ entity_capabilities=0xC588
+diff --git a/milan-linux/config/nvm_shape_gen.h b/milan-linux/config/nvm_shape_gen.h
+index b46273d..3d63bb5 100644
+--- a/milan-linux/config/nvm_shape_gen.h
++++ b/milan-linux/config/nvm_shape_gen.h
+@@ -1,4 +1,4 @@
+-/* GENERATED by milan-linux/tools/gen-nvm-shape.py from endstation_pb2_bridge.yaml at milan-fpga 66b4def34dcbc0d371ce4eb339d3d0226875befa,
++/* GENERATED by milan-linux/tools/gen-nvm-shape.py from endstation_pb2_bridge.yaml at milan-fpga 58f7673b8c57a80230e716bc1774ff9cc2f71ddc,
+  * through sw/firmware/ctrl_nvm/test/nvm_bench.py shape_header. DO NOT EDIT: regenerate.
+  * The identity words are milan-ctrld's run-time variables (src/nvm_file.c). */
+ #ifndef NVM_SHAPE_GEN_H
+diff --git a/milan-linux/milan-fpga.pin b/milan-linux/milan-fpga.pin
+index 806d7d7..53dc8ab 100644
+--- a/milan-linux/milan-fpga.pin
++++ b/milan-linux/milan-fpga.pin
+@@ -7,9 +7,9 @@
+ # profile config/endstation_pb2_bridge.yaml is written for). Move the pin to
+ # that PR's merge commit once it lands on dev-soft-core.
+ MILAN_FPGA_REPO=https://github.com/kebag-logic/milan-fpga
+-MILAN_FPGA_REV=66b4def34dcbc0d371ce4eb339d3d0226875befa
++MILAN_FPGA_REV=58f7673b8c57a80230e716bc1774ff9cc2f71ddc
+ # sha256 of $(MILAN_FPGA_REPO)/archive/$(MILAN_FPGA_REV).tar.gz
+-MILAN_FPGA_SHA256=c5b3b01c19db771bb6e6c379a7510489c5450b8214d9df5499b8d4a4957c0ee2
++MILAN_FPGA_SHA256=2d948089927a58f351176d3c1b8ef535b6533b007b400adc548ed7a5c806f2ac
+ # The TSN stack the firmware's ADP, ACMP, MAAP and wire layer come from (the
+ # gitlink third_party/tsn-c-stack at MILAN_FPGA_REV): every build needs it.
+ TSN_C_STACK_REPO=https://github.com/kebag-logic/tsn-c-stack
+diff --git a/milan-linux/src/aecp_far.c b/milan-linux/src/aecp_far.c
+index 4cd1c3b..f061b9e 100644
+--- a/milan-linux/src/aecp_far.c
++++ b/milan-linux/src/aecp_far.c
+@@ -69,16 +69,24 @@ static struct aecp_far_counters stream_counters(const struct aecp_far *f, const
+ // Which media program counts which stream: milan-mediad's AAF listener
+ // STREAM_INPUT 0, its CRF receive path STREAM_INPUT 1 (crf_rx.h), its talker
+ // STREAM_OUTPUT 0. Any other stream of the model has none.
++static struct aecp_far_counters input_counters(const struct aecp_far *f, unsigned index)
++{
++	struct aecp_far_counters none = {0};
++	const struct milan_media *m = &f->media_copy;
++	if (index >= f->cfg.n_inputs) {
++		return none;
++	}
++	return index == 0u ? stream_counters(f, &m->listener.milan, 0)
++	     : index == 1u ? stream_counters(f, &m->crf.milan, 1) : none;
++}
++
+ static void stream_poll(struct aecp_far *f, struct aecp_far_counters *in, struct aecp_far_counters *out)
+ {
+ 	memset(in, 0, sizeof *in * AECP_FAR_COUNTED);
+ 	memset(out, 0, sizeof *out * AECP_FAR_COUNTED);
+ 	const struct milan_media *m = &f->media_copy;
+-	if (f->cfg.n_inputs > 0u) {
+-		in[0] = stream_counters(f, &m->listener.milan, 0);
+-	}
+-	if (f->cfg.n_inputs > 1u) {
+-		in[1] = stream_counters(f, &m->crf.milan, 1);
++	for (unsigned k = 0; k < AECP_FAR_COUNTED; ++k) {
++		in[k] = input_counters(f, k);
+ 	}
+ 	if (f->cfg.n_outputs > 0u) {
+ 		out[0] = stream_counters(f, &m->talker.milan, -1);
+@@ -96,8 +104,10 @@ static bool counters(const struct aecp_far *f, uint16_t type, uint16_t index, st
+ 		put(out, CD_LOCKED, f->locks);
+ 		put(out, CD_UNLOCKED, f->unlocks);
+ 	} else if (type == STREAM_INPUT && index < f->cfg.n_inputs) {
++		// against the bind count as it is now, not as the last poll saw it: a
++		// binding made since then has its counters at zero (stream_counters)
+ 		if (index < AECP_FAR_COUNTED) {
+-			*out = f->input[index];
++			*out = input_counters(f, index);
+ 		}
+ 	} else if (type == STREAM_OUTPUT && index < f->cfg.n_outputs) {
+ 		if (index < AECP_FAR_COUNTED) {
+diff --git a/milan-linux/src/crf_rx.c b/milan-linux/src/crf_rx.c
+index c38f3bd..c3e4c3a 100644
+--- a/milan-linux/src/crf_rx.c
++++ b/milan-linux/src/crf_rx.c
+@@ -107,6 +107,21 @@ struct grid {
+ 	uint64_t run_events;            // the events since it, at the nominal step
+ };
+ 
++// no Milan PDU of the stream processed for interrupt_ns (Milan v1.2 Table 5.6
++// STREAM_INTERRUPTED): unlocked, and waiting for the next to start the grid over
++static void interrupt(struct crf_rx *x, struct milan_media_crf *r, enum cstate *state, bool *have_seq,
++		      struct grid *g)
++{
++	r->stream_interrupted++;
++	r->milan.value[MILAN_SI_STREAM_INTERRUPTED]++;
++	set_locked(r, false);
++	r->active = 0;
++	*state = C_WAITING;
++	*have_seq = false;
++	g->have = false;
++	live_update(x, r);
++}
++
+ static void *crf_rx_main(void *arg)
+ {
+ 	struct crf_rx *x = arg;
+@@ -114,25 +129,20 @@ static void *crf_rx_main(void *arg)
+ 	struct milan_media_crf rep;
+ 	memset(&rep, 0, sizeof rep);
+ 	rep.margin_min_ns = INT32_MAX;
+-	rep.milan.valid = MILAN_SI_VALID;       // this thread counts all ten (media.h)
+ 	struct milan_obs obs;
+ 	milan_counters_zero(&rep.milan, &obs, 0, milan_mono_ns());
+-	live_update(x, &rep);
++	(void)pthread_setname_np(pthread_self(), "milan-crf-rx");
+ 
+-	int ifindex = (int)if_nametoindex(c->ifname);
+-	int fd = socket(AF_PACKET, SOCK_RAW | SOCK_CLOEXEC, htons(ETH_P_ALL));
+-	struct sockaddr_ll sll = {.sll_family = AF_PACKET, .sll_protocol = htons(ETH_P_ALL), .sll_ifindex = ifindex};
+-	struct timeval tv = {0, 5000};
+-	if (fd < 0 || ifindex == 0 || set_filter(fd, 0) != 0 || bind(fd, (struct sockaddr *)&sll, sizeof sll) != 0 ||
+-	    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv) != 0) {
+-		// no receive path: nothing counts the input, so none of its counters is valid
+-		rep.milan.valid = 0;
++	// no receive path: nothing counts the input, so none of its counters is
++	// valid; they are once it receives (rxsock.h)
++	int ifindex = 0;
++	int fd = rxsock_open(&x->rx, c->ifname, set_filter, &ifindex);
++	if (fd < 0) {
+ 		live_update(x, &rep);
+-		if (fd >= 0) {
+-			close(fd);
+-		}
+ 		return NULL;
+ 	}
++	rep.milan.valid = MILAN_SI_VALID;       // this thread counts all ten (media.h)
++	live_update(x, &rep);
+ 	int one = 1;
+ 	(void)setsockopt(fd, SOL_PACKET, PACKET_IGNORE_OUTGOING, &one, sizeof one);
+ 
+@@ -170,6 +180,9 @@ static void *crf_rx_main(void *arg)
+ 				state = C_NONE;
+ 				cur_stream = cur_mac = 0;
+ 				set_filter(fd, 0);
++				// what the socket holds from before is not this binding's to count
++				while (recv(fd, frame, sizeof frame, MSG_DONTWAIT) > 0) {
++				}
+ 				if (listening) {
+ 					cur_stream = k.stream_id;
+ 					cur_mac = k.dest_mac;
+@@ -205,14 +218,7 @@ static void *crf_rx_main(void *arg)
+ 			uint8_t peek;
+ 			bool pending = n <= 0 && recv(fd, &peek, 1, MSG_PEEK | MSG_DONTWAIT) > 0;
+ 			if (state == C_RUNNING && !pending && now - last_rx > c->interrupt_ns) {
+-				rep.stream_interrupted++;
+-				rep.milan.value[MILAN_SI_STREAM_INTERRUPTED]++;
+-				set_locked(&rep, false);
+-				rep.active = 0;
+-				state = C_WAITING;
+-				have_seq = false;
+-				g.have = false;
+-				live_update(x, &rep);
++				interrupt(x, &rep, &state, &have_seq, &g);
+ 			}
+ 			if (!ours) {
+ 				continue;
+@@ -250,9 +256,14 @@ static void *crf_rx_main(void *arg)
+ 			rep.late_timestamp++;
+ 			milan_obs_note(&obs, MILAN_SI_LATE_TIMESTAMP);
+ 		} else if (margin > c->early_ns) {
+-			// too far in the future to process: counted, and not laid on the grid
++			// too far in the future to process: counted, and not laid on the grid,
++			// so a run of them interrupts the stream as a gap would, judged on
++			// each one, not only when a receive times out
+ 			rep.early_timestamp++;
+ 			milan_obs_note(&obs, MILAN_SI_EARLY_TIMESTAMP);
++			if (state == C_RUNNING && now - last_rx > c->interrupt_ns) {
++				interrupt(x, &rep, &state, &have_seq, &g);
++			}
+ 			continue;
+ 		}
+ 		int32_t m32 = margin < INT32_MIN ? INT32_MIN : margin > INT32_MAX ? INT32_MAX : (int32_t)margin;
+diff --git a/milan-linux/src/crf_rx.h b/milan-linux/src/crf_rx.h
+index 6a1ff9e..3ac6626 100644
+--- a/milan-linux/src/crf_rx.h
++++ b/milan-linux/src/crf_rx.h
+@@ -42,6 +42,7 @@
+ #include "datapath.h"
+ #include "gptp_time.h"
+ #include "media.h"
++#include "rxsock.h"
+ #include "shmblk.h"
+ 
+ #define CRF_RX_LOCK_STEPS 25u           // 50 ms of 2 ms steps on the grid
+@@ -67,6 +68,7 @@ struct crf_rx {
+ 	struct crf_rx_cfg cfg;
+ 	pthread_t thread;
+ 	atomic_bool stop;
++	struct rxsock_state rx;         // its receive socket's setup
+ 	struct crf_rx_live live;
+ };
+ 
+diff --git a/milan-linux/src/datapath.c b/milan-linux/src/datapath.c
+index b4ab735..80433dc 100644
+--- a/milan-linux/src/datapath.c
++++ b/milan-linux/src/datapath.c
+@@ -6,6 +6,7 @@
+ #include "datapath.h"
+ 
+ #include <stddef.h>
++#include <sys/mman.h>
+ 
+ #include "shmblk.h"
+ 
+@@ -16,7 +17,26 @@ _Static_assert(offsetof(struct milan_dp, magic) == offsetof(struct shmblk_hdr, m
+ 
+ struct milan_dp *milan_dp_create(const char *name)
+ {
+-	return shmblk_create(name, sizeof(struct milan_dp), MILAN_DP_MAGIC, MILAN_DP_VERSION);
++	// the bind counts of the block taken over, read word by word (a writer
++	// killed inside an update tears no aligned word), so a binding restored
++	// at boot moves its sink's count past the one the media plane last zeroed for
++	uint32_t binds[MILAN_DP_MAX_SINKS] = {0};
++	const struct milan_dp *old = milan_dp_open(name);
++	if (old != NULL) {
++		for (unsigned k = 0; k < MILAN_DP_MAX_SINKS; ++k) {
++			binds[k] = __atomic_load_n(&old->sinks[k].binds, __ATOMIC_RELAXED);
++		}
++		munmap((void *)(uintptr_t)old, sizeof *old);
++	}
++	struct milan_dp *dp = shmblk_create(name, sizeof(struct milan_dp), MILAN_DP_MAGIC, MILAN_DP_VERSION);
++	if (dp != NULL) {
++		milan_dp_begin(dp);
++		for (unsigned k = 0; k < MILAN_DP_MAX_SINKS; ++k) {
++			dp->sinks[k].binds = binds[k];
++		}
++		milan_dp_end(dp);
++	}
++	return dp;
+ }
+ 
+ const struct milan_dp *milan_dp_open(const char *name)
+diff --git a/milan-linux/src/datapath.h b/milan-linux/src/datapath.h
+index 23062ef..03876f7 100644
+--- a/milan-linux/src/datapath.h
++++ b/milan-linux/src/datapath.h
+@@ -40,7 +40,8 @@ struct milan_dp_sink {
+ 	uint8_t listening;      // ACMP settled: receive this stream
+ 	uint8_t bound;          // ACMP's bound state (Milan v1.2 5.3.8.2), settled or not
+ 	uint32_t binds;         // times it went from not bound to bound, which zeroes the
+-				// input's Milan counters (Milan v1.2 5.3.8.10, media.h)
++				// input's Milan counters (Milan v1.2 5.3.8.10, media.h);
++				// counted on from the block a restarted writer takes over
+ };
+ 
+ struct milan_dp {
+@@ -64,7 +65,8 @@ struct milan_dp {
+ 	struct milan_dp_sink sinks[MILAN_DP_MAX_SINKS];
+ };
+ 
+-// Writer: create (or take over) the block and map it; NULL on failure.
++// Writer: create (or take over) the block and map it; NULL on failure. A block
++// taken over is zeroed but for each sink's binds.
+ struct milan_dp *milan_dp_create(const char *name);
+ // Reader: map an existing block read-only; NULL when absent or of another
+ // layout.
+diff --git a/milan-linux/src/listener.c b/milan-linux/src/listener.c
+index 2f08b84..4a55793 100644
+--- a/milan-linux/src/listener.c
++++ b/milan-linux/src/listener.c
+@@ -73,6 +73,19 @@ static void live_update(struct listener *ls, const struct milan_media_listener *
+ 	shmblk_end(&ls->live);
+ }
+ 
++// nothing played for interrupt_ns: the playback stops, and is placed again
++// from the next PDU it can play
++static void stop_playback(struct listener *ls, struct milan_media_listener *r, enum lstate *state, bool *have_seq)
++{
++	interrupted(r);
++	set_locked(r, false);
++	r->active = 0;
++	ls->cfg.snk->stop(ls->cfg.snk);
++	*state = L_WAITING;
++	*have_seq = false;
++	live_update(ls, r);
++}
++
+ void listener_report(const struct listener *ls, struct milan_media_listener *out)
+ {
+ 	struct listener_live copy;
+@@ -140,19 +153,19 @@ static void *listener_main(void *arg)
+ 	memset(&rep, 0, sizeof rep);
+ 	rep.pitch = 1000000;
+ 	rep.in_flight_ns = c->in_flight_ns;
+-	rep.milan.valid = MILAN_SI_VALID;       // this thread counts all ten (media.h)
+ 	struct milan_obs obs;
+ 	milan_counters_zero(&rep.milan, &obs, 0, milan_mono_ns());
+-	live_update(ls, &rep);
++	(void)pthread_setname_np(pthread_self(), "milan-listener");
+ 
+-	int ifindex = (int)if_nametoindex(c->ifname);
+-	int fd = socket(AF_PACKET, SOCK_RAW | SOCK_CLOEXEC, htons(ETH_P_ALL));
+-	struct sockaddr_ll sll = {.sll_family = AF_PACKET, .sll_protocol = htons(ETH_P_ALL), .sll_ifindex = ifindex};
+-	struct timeval tv = {0, 5000};
+-	if (fd < 0 || ifindex == 0 || set_filter(fd, 0) != 0 || bind(fd, (struct sockaddr *)&sll, sizeof sll) != 0 ||
+-	    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv) != 0) {
++	// none valid until it receives: a failed setup leaves them so (rxsock.h)
++	int ifindex = 0;
++	int fd = rxsock_open(&ls->rx, c->ifname, set_filter, &ifindex);
++	if (fd < 0) {
++		live_update(ls, &rep);
+ 		return NULL;
+ 	}
++	rep.milan.valid = MILAN_SI_VALID;       // this thread counts all ten (media.h)
++	live_update(ls, &rep);
+ 	int one = 1;
+ 	(void)setsockopt(fd, SOL_PACKET, PACKET_IGNORE_OUTGOING, &one, sizeof one);
+ 	// room for half a second of PDUs, should the thread be held off its core
+@@ -200,6 +213,9 @@ static void *listener_main(void *arg)
+ 				state = L_NONE;
+ 				memset(&cur, 0, sizeof cur);
+ 				set_filter(fd, 0);
++				// what the socket holds from before is not this binding's to count
++				while (recv(fd, frame, sizeof frame, MSG_DONTWAIT) > 0) {
++				}
+ 				if (listening) {
+ 					cur = (struct lstream){k.stream_id, k.dest_mac};
+ 					set_filter(fd, k.dest_mac);
+@@ -221,13 +237,7 @@ static void *listener_main(void *arg)
+ 			uint8_t peek;
+ 			bool pending = recv(fd, &peek, 1, MSG_PEEK | MSG_DONTWAIT) > 0;
+ 			if (state == L_RUNNING && !pending && now - last_rx > c->interrupt_ns) {
+-				interrupted(&rep);
+-				set_locked(&rep, false);
+-				rep.active = 0;
+-				snk->stop(snk);
+-				state = L_WAITING;
+-				have_seq = false;
+-				live_update(ls, &rep);
++				stop_playback(ls, &rep, &state, &have_seq);
+ 			}
+ 			continue;
+ 		}
+@@ -275,18 +285,18 @@ static void *listener_main(void *arg)
+ 			milan_obs_note(&obs, MILAN_SI_UNSUPPORTED_FORMAT);
+ 			// nothing to play for interrupt_ns, though PDUs of another format arrive
+ 			if (state == L_RUNNING && now - last_rx > c->interrupt_ns) {
+-				interrupted(&rep);
+-				set_locked(&rep, false);
+-				rep.active = 0;
+-				snk->stop(snk);
+-				state = L_WAITING;
+-				have_seq = false;
+-				live_update(ls, &rep);
++				stop_playback(ls, &rep, &state, &have_seq);
+ 			}
+ 			continue;
+ 		}
+ 		if (early) {
+-			continue;               // too far in the future to process (Milan v1.2 Table 5.6): not played
++			// too far in the future to process (Milan v1.2 Table 5.6): not played,
++			// so a run of them interrupts the playback as a gap would, judged on
++			// each one, not only when a receive times out
++			if (state == L_RUNNING && now - last_rx > c->interrupt_ns) {
++				stop_playback(ls, &rep, &state, &have_seq);
++			}
++			continue;
+ 		}
+ 		rep.frames_rx++;
+ 		last_rx = now;
+diff --git a/milan-linux/src/listener.h b/milan-linux/src/listener.h
+index 3d8f062..4f7aa83 100644
+--- a/milan-linux/src/listener.h
++++ b/milan-linux/src/listener.h
+@@ -36,6 +36,7 @@
+ #include "datapath.h"
+ #include "gptp_time.h"
+ #include "media.h"
++#include "rxsock.h"
+ #include "shmblk.h"
+ 
+ struct listener_cfg {
+@@ -61,6 +62,7 @@ struct listener {
+ 	struct listener_cfg cfg;
+ 	pthread_t thread;
+ 	atomic_bool stop;
++	struct rxsock_state rx;         // its receive socket's setup
+ 	struct listener_live live;
+ };
+ 
+diff --git a/milan-linux/src/milan_ctrld.c b/milan-linux/src/milan_ctrld.c
+index 5612d55..5c4b726 100644
+--- a/milan-linux/src/milan_ctrld.c
++++ b/milan-linux/src/milan_ctrld.c
+@@ -245,21 +245,25 @@ static void env_persist(void *ctx, unsigned sink)
+ 	say(LOG_DEBUG, "sink %u: binding changed", sink);
+ }
+ 
+-// ACMP's bound state into the datapath block, and the count of not-bound to
+-// bound changes that zeroes an input's Milan counters (Milan v1.2 5.3.8.10).
+-// Read every loop pass, so a binding the saved state restores at boot counts
+-// as one too.
+-static void publish_bound(void)
++// The bound state into the datapath block, and the count of not-bound to bound
++// changes that zeroes an input's Milan counters (Milan v1.2 5.3.8.10), at the
++// owner's boundary: the publication's BINDING.BOUND, which ACMP writes before
++// it answers BIND_RX or UNBIND_RX, and for a binding the saved state restores
++// at boot (softfab.h). Each edge is seen in the write that makes it, so a
++// burst that unbinds and binds again within one loop pass counts its binding,
++// and the count is in the block before the response leaves or a later
++// GET_COUNTERS is answered (aecp_far.c). Inside the firmware's write: no call
++// back into it, and the block is never inside another update here.
++static void sink_bound(void *ctx, unsigned sink, bool bound)
+ {
+-	for (unsigned k = 0; k < acmp_cfg.n_sinks && k < ACMP_MAX_SINKS && k < MILAN_DP_MAX_SINKS; ++k) {
+-		bool bound = app.acmp.acmp.sinks[k].bound;
+-		if (bound != (dp->sinks[k].bound != 0u)) {
+-			milan_dp_begin(dp);
+-			dp->sinks[k].bound = bound;
+-			dp->sinks[k].binds += bound ? 1u : 0u;
+-			milan_dp_end(dp);
+-		}
++	(void)ctx;
++	if (dp == NULL || sink >= MILAN_DP_MAX_SINKS) {
++		return;
+ 	}
++	milan_dp_begin(dp);
++	dp->sinks[sink].bound = bound;
++	dp->sinks[sink].binds += bound ? 1u : 0u;
++	milan_dp_end(dp);
+ }
+ 
+ static void env_changed(void *ctx, unsigned sink)
+@@ -665,6 +669,7 @@ int main(int argc, char **argv)
+ 		.ifname = opt.ifname,
+ 		.gptp_shm = opt.gptp_shm,
+ 		.gptp_poll_ms = opt.gptp_poll_ms,
++		.bound_changed = sink_bound,
+ 	};
+ 	if (softfab_open(&fab, &fcfg) != 0) {
+ 		return 1;
+@@ -700,7 +705,6 @@ int main(int argc, char **argv)
+ 		}
+ 		softfab_pump(&fab, handled == 0u);
+ 		publish_gptp();
+-		publish_bound();
+ 		aecp_far_poll(&far);
+ 		if (dump_requested) {
+ 			dump_requested = 0;
+diff --git a/milan-linux/src/milan_mediad.c b/milan-linux/src/milan_mediad.c
+index 793d25c..3b5043b 100644
+--- a/milan-linux/src/milan_mediad.c
++++ b/milan-linux/src/milan_mediad.c
+@@ -365,6 +365,18 @@ int main(int argc, char **argv)
+ 		if (opt.crf) {
+ 			crf_rx_report(&crf, &x);
+ 		}
++		// an input whose receive socket could not be set up counts nothing, and
++		// reports none of its counters valid; said once, the rest runs on
++		const char *step;
++		int err;
++		if (opt.listener && rxsock_failed(&ls.rx, &step, &err)) {
++			say(LOG_ERR, "listener on %s: %s: %s; STREAM_INPUT 0 is not received, none of its counters valid",
++			    opt.ifname, step, strerror(err));
++		}
++		if (opt.crf && rxsock_failed(&crf.rx, &step, &err)) {
++			say(LOG_ERR, "CRF input on %s: %s: %s; STREAM_INPUT 1 is not received, none of its counters valid",
++			    opt.ifname, step, strerror(err));
++		}
+ 		milan_media_begin(media);
+ 		media->gptp_rate_ppb = (int64_t)((clk.model.rate - 1.0) * 1e9);
+ 		media->gptp_residual_ns = clk.residual_ns;
+diff --git a/milan-linux/src/rxsock.c b/milan-linux/src/rxsock.c
+new file mode 100644
+index 0000000..b8f37f5
+--- /dev/null
++++ b/milan-linux/src/rxsock.c
+@@ -0,0 +1,62 @@
++// SPDX-FileCopyrightText: Copyright (c) 2026 Kebag-Logic
++// SPDX-License-Identifier: Apache-2.0
++//
++// rxsock.c - see rxsock.h.
++
++#define _GNU_SOURCE
++#include "rxsock.h"
++
++#include <arpa/inet.h>
++#include <errno.h>
++#include <linux/if_packet.h>
++#include <net/ethernet.h>
++#include <net/if.h>
++#include <sys/socket.h>
++#include <sys/time.h>
++#include <unistd.h>
++
++static int fail(struct rxsock_state *st, int fd, const char *step, int err)
++{
++	if (fd >= 0) {
++		close(fd);
++	}
++	st->step = step;
++	atomic_store(&st->result, -(err != 0 ? err : EIO));
++	return -1;
++}
++
++int rxsock_open(struct rxsock_state *st, const char *ifname, int (*filter)(int fd, uint64_t mac), int *ifindex)
++{
++	*ifindex = (int)if_nametoindex(ifname);
++	if (*ifindex == 0) {
++		return fail(st, -1, "interface", errno);
++	}
++	int fd = socket(AF_PACKET, SOCK_RAW | SOCK_CLOEXEC, htons(ETH_P_ALL));
++	if (fd < 0) {
++		return fail(st, -1, "socket", errno);
++	}
++	if (filter(fd, 0) != 0) {
++		return fail(st, fd, "filter", errno);
++	}
++	struct sockaddr_ll sll = {.sll_family = AF_PACKET, .sll_protocol = htons(ETH_P_ALL), .sll_ifindex = *ifindex};
++	if (bind(fd, (struct sockaddr *)&sll, sizeof sll) != 0) {
++		return fail(st, fd, "bind", errno);
++	}
++	struct timeval tv = {0, 5000};
++	if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv) != 0) {
++		return fail(st, fd, "receive timeout", errno);
++	}
++	atomic_store(&st->result, 1);
++	return fd;
++}
++
++bool rxsock_failed(struct rxsock_state *st, const char **step, int *err)
++{
++	int r = atomic_load(&st->result);
++	if (r >= 0 || atomic_exchange(&st->logged, true)) {
++		return false;
++	}
++	*step = st->step;
++	*err = -r;
++	return true;
++}
+diff --git a/milan-linux/src/rxsock.h b/milan-linux/src/rxsock.h
+new file mode 100644
+index 0000000..e03c948
+--- /dev/null
++++ b/milan-linux/src/rxsock.h
+@@ -0,0 +1,34 @@
++// SPDX-FileCopyrightText: Copyright (c) 2026 Kebag-Logic
++// SPDX-License-Identifier: Apache-2.0
++//
++// rxsock.h - the receive socket of a media input (the AAF listener, the CRF
++// receive path), and how its setup ended.
++//
++// An input's counters are valid only while a program counts them (media.h):
++// its thread marks them valid once this setup has succeeded, and a setup that
++// fails leaves them invalid, no descriptor open, and the step and errno for
++// the main thread to log (rxsock_failed).
++
++#ifndef MILAN_RXSOCK_H
++#define MILAN_RXSOCK_H
++
++#include <stdatomic.h>
++#include <stdbool.h>
++#include <stdint.h>
++
++// How an input's setup ended: 0 still running, 1 receiving, -errno failed.
++struct rxsock_state {
++	atomic_int result;
++	const char *step;               // the step that failed, set before result
++	atomic_bool logged;
++};
++
++// AF_PACKET on ifname, the input's filter closed (filter(fd, 0)), bound to the
++// interface, a 5 ms receive timeout. The descriptor, or -1 with the state
++// failed and nothing left open.
++int rxsock_open(struct rxsock_state *st, const char *ifname, int (*filter)(int fd, uint64_t mac), int *ifindex);
++
++// The step and errno of a failed setup, the first time it is asked: true once.
++bool rxsock_failed(struct rxsock_state *st, const char **step, int *err);
++
++#endif // MILAN_RXSOCK_H
+diff --git a/milan-linux/src/softfab.c b/milan-linux/src/softfab.c
+index d4d45bd..d5aa94a 100644
+--- a/milan-linux/src/softfab.c
++++ b/milan-linux/src/softfab.c
+@@ -90,9 +90,35 @@ uint32_t mbx_hal_read32(uint32_t byte_offset)
+ 	return mbx_model_read(&bound->model, byte_offset);
+ }
+ 
++_Static_assert(MBX_N_PUB_SINKS <= 32u, "a bit per sink of the publication block");
++
++// Each sink's BINDING.BOUND as the publication block holds it after a write,
++// against the last seen: every edge, in the write that made it, so a loop pass
++// that binds, unbinds and binds again shows each one.
++static void bound_edges(struct softfab *sf)
++{
++	const uint32_t *pub = sf->model.pub[0];
++	uint32_t now = 0;
++	for (unsigned k = 0; k < MBX_N_PUB_SINKS; ++k) {
++		uint32_t binding = pub[(MBX_PUB_SINK_BASE + MBX_PUB_SINK_STRIDE * k + MBX_PUB_SINK_REG_BINDING) / 4u];
++		now |= ((binding >> MBX_BINDING_BOUND_LSB) & 1u) << k;
++	}
++	uint32_t moved = now ^ sf->pub_bound;
++	sf->pub_bound = now;
++	for (unsigned k = 0; moved != 0u && k < MBX_N_PUB_SINKS; ++k) {
++		if ((moved >> k) & 1u) {
++			moved &= ~(1u << k);
++			if (sf->cfg.bound_changed != NULL) {
++				sf->cfg.bound_changed(sf->cfg.bound_ctx, k, (now >> k) & 1u);
++			}
++		}
++	}
++}
++
+ void mbx_hal_write32(uint32_t byte_offset, uint32_t value)
+ {
+ 	mbx_model_write(&bound->model, byte_offset, value, 0xFu);
++	bound_edges(bound);
+ 	tx_flush(bound);
+ }
+ 
+diff --git a/milan-linux/src/softfab.h b/milan-linux/src/softfab.h
+index ac95b73..3c8598e 100644
+--- a/milan-linux/src/softfab.h
++++ b/milan-linux/src/softfab.h
+@@ -37,10 +37,19 @@
+ #include "gptp_shm.h"
+ #include "mbx_model.h"
+ 
++// A sink's BINDING.BOUND moved in the publication block (the processor's
++// acmp_bound_o; MAILBOX_CONTRACT: the firmware writes it before the BIND_RX or
++// UNBIND_RX response). Called inside the firmware's write that moved it, once
++// per edge, however many edges one loop pass makes; it must not call into the
++// firmware.
++typedef void softfab_bound_fn(void *ctx, unsigned sink, bool bound);
++
+ struct softfab_config {
+ 	const char *ifname;
+ 	const char *gptp_shm;           // flexptpd's status block; NULL = no gPTP plane
+ 	unsigned gptp_poll_ms;          // its polling period
++	softfab_bound_fn *bound_changed; // NULL for none
++	void *bound_ctx;
+ };
+ 
+ struct softfab_stats {
+@@ -77,6 +86,7 @@ struct softfab {
+ 	uint64_t gptp_fresh_ms;         // when it last changed (or the mapping's baseline was read)
+ 	struct gptp_status gptp_last;   // the last read of live status (AECP's GET_AVB_INFO, GET_AS_PATH)
+ 	bool gptp_seen;                 // the status is live: its update counter moved within GPTP_STALE_MS
++	uint32_t pub_bound;             // bit k: sink k's BINDING.BOUND on interface 0, as last seen
+ 	struct softfab_stats stats;
+ };
+ 
+diff --git a/milan-linux/tests/counters.py b/milan-linux/tests/counters.py
+index b0c4fa4..8a1e963 100755
+--- a/milan-linux/tests/counters.py
++++ b/milan-linux/tests/counters.py
+@@ -25,8 +25,19 @@ controller reads GET_COUNTERS while the streams carry one fault at a time:
+                   EARLY_TIMESTAMP; they are not processed, the grid holds
+   interruption    300 ms with nothing sent (the threshold 200 ms):
+                   STREAM_INTERRUPTED on both; the CRF input unlocks, then locks
++  early only      1.5 s of PDUs all stamped 300 ms ahead: none is processed,
++                  so both inputs are interrupted once (STREAM_INTERRUPTED), as
++                  for a gap, though PDUs keep arriving; the CRF input unlocks
+   rebind          UNBIND_RX and BIND_RX of STREAM_INPUT 1: its counters start
+                   from zero (Milan v1.2 5.3.8.10)
++  burst           with milan-ctrld and milan-mediad held, UNBIND_RX, BIND_RX,
++                  UNBIND_RX, BIND_RX of STREAM_INPUT 0, UNBIND_RX and BIND_RX
++                  of STREAM_INPUT 1, then GET_COUNTERS of both, queued: served
++                  in one go, each binding is counted and both inputs read zero
++                  at once, before milan-mediad runs again; then they count
++                  from zero for the new binding
++  rebind at once  BIND_RX of STREAM_INPUT 1 and GET_COUNTERS the moment its
++                  response is seen, five times: zero at once
+   talker          STREAM_OUTPUT 0 (Milan v1.2 Table 5.4): one STREAM_START,
+                   FRAMES_TX per interval, MEDIA_RESET and TIMESTAMP_UNCERTAIN
+                   zero, since it never toggles mr nor sets tu, as its PDUs show
+@@ -195,6 +206,156 @@ def delta(a: list[int], b: list[int]) -> dict:
+     return {SI[k]: b[k] - a[k] for k in range(12) if SI[k] and b[k] != a[k]}
+ 
+ 
++def binds(a, sink: int) -> int:
++    x = peer.milan_dp(a.dp, a.shm).get(f"sink{sink}", "")
++    return int(x.split("binds:")[1].split()[0]) if "binds:" in x else -1
++
++
++def hold(p: subprocess.Popen) -> None:
++    p.send_signal(signal.SIGSTOP)
++    os.waitpid(p.pid, os.WUNTRACED)
++
++
++def get_counters(c, k: int) -> int:
++    """GET_COUNTERS of STREAM_INPUT k sent, not waited for: its sequence_id."""
++    c.seq = (c.seq + 1) & 0xFFFF
++    c.wire.send(c.dut_mac, aecp.aecpdu(aecp.AEM_CMD, c.eid, peer.CONTROLLER, c.seq, aecp.GET_COUNTERS,
++                                       struct.pack(">HH", aecp.D_STREAM_INPUT, k)))
++    return c.seq
++
++
++def burst(g, a, c, wire, eid: int, ctrld, mediad, talker, aaf: Stream, crf: Stream) -> None:
++    """UNBIND_RX and BIND_RX queued while milan-ctrld is held, so one loop pass serves several of them, and
++    GET_COUNTERS after them while milan-mediad is held, so only the bind count can zero the counters: each binding
++    zeroes its input's counters (Milan v1.2 5.3.8.10), however fast the sequence."""
++    talker.fault([(aaf, "skip", 1), (crf, "skip", 1)])
++    time.sleep(1.2)
++    old = [read(c, 0), read(c, 1)]
++    g.check("burst: before it, both inputs have counted for their binding (SEQ_NUM_MISMATCH, FRAMES_RX)",
++            all(len(q) == 12 and q[3] >= 1 and q[11] >= 2 for q in old), str(old))
++    before = [binds(a, 0), binds(a, 1)]
++    hold(mediad)
++    hold(ctrld)
++    t = time.monotonic()
++    queued = [(peer.UNBIND_RX_CMD, 0, 0x7100), (peer.BIND_RX_CMD, 0, 0x7101), (peer.UNBIND_RX_CMD, 0, 0x7102),
++              (peer.BIND_RX_CMD, 0, 0x7103), (peer.UNBIND_RX_CMD, 1, 0x7110), (peer.BIND_RX_CMD, 1, 0x7111)]
++    for typ, luid, seq in queued:
++        wire.send(peer.ADP_ACMP_MC, peer.acmpdu(typ, controller=peer.CONTROLLER, talker=peer.TALKER_PEER,
++                                                listener=eid, tuid=luid, luid=luid, seq=seq))
++    asked = {k: get_counters(c, k) for k in (0, 1)}
++    time.sleep(0.03)
++    ctrld.send_signal(signal.SIGCONT)
++    last_bind = {}
++    for typ, luid, seq in queued:
++        r = wire.wait(lambda f: peer.is_sub(peer.SUB_ACMP, typ + 1)(f) and peer.parse_acmp(f[14:])["seq"] == seq,
++                      1.0, t)
++        g.check(f"burst: {'BIND_RX' if typ == peer.BIND_RX_CMD else 'UNBIND_RX'} STREAM_INPUT {luid} "
++                f"({seq:#x}): SUCCESS", r is not None and peer.parse_acmp(r[1][14:])["status"] == 0)
++        if r is not None and typ == peer.BIND_RX_CMD:
++            last_bind[luid] = r[0]
++    # at once after the last BIND_RX response: before the far side's next look at the media block
++    now = {k: get_counters(c, k) for k in (0, 1)}
++
++    def answer(seq: int):
++        r = wire.wait(lambda f: aecp.is_aecp(f) and (lambda q: q["msg"] == aecp.AEM_RSP and q["seq"] == seq
++                                                      and q["cmd"] == aecp.GET_COUNTERS
++                                                      and not q["unsolicited"])(aecp.parse_aecp(f[14:])), 1.0, t)
++        q = aecp.parse_aecp(r[1][14:]) if r else None
++        if q is None or q["status"] != aecp.SUCCESS or len(q["payload"]) < 136:
++            return None, None, []
++        return r[0], aecp.u32(q["payload"], 4), [aecp.u32(q["payload"], 8 + 4 * j) for j in range(12)]
++    for k in (0, 1):
++        # queued behind the bindings on the wire, but AECP may be served first in the same pass: answered after
++        # the binding's response, it is the new binding's (zero); before, the old one's
++        at, valid, values = answer(asked[k])
++        after_bind = at is not None and k in last_bind and at > last_bind[k]
++        g.check(f"burst: GET_COUNTERS STREAM_INPUT {k} queued with them: valid 0xf3f; "
++                f"{'answered after its BIND_RX response, all zero' if after_bind else 'answered first, the old binding'}"
++                "'s", valid == 0xF3F and (values == [0] * 12 if after_bind else values[3] >= 1),
++                f"{valid if valid is None else hex(valid)} {values}")
++        at, valid, values = answer(now[k])
++        g.check(f"burst: GET_COUNTERS STREAM_INPUT {k} at once after the last BIND_RX response, milan-mediad held: "
++                "valid 0xf3f, all zero", valid == 0xF3F and values == [0] * 12,
++                f"{valid if valid is None else hex(valid)} {values}")
++    after = [binds(a, 0), binds(a, 1)]
++    g.check("burst: each binding counted, two for STREAM_INPUT 0, one for STREAM_INPUT 1",
++            after == [before[0] + 2, before[1] + 1], f"{before} -> {after}")
++    # the talker's answers to the probes the bindings sent, so both inputs settle again
++    time.sleep(0.1)
++    with wire.lock:
++        probes = [f for at, f in wire.frames if at >= t and peer.is_sub(peer.SUB_ACMP, peer.PROBE_TX_CMD)(f)]
++    for f in probes:
++        q = peer.parse_acmp(f[14:])
++        stream = aecp.TALKER_STREAM_AAF if q["luid"] == 0 else aecp.TALKER_STREAM_CRF
++        wire.send(peer.ADP_ACMP_MC, peer.acmpdu(peer.PROBE_TX_RSP, stream_id=stream, controller=q["controller"],
++                                                talker=peer.TALKER_PEER, listener=eid, tuid=q["tuid"],
++                                                luid=q["luid"], dmac=peer.PEER_STREAM_DMAC + q["luid"],
++                                                seq=q["seq"], vlan=2))
++    time.sleep(0.3)
++    held = [aecp.counters(c, aecp.D_STREAM_INPUT, k) for k in (0, 1)]
++    g.check("burst: GET_COUNTERS again, milan-mediad still held: both valid 0xf3f, all zero",
++            held == [(0xF3F, [0] * 12)] * 2, str(held))
++    mediad.send_signal(signal.SIGCONT)
++    time.sleep(1.2)
++    fresh = [read(c, 0), read(c, 1)]
++    g.check("burst: milan-mediad running again, both count from zero for the new binding: no SEQ_NUM_MISMATCH, "
++            "FRAMES_RX 1 to 3", all(len(q) == 12 and q[2:11] == [0] * 9 and 1 <= q[11] <= 3 for q in fresh),
++            str(fresh))
++    out = subprocess.run([a.dp, a.shm, a.media], capture_output=True, text=True, check=False).stdout
++    served = {k: f"binds:{after[k]}" in next((x for x in out.splitlines()
++                                               if x.startswith(f"milan_stream_input{k}=")), "") for k in (0, 1)}
++    g.check("burst: milan-mediad zeroed each input for its latest binding (its bind count is the datapath's)",
++            served == {0: True, 1: True}, out.replace("\n", " ")[-400:])
++    sinks = [peer.milan_dp(a.dp, a.shm).get(f"sink{k}", "") for k in (0, 1)]
++    g.check("burst: both inputs listening again", all("listening:1" in x for x in sinks), str(sinks))
++
++
++def rebind_at_once(g, a, c, wire, eid: int) -> None:
++    """BIND_RX of STREAM_INPUT 1, and GET_COUNTERS the moment its response is seen, five times: the new binding
++    reads zero at once, though milan-mediad has not yet zeroed for it and the far side last read its block up to
++    100 ms before; the previous binding counted FRAMES_RX, which the unbind keeps."""
++    for n in range(5):
++        time.sleep(1.2)
++        aecp.unbind(g, wire, eid, 1, 1)
++        time.sleep(0.3)
++        kept = read(c, 1)
++        t = time.monotonic()
++        seq = 0x7200 + n
++        wire.send(peer.ADP_ACMP_MC, peer.acmpdu(peer.BIND_RX_CMD, controller=peer.CONTROLLER, talker=peer.TALKER_PEER,
++                                                listener=eid, tuid=1, luid=1, seq=seq))
++        rsp = wire.wait(lambda f: peer.is_sub(peer.SUB_ACMP, peer.BIND_RX_RSP)(f)
++                        and peer.parse_acmp(f[14:])["seq"] == seq, 1.0, t)
++        asked = get_counters(c, 1)
++        r = wire.wait(lambda f: aecp.is_aecp(f) and (lambda q: q["msg"] == aecp.AEM_RSP and q["seq"] == asked
++                                                      and q["cmd"] == aecp.GET_COUNTERS
++                                                      and not q["unsolicited"])(aecp.parse_aecp(f[14:])), 1.0, t)
++        q = aecp.parse_aecp(r[1][14:]) if r else None
++        ok = q is not None and q["status"] == aecp.SUCCESS and len(q["payload"]) >= 136
++        valid = aecp.u32(q["payload"], 4) if ok else None
++        values = [aecp.u32(q["payload"], 8 + 4 * j) for j in range(12)] if ok else []
++        g.check(f"rebind {n + 1} of 5: unbound, STREAM_INPUT 1 kept its FRAMES_RX", len(kept) == 12 and kept[11] >= 1,
++                str(kept))
++        g.check(f"rebind {n + 1} of 5: GET_COUNTERS STREAM_INPUT 1 at once after the BIND_RX response "
++                f"({(r[0] - rsp[0]) * 1000 if r and rsp else -1:.1f} ms): valid 0xf3f, all zero",
++                rsp is not None and valid == 0xF3F and values == [0] * 12,
++                f"{valid if valid is None else hex(valid)} {values}")
++        probe = wire.wait(lambda f: peer.is_sub(peer.SUB_ACMP, peer.PROBE_TX_CMD)(f)
++                          and peer.parse_acmp(f[14:])["luid"] == 1, 1.0, t)
++        if probe is not None:
++            p = peer.parse_acmp(probe[1][14:])
++            wire.send(peer.ADP_ACMP_MC, peer.acmpdu(peer.PROBE_TX_RSP, stream_id=aecp.TALKER_STREAM_CRF,
++                                                    controller=p["controller"], talker=peer.TALKER_PEER, listener=eid,
++                                                    tuid=p["tuid"], luid=p["luid"], dmac=peer.PEER_STREAM_DMAC + 1,
++                                                    seq=p["seq"], vlan=2))
++        sink = ""
++        for _ in range(50):
++            sink = peer.milan_dp(a.dp, a.shm).get("sink1", "")
++            if "listening:1" in sink:
++                break
++            time.sleep(0.02)
++        g.check(f"rebind {n + 1} of 5: settled again", "listening:1" in sink, sink)
++
++
+ def main() -> int:
+     ap = argparse.ArgumentParser()
+     for k in ("--dut", "--peer", "--build", "--entity", "--tmp"):
+@@ -209,9 +370,11 @@ def main() -> int:
+     a.dp = os.path.join(a.build, "milan-dp")
+     a.shm = f"/milan-dp-ctr-{os.getpid()}"
+     media_name = f"/milan-media-ctr-{os.getpid()}"
++    a.media = media_name
+     gptp_name = f"flexptpd-ctr-{os.getpid()}"
+     ptp = aecp.Flexptpd(gptp_name, eid)
+     wire = peer.Wire(a.peer, dut_mac)
++    wire.control_only()
+     c = aecp.Controller(wire, dut_mac, eid, (peer.CONTROLLER,))
+     logs = [open(os.path.join(a.tmp, n), "w") for n in ("ctrld-ctr.log", "mediad-ctr.log")]
+     ctrld = subprocess.Popen([os.path.join(a.build, "milan-ctrld"), "-i", a.dut, "-e", a.entity, "-g", gptp_name,
+@@ -291,6 +454,14 @@ def main() -> int:
+                 and raw["unsupported_format"] == "3" and int(raw["late_timestamp"] or 0) >= 1
+                 and raw["early_timestamp"] == "3" and raw["stream_interrupted"] == "1" and raw["grid_breaks"] == "0",
+                 str(raw))
++        # PDUs that keep arriving, none of them processed: an interruption, judged on each PDU, not only on a
++        # receive that times out (which a stream every 2 ms under a 5 ms timeout may never reach)
++        step("1.5 s of PDUs all stamped 300 ms ahead", 1.5,
++             {**frames, **aaf_lock, "EARLY_TIMESTAMP": (2, 4), "STREAM_INTERRUPTED": (1, 1)},
++             {**frames, "EARLY_TIMESTAMP": (2, 4), "STREAM_INTERRUPTED": (1, 1), "MEDIA_UNLOCKED": (1, 1)},
++             [(aaf, "early", 100000), (crf, "early", 100000)])
++        talker.fault([(aaf, "early", 0), (crf, "early", 0)])
++        time.sleep(1.0)
+         # rebinding: zeroed for the new binding (Milan v1.2 5.3.8.10)
+         aecp.unbind(g, wire, eid, 1, 1)
+         time.sleep(0.5)
+@@ -313,6 +484,9 @@ def main() -> int:
+         g.check("GET_COUNTERS STREAM_OUTPUT 0: valid 0x1f; STREAM_START 1, STREAM_STOP 0, MEDIA_RESET 0, "
+                 "TIMESTAMP_UNCERTAIN 0, FRAMES_TX counting 500 ms intervals",
+                 v == 0x1F and q[:4] == [1, 0, 0, 0] and 20 <= q[4] <= 80, f"{v} {q[:5]}")
++        # last: holding milan-mediad holds its talker too
++        burst(g, a, c, wire, eid, ctrld, mediad, talker, aaf, crf)
++        rebind_at_once(g, a, c, wire, eid)
+     finally:
+         if talker is not None:
+             talker.close()
+diff --git a/milan-linux/tests/peer.py b/milan-linux/tests/peer.py
+index 9cbfb74..83e18a6 100755
+--- a/milan-linux/tests/peer.py
++++ b/milan-linux/tests/peer.py
+@@ -23,6 +23,7 @@ Usage (as root in the namespace): peer.py --dut veth0 --peer veth1 --ctrld BIN -
+ from __future__ import annotations
+ 
+ import argparse
++import ctypes
+ import mmap
+ import os
+ import signal
+@@ -139,6 +140,19 @@ class Wire:
+             with self.lock:
+                 self.frames.append((time.monotonic(), data))
+ 
++    def control_only(self) -> None:
++        """Have the kernel pass only untagged AVTP control frames (subtype 0xF0 and up: ADP, AECP, ACMP, MAAP),
++        so stream data on the link, thousands of PDUs a second, cannot crowd out what the tests wait for."""
++        prog = [(0x28, 0, 0, 12),               # ldh [12]: the EtherType
++                (0x15, 0, 3, AVTP),             # jeq AVTP, or drop
++                (0x30, 0, 0, 14),               # ldb [14]: the subtype
++                (0x35, 0, 1, 0xF0),             # jge 0xF0, or drop
++                (0x06, 0, 0, 0xFFFF),           # ret: keep
++                (0x06, 0, 0, 0)]                # ret: drop
++        self._filter = ctypes.create_string_buffer(b"".join(struct.pack("HBBI", *i) for i in prog))
++        fprog = struct.pack("HL", len(prog), ctypes.addressof(self._filter))
++        self.sock.setsockopt(socket.SOL_SOCKET, 26, fprog)     # SO_ATTACH_FILTER
++
+     def send(self, dst: bytes, payload: bytes) -> None:
+         self.sock.send(eth(dst, self.src, payload))
+ 
+diff --git a/milan-linux/tests/run-netns-nvm.sh b/milan-linux/tests/run-netns-nvm.sh
+index 165495a..7caf009 100755
+--- a/milan-linux/tests/run-netns-nvm.sh
++++ b/milan-linux/tests/run-netns-nvm.sh
+@@ -11,6 +11,9 @@
+ #   2. unbound, killed, restarted: B stays unbound (A6.2)
+ #   3. bind and unbind in a loop, SIGKILL at a random point, restart, every
+ #      round: the store always boots on an accepted slot, never a torn one (A6.3)
++# A binding restored at boot is a not-bound to bound change (Milan v1.2
++# 5.3.8.10): the sink's bind count moves past the one the killed process left,
++# so the media plane zeroes its counters for it.
+ #
+ # usage: run-netns-nvm.sh <build dir> [rounds]
+ 
+@@ -55,6 +58,7 @@ fail=0
+ check() { if [ "$2" -eq 0 ]; then echo "[PASS] $1: $3"; else echo "[FAIL] $1: $3"; fail=1; fi; }
+ sink() { "$B/milan-dp" "$DPB" 2>/dev/null | sed -n 's/^sink0=//p'; }
+ listening() { sink | grep -q listening:1; }
++binds() { sink | sed -n 's/.*binds:\([0-9]*\).*/\1/p'; }
+ wait_listening() { # <seconds>
+ 	i=0; while [ "$i" -lt $(($1 * 10)) ] && ! listening; do sleep 0.1; i=$((i + 1)); done; listening
+ }
+@@ -68,6 +72,7 @@ sleep 3        # MAAP on both, before the talker can answer a probe
+ python3 -I "$HERE/bind.py" veth0 020000fffe000002 020000fffe000001 0 0 >/dev/null
+ check "bound" "$(wait_listening 3; echo $?)" "$(sink)"
+ sleep 3
++n0=$(binds)
+ kill -9 "$CB"; wait "$CB" 2>/dev/null || true
+ t0=$(date +%s%N)
+ start_b
+@@ -76,6 +81,9 @@ t1=$(date +%s%N)
+ check "A6.1 binding survives a power cut; fast connect without a controller" \
+ 	"$([ "$ok" = 0 ] && last_boot | grep -q 'bindings restored'; echo $?)" \
+ 	"settled $(( (t1 - t0) / 1000000 )) ms after the restart; $(last_boot)"
++n1=$(binds)
++check "A6.1 the restored binding is counted on from the killed process's bind count" \
++	"$([ -n "$n0" ] && [ "$n1" = $((n0 + 1)) ] && sink | grep -q 'bound:1'; echo $?)" "binds $n0 -> $n1: $(sink)"
+ 
+ # 2. unbind, power cut: stays unbound
+ python3 -I - <<'PY'
+@@ -90,6 +98,8 @@ kill -9 "$CB"; wait "$CB" 2>/dev/null || true
+ start_b
+ sleep 5
+ check "A6.2 an unbind survives a power cut" "$(listening && echo 1 || echo 0)" "$(sink)"
++check "A6.2 restarted unbound: not bound, the bind count kept" \
++	"$(sink | grep -q 'bound:0' && [ "$(binds)" = "$n1" ]; echo $?)" "binds $n1 -> $(binds): $(sink)"
+ 
+ # 3. power cuts at random points of bind/unbind, every round restarted
+ bad=0
+diff --git a/milan-linux/tests/run-netns-rxfail.sh b/milan-linux/tests/run-netns-rxfail.sh
+new file mode 100755
+index 0000000..b042875
+--- /dev/null
++++ b/milan-linux/tests/run-netns-rxfail.sh
+@@ -0,0 +1,30 @@
++#!/bin/sh
++
++# SPDX-FileCopyrightText: Copyright (c) 2026 Kebag-Logic
++# SPDX-License-Identifier: Apache-2.0
++
++# Run tests/rxfail.py: milan-ctrld on veth0, milan-mediad started again for
++# each receive setup failure rxfail.so injects, the controller on veth1, in a
++# private user and network namespace (unshare -rn), so it needs no root and
++# touches no real interface.
++#
++# usage: run-netns-rxfail.sh <build dir> [entity.conf]
++
++set -e
++HERE=$(cd "$(dirname "$0")" && pwd)
++
++if [ "$1" != --inside ]; then
++	B=$(realpath "${1:?usage: run-netns-rxfail.sh <build dir> [entity.conf]}")
++	ENTITY=$(realpath "${2:-$HERE/../config/entity.conf}")
++	exec unshare -rn sh "$0" --inside "$B" "$ENTITY"
++fi
++B=$2; ENTITY=$3
++TMP=$(mktemp -d)
++trap 'rm -rf "$TMP"' EXIT
++
++ip link set lo up
++ip link add veth0 address 02:1a:2b:3c:4d:5e type veth peer name veth1 address 02:00:00:00:00:02
++ip link set veth0 up
++ip link set veth1 up
++sleep 0.2
++python3 -I "$HERE/rxfail.py" --dut veth0 --peer veth1 --build "$B" --entity "$ENTITY" --tmp "$TMP"
+diff --git a/milan-linux/tests/rxfail.c b/milan-linux/tests/rxfail.c
+new file mode 100644
+index 0000000..ebc1236
+--- /dev/null
++++ b/milan-linux/tests/rxfail.c
+@@ -0,0 +1,135 @@
++// SPDX-FileCopyrightText: Copyright (c) 2026 Kebag-Logic
++// SPDX-License-Identifier: Apache-2.0
++//
++// rxfail.c - an LD_PRELOAD library for tests/rxfail.py: makes one step of a
++// media input's receive socket setup (src/rxsock.c) fail, in one thread of
++// milan-mediad only, and says on stderr what it did.
++//
++//   RXFAIL_THREAD  the thread's name (milan-listener, milan-crf-rx)
++//   RXFAIL_STEP    interface, socket, filter, bind or timeout
++//
++// Each failure, and the close of a descriptor that thread opened, is written
++// to stderr as "rxfail: <thread> <what>", so a test can tell that a failed
++// setup left nothing open.
++
++#define _GNU_SOURCE
++#include <dlfcn.h>
++#include <errno.h>
++#include <linux/filter.h>
++#include <net/if.h>
++#include <stdarg.h>
++#include <stdbool.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/prctl.h>
++#include <sys/socket.h>
++#include <unistd.h>
++
++static __thread int opened = -1;        // the descriptor socket() gave this thread
++
++static bool targeted(const char *step)
++{
++	const char *t = getenv("RXFAIL_THREAD"), *s = getenv("RXFAIL_STEP");
++	char name[16] = {0};
++	if (t == NULL || s == NULL || prctl(PR_GET_NAME, name) != 0) {
++		return false;
++	}
++	return strcmp(name, t) == 0 && strcmp(s, step) == 0;
++}
++
++static bool in_thread(void)
++{
++	const char *t = getenv("RXFAIL_THREAD");
++	char name[16] = {0};
++	return t != NULL && prctl(PR_GET_NAME, name) == 0 && strcmp(name, t) == 0;
++}
++
++static void say(const char *fmt, ...)
++{
++	char line[160];
++	va_list ap;
++	va_start(ap, fmt);
++	int n = vsnprintf(line, sizeof line, fmt, ap);
++	va_end(ap);
++	if (n > 0) {
++		(void)!write(2, line, (size_t)n < sizeof line ? (size_t)n : sizeof line - 1u);
++	}
++}
++
++static int injected(const char *step, int err)
++{
++	say("rxfail: %s %s failed (%s)\n", getenv("RXFAIL_THREAD"), step, strerror(err));
++	errno = err;
++	return -1;
++}
++
++unsigned int if_nametoindex(const char *ifname)
++{
++	static unsigned int (*real)(const char *);
++	if (real == NULL) {
++		real = (unsigned int (*)(const char *))dlsym(RTLD_NEXT, "if_nametoindex");
++	}
++	if (targeted("interface")) {
++		(void)injected("interface", ENODEV);
++		return 0;
++	}
++	return real(ifname);
++}
++
++int socket(int domain, int type, int protocol)
++{
++	static int (*real)(int, int, int);
++	if (real == NULL) {
++		real = (int (*)(int, int, int))dlsym(RTLD_NEXT, "socket");
++	}
++	if (domain == AF_PACKET && targeted("socket")) {
++		return injected("socket", EMFILE);
++	}
++	int fd = real(domain, type, protocol);
++	if (domain == AF_PACKET && in_thread()) {
++		opened = fd;
++		say("rxfail: %s opened fd %d\n", getenv("RXFAIL_THREAD"), fd);
++	}
++	return fd;
++}
++
++int setsockopt(int fd, int level, int name, const void *value, socklen_t len)
++{
++	static int (*real)(int, int, int, const void *, socklen_t);
++	if (real == NULL) {
++		real = (int (*)(int, int, int, const void *, socklen_t))dlsym(RTLD_NEXT, "setsockopt");
++	}
++	if (fd == opened && level == SOL_SOCKET && name == SO_ATTACH_FILTER && targeted("filter")) {
++		return injected("filter", ENOMEM);
++	}
++	if (fd == opened && level == SOL_SOCKET && name == SO_RCVTIMEO && targeted("timeout")) {
++		return injected("timeout", EINVAL);
++	}
++	return real(fd, level, name, value, len);
++}
++
++int bind(int fd, const struct sockaddr *addr, socklen_t len)
++{
++	static int (*real)(int, const struct sockaddr *, socklen_t);
++	if (real == NULL) {
++		real = (int (*)(int, const struct sockaddr *, socklen_t))dlsym(RTLD_NEXT, "bind");
++	}
++	if (fd == opened && targeted("bind")) {
++		return injected("bind", EADDRNOTAVAIL);
++	}
++	return real(fd, addr, len);
++}
++
++int close(int fd)
++{
++	static int (*real)(int);
++	if (real == NULL) {
++		real = (int (*)(int))dlsym(RTLD_NEXT, "close");
++	}
++	if (fd >= 0 && fd == opened) {
++		say("rxfail: %s closed fd %d\n", getenv("RXFAIL_THREAD"), fd);
++		opened = -1;
++	}
++	return real(fd);
++}
+diff --git a/milan-linux/tests/rxfail.py b/milan-linux/tests/rxfail.py
+new file mode 100644
+index 0000000..c423c3c
+--- /dev/null
++++ b/milan-linux/tests/rxfail.py
+@@ -0,0 +1,155 @@
++#!/usr/bin/env python3
++# SPDX-FileCopyrightText: Copyright (c) 2026 Kebag-Logic
++# SPDX-License-Identifier: Apache-2.0
++"""rxfail.py - a media input whose receive socket cannot be set up reports none of its counters valid.
++
++milan-ctrld runs on the DUT side of the veth pair run-netns-rxfail.sh makes,
++and milan-mediad is started again for each case, its talker, AAF listener and
++CRF receive path on. rxfail.so (tests/rxfail.c) makes one setup step fail in
++one of its receiving threads; a controller on the peer side reads
++GET_COUNTERS:
++
++  control             nothing fails: STREAM_INPUT 0 and 1 valid 0xf3f
++  each step, each     interface, socket, filter, bind, receive timeout, in
++  input               the listener (STREAM_INPUT 0) or the CRF path
++                      (STREAM_INPUT 1): that input none valid, the other 0xf3f,
++                      milan-mediad still running, the failure logged with its
++                      step, and the descriptor it opened closed
++  no interface        milan-mediad on an interface that does not exist: both
++                      inputs none valid, both failures logged
++
++Usage (as root in the namespace): rxfail.py --dut veth0 --peer veth1 --build DIR --entity FILE --tmp DIR
++"""
++
++from __future__ import annotations
++
++import argparse
++import importlib.util
++import os
++import re
++import signal
++import subprocess
++import sys
++import time
++from pathlib import Path
++
++HERE = Path(__file__).resolve().parent
++sys.dont_write_bytecode = True
++
++
++def load(name: str):
++    spec = importlib.util.spec_from_file_location(name, HERE / f"{name}.py")
++    mod = importlib.util.module_from_spec(spec)
++    spec.loader.exec_module(mod)
++    return mod
++
++
++aecp = load("aecp")
++peer = aecp.peer
++
++THREADS = (("milan-listener", 0, "listener on"), ("milan-crf-rx", 1, "CRF input on"))
++STEPS = (("interface", "interface"), ("socket", "socket"), ("filter", "filter"), ("bind", "bind"),
++         ("timeout", "receive timeout"))
++
++
++def main() -> int:
++    ap = argparse.ArgumentParser()
++    for k in ("--dut", "--peer", "--build", "--entity", "--tmp"):
++        ap.add_argument(k, required=True)
++    a = ap.parse_args()
++    g = peer.Grader()
++    probe = peer.socket.socket(peer.socket.AF_PACKET, peer.socket.SOCK_RAW, 0)
++    probe.bind((a.dut, 0))
++    dut_mac = probe.getsockname()[4]
++    probe.close()
++    eid = peer.mac_int(dut_mac[:3] + b"\xff\xfe" + dut_mac[3:])
++    shm = f"/milan-dp-rxf-{os.getpid()}"
++    media_name = f"/milan-media-rxf-{os.getpid()}"
++    gptp_name = f"flexptpd-rxf-{os.getpid()}"
++    ptp = aecp.Flexptpd(gptp_name, eid)
++    wire = peer.Wire(a.peer, dut_mac)
++    wire.control_only()
++    c = aecp.Controller(wire, dut_mac, eid, (peer.CONTROLLER,))
++    ctrld_log = open(os.path.join(a.tmp, "ctrld-rxf.log"), "w")
++    ctrld = subprocess.Popen([os.path.join(a.build, "milan-ctrld"), "-i", a.dut, "-e", a.entity, "-g", gptp_name,
++                              "-d", shm, "-m", media_name, "-N", "none", "-n"], stdout=ctrld_log, stderr=ctrld_log)
++    shim = os.path.join(a.build, "rxfail.so")
++    last = ""
++
++    def run(name: str, ifname: str, env: dict) -> tuple[bool, dict, str]:
++        """milan-mediad for one case: alive after 1 s, each input's counters_valid, its log."""
++        nonlocal last
++        path = os.path.join(a.tmp, f"mediad-rxf-{name}.log")
++        with open(path, "w") as log:
++            p = subprocess.Popen([os.path.join(a.build, "milan-mediad"), "-i", ifname, "-r", "talker,listener,crf",
++                                  "-S", "0", "-P", "0", "-d", shm, "-m", media_name],
++                                 stdout=log, stderr=log, env={**os.environ, **env})
++            time.sleep(1.0)
++            alive = p.poll() is None
++            valid = {k: aecp.counters(c, aecp.D_STREAM_INPUT, k)[0] for k in (0, 1)}
++            p.send_signal(signal.SIGTERM)
++            try:
++                p.wait(timeout=5)
++            except subprocess.TimeoutExpired:
++                p.kill()
++                p.wait()
++        last = open(path).read()
++        return alive, valid, last
++
++    try:
++        r = wire.wait(lambda f: peer.is_sub(peer.SUB_ADP, peer.ADP_AVAILABLE)(f), 7.0)
++        g.check("ADP: ENTITY_AVAILABLE", r is not None)
++        alive, valid, log = run("control", a.dut, {"LD_PRELOAD": shim, "RXFAIL_THREAD": "milan-listener",
++                                                   "RXFAIL_STEP": "none"})
++        g.check("control, nothing fails: STREAM_INPUT 0 and 1 valid 0xf3f, nothing logged as failed",
++                alive and valid == {0: 0xF3F, 1: 0xF3F} and "not received" not in log and "failed" not in log,
++                f"alive {alive} valid {valid}")
++        for thread, index, says in THREADS:
++            other = 1 - index
++            for step, logged in STEPS:
++                alive, valid, log = run(f"{thread}-{step}", a.dut, {"LD_PRELOAD": shim, "RXFAIL_THREAD": thread,
++                                                                     "RXFAIL_STEP": step})
++                name = f"{thread} {step} fails"
++                g.check(f"{name}: injected", f"rxfail: {thread} {step} failed" in log)
++                g.check(f"{name}: STREAM_INPUT {index} none valid, STREAM_INPUT {other} 0xf3f, milan-mediad "
++                        "running", alive and valid.get(index) == 0 and valid.get(other) == 0xF3F,
++                        f"alive {alive} valid {valid}")
++                g.check(f"{name}: logged with its step", f"{says} {a.dut}: {logged}:" in log
++                        and f"STREAM_INPUT {index} is not received, none of its counters valid" in log,
++                        next((x for x in log.splitlines() if "not received" in x), "no line"))
++                opened = re.search(rf"rxfail: {thread} opened fd (\d+)", log)
++                if step in ("interface", "socket"):
++                    g.check(f"{name}: no descriptor opened", opened is None)
++                else:
++                    g.check(f"{name}: the descriptor it opened is closed", opened is not None
++                            and f"rxfail: {thread} closed fd {opened.group(1)}" in log)
++        alive, valid, log = run("missing", "missing0", {})
++        g.check("no such interface: STREAM_INPUT 0 and 1 none valid, milan-mediad running",
++                alive and valid == {0: 0, 1: 0}, f"alive {alive} valid {valid}")
++        g.check("no such interface: both failures logged",
++                "listener on missing0: interface:" in log and "CRF input on missing0: interface:" in log)
++    finally:
++        if ctrld.poll() is None:
++            ctrld.send_signal(signal.SIGTERM)
++            try:
++                ctrld.wait(timeout=5)
++            except subprocess.TimeoutExpired:
++                ctrld.kill()
++        c.stop = True
++        wire.stop = True
++        ptp.close()
++        for name in (shm, media_name):
++            try:
++                os.unlink("/dev/shm" + name)
++            except OSError:
++                pass
++        ctrld_log.close()
++    print(f"rxfail: {'PASS' if g.failed == 0 else 'FAIL'} ({g.failed} failed)")
++    if g.failed:
++        print("--- last milan-mediad log ---")
++        print(last[-4000:])
++    return 1 if g.failed else 0
++
++
++if __name__ == "__main__":
++    sys.exit(main())

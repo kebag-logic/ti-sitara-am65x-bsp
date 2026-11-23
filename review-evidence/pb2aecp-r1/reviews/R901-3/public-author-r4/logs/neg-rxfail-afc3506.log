@@ -1,0 +1,54 @@
+[PASS] ADP: ENTITY_AVAILABLE
+[PASS] control, nothing fails: STREAM_INPUT 0 and 1 valid 0xf3f, nothing logged as failed: alive True valid {0: 3903, 1: 3903}
+[FAIL] milan-listener interface fails: injected
+[FAIL] milan-listener interface fails: STREAM_INPUT 0 none valid, STREAM_INPUT 1 0xf3f, milan-mediad running: alive True valid {0: 3903, 1: 3903}
+[FAIL] milan-listener interface fails: logged with its step: no line
+[PASS] milan-listener interface fails: no descriptor opened
+[FAIL] milan-listener socket fails: injected
+[FAIL] milan-listener socket fails: STREAM_INPUT 0 none valid, STREAM_INPUT 1 0xf3f, milan-mediad running: alive True valid {0: 3903, 1: 3903}
+[FAIL] milan-listener socket fails: logged with its step: no line
+[PASS] milan-listener socket fails: no descriptor opened
+[FAIL] milan-listener filter fails: injected
+[FAIL] milan-listener filter fails: STREAM_INPUT 0 none valid, STREAM_INPUT 1 0xf3f, milan-mediad running: alive True valid {0: 3903, 1: 3903}
+[FAIL] milan-listener filter fails: logged with its step: no line
+[FAIL] milan-listener filter fails: the descriptor it opened is closed
+[FAIL] milan-listener bind fails: injected
+[FAIL] milan-listener bind fails: STREAM_INPUT 0 none valid, STREAM_INPUT 1 0xf3f, milan-mediad running: alive True valid {0: 3903, 1: 3903}
+[FAIL] milan-listener bind fails: logged with its step: no line
+[FAIL] milan-listener bind fails: the descriptor it opened is closed
+[FAIL] milan-listener timeout fails: injected
+[FAIL] milan-listener timeout fails: STREAM_INPUT 0 none valid, STREAM_INPUT 1 0xf3f, milan-mediad running: alive True valid {0: 3903, 1: 3903}
+[FAIL] milan-listener timeout fails: logged with its step: no line
+[FAIL] milan-listener timeout fails: the descriptor it opened is closed
+[FAIL] milan-crf-rx interface fails: injected
+[FAIL] milan-crf-rx interface fails: STREAM_INPUT 1 none valid, STREAM_INPUT 0 0xf3f, milan-mediad running: alive True valid {0: 3903, 1: 3903}
+[FAIL] milan-crf-rx interface fails: logged with its step: no line
+[PASS] milan-crf-rx interface fails: no descriptor opened
+[FAIL] milan-crf-rx socket fails: injected
+[FAIL] milan-crf-rx socket fails: STREAM_INPUT 1 none valid, STREAM_INPUT 0 0xf3f, milan-mediad running: alive True valid {0: 3903, 1: 3903}
+[FAIL] milan-crf-rx socket fails: logged with its step: no line
+[PASS] milan-crf-rx socket fails: no descriptor opened
+[FAIL] milan-crf-rx filter fails: injected
+[FAIL] milan-crf-rx filter fails: STREAM_INPUT 1 none valid, STREAM_INPUT 0 0xf3f, milan-mediad running: alive True valid {0: 3903, 1: 3903}
+[FAIL] milan-crf-rx filter fails: logged with its step: no line
+[FAIL] milan-crf-rx filter fails: the descriptor it opened is closed
+[FAIL] milan-crf-rx bind fails: injected
+[FAIL] milan-crf-rx bind fails: STREAM_INPUT 1 none valid, STREAM_INPUT 0 0xf3f, milan-mediad running: alive True valid {0: 3903, 1: 3903}
+[FAIL] milan-crf-rx bind fails: logged with its step: no line
+[FAIL] milan-crf-rx bind fails: the descriptor it opened is closed
+[FAIL] milan-crf-rx timeout fails: injected
+[FAIL] milan-crf-rx timeout fails: STREAM_INPUT 1 none valid, STREAM_INPUT 0 0xf3f, milan-mediad running: alive True valid {0: 3903, 1: 3903}
+[FAIL] milan-crf-rx timeout fails: logged with its step: no line
+[FAIL] milan-crf-rx timeout fails: the descriptor it opened is closed
+[FAIL] no such interface: STREAM_INPUT 0 and 1 none valid, milan-mediad running: alive True valid {0: 3903, 1: 0}
+[FAIL] no such interface: both failures logged
+rxfail: FAIL (38 failed)
+--- last milan-mediad log ---
+missing0 has no PTP clock: gPTP time is CLOCK_TAI
+talker on missing0, 8 channels, PTO 2000000 ns, level 48..192 frames, PHC -1
+listener on missing0, 8 channels, USB IN pipeline 0 ns
+CRF input (sink 1) on missing0: counted, not clocked from
+crf idle stream 0000000000000000 | PDUs 0 seq 0 late 0 early 0 unsupported 0 tu 0 mr toggles 0 | locked 0 unlocked 0 interrupted 0 grid breaks 0 | rate +0.000 ppm
+listener idle stream 0000000000000000 | FRAMES_RX 0 SEQ_NUM_MISMATCH 0 LATE 0 EARLY 0 UNSUPPORTED 0 MEDIA_LOCKED 0 MEDIA_UNLOCKED 0 jumps 0 STREAM_INTERRUPTED 0 tu 0 mr toggles 0 | underruns 0 pitch 1000000 | presentation error 0..0 avg 0 ns, least margin 0 ns
+talker idle stream 0000000000000000 -> 000000000000 | PDUs 0 underruns 0 overruns 0 late 0 send errors 0 | level 0..0 avg 0.00 (target 48) pitch 1000000 | worst send delay 0 ns | gPTP rate +0.000 ppm residual 0 ns
+

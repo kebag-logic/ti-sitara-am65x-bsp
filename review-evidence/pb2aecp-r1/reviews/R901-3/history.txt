@@ -1,0 +1,10 @@
+a5cd7c1e48019f89583e8df930299d457e016fe3 PB2: pin milan-fpga at #986's reviewed head 58f7673b with its archive sha256; config regenerated (revision lines only)
+ed21f9b36950e405e402695185e712c0a92b116a PB2: the counter and receive-failure suites capture only AVTP control frames, so stream data cannot crowd out a response they wait for; each immediate rebind is checked to settle again
+ad9c0f09f4883d5fd82196081293ff933d6f8a71 PB2: AECP-STATUS and README state the reset at each binding, the receive setup failures, and the acceptance rows as they stand
+88cddb6d9e78934db197722293f2d7ae20bed07f PB2: every accepted binding zeroes its input's counters, counted at each BINDING.BOUND edge in the write that makes it and served live; an input whose receive socket fails to set up reports none valid; PDUs too far ahead interrupt as a gap does
+afc350641dc2d93cee39bb4c62258b6d55f00ccb PB2: pin milan-fpga at #986's round-2 head 66b4def3 with its archive sha256; config regenerated (revision lines only)
+49b2035605729e74d1fc664fb25304402e758ea4 PB2: a la_avdecc 4.3.x controller enumerates the entity on a veth pair and judges it Milan 1.2 compatible (make check-compat); AECP-STATUS states the counters, the frozen acceptance and what stays open
+65fc798b135fd66a5eff59e6f3418e9959c031da PB2: the stream counters milan-mediad keeps for GET_COUNTERS (tu, mr, the CRF input's receive path, Milan observation intervals, zeroed at bind); gPTP status live only while flexptpd updates it; a DUT MAC distinct from the image's
+f405a5754afbe30313116be4662adb9d79567f9e PB2: pin milan-fpga at the published head of #986 with its archive sha256
+cce8c9a4143548c80800b2def821431ff45e3698 PB2: milan-ctrld serves AECP from the board's own end-station config through milan-fpga's host profile (provisional pin 677d605f), the split platform's boot with its face answered from the system; enumeration and BIND_RX of both inputs on veth (#29)
+382f1221885a01b732f7d7dc304d76e97f3effb4 Document PocketBeagle 2 AECP integration prerequisites

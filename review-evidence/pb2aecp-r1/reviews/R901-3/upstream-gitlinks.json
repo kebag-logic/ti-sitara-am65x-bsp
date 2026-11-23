@@ -1,0 +1,22 @@
+[
+  {
+    "path": "gptp-processor",
+    "sha": "1616fc8f062fbf58c35ad31674b5b233207bbdb8",
+    "url": "https://github.com/Mister-M-alt/FPGA-gPTP/tree/1616fc8f062fbf58c35ad31674b5b233207bbdb8"
+  },
+  {
+    "path": "protocol-processor",
+    "sha": "801ef2283ec793e35a2590fc6593c90313a64041",
+    "url": "https://github.com/Mister-M-alt/protocol-processor-control-plane-avb-milan/tree/801ef2283ec793e35a2590fc6593c90313a64041"
+  },
+  {
+    "path": "third_party/lwSRP",
+    "sha": "08ee86e812a0eb5e1dc6cd61b494d8baf3491348",
+    "url": "https://github.com/kebag-logic/lwSRP/tree/08ee86e812a0eb5e1dc6cd61b494d8baf3491348"
+  },
+  {
+    "path": "third_party/tsn-c-stack",
+    "sha": "715589c1db7cf67e2f3259fd7083ebc7f0923376",
+    "url": "https://github.com/kebag-logic/tsn-c-stack/tree/715589c1db7cf67e2f3259fd7083ebc7f0923376"
+  }
+]

@@ -1,0 +1,677 @@
+diff --git a/milan-linux/Makefile b/milan-linux/Makefile
+index 7dbd3ba..5e012b1 100644
+--- a/milan-linux/Makefile
++++ b/milan-linux/Makefile
+@@ -58,7 +58,7 @@ OWN_CFLAGS := -std=gnu11 -O2 -Wall -Wextra -Werror -Isrc $(FW_INC) $(SHAPE) $(CF
+ CTRLD_SRCS := src/milan_ctrld.c src/softfab.c src/gptp_shm.c src/datapath.c src/shmblk.c src/entity_conf.c \
+ 	src/nvm_file.c src/aecp_far.c src/media.c
+ CTRLD_OBJS := $(addprefix $(O)/,$(notdir $(CTRLD_SRCS:.c=.o)))
+-MEDIAD_SRCS := src/milan_mediad.c src/talker.c src/listener.c src/crf_rx.c src/aaf.c src/crf.c src/servo.c \
++MEDIAD_SRCS := src/milan_mediad.c src/talker.c src/listener.c src/crf_rx.c src/rxsock.c src/aaf.c src/crf.c src/servo.c \
+ 	src/gptp_time.c src/audio_alsa.c src/audio_sim.c src/datapath.c src/media.c src/shmblk.c
+ MEDIAD_OBJS := $(addprefix $(O)/,$(notdir $(MEDIAD_SRCS:.c=.o)))
+ DP_OBJS := $(addprefix $(O)/,milan_dp.o datapath.o media.o shmblk.o gptp_shm.o)
+@@ -103,12 +103,13 @@ check-compat: all
+ 	tests/milan-compat/run-netns-compat.sh $(O) $(O)/milan-compat config/entity.conf 15
+ 	tests/milan-compat/run-netns-compat.sh $(O) $(O)/milan-compat config/entity.conf 15 streams
+ 
+-check: all check-config $(O)/test_media $(O)/test_gptp
++check: all check-config $(O)/test_media $(O)/test_gptp $(O)/rxfail.so
+ 	$(O)/test_media
+ 	$(O)/test_gptp
+ 	tests/run-netns.sh $(O)/milan-ctrld $(O)/milan-dp config/entity.conf
+ 	tests/run-netns-aecp.sh $(O)/milan-ctrld $(O)/milan-dp config/entity.conf
+ 	tests/run-netns-counters.sh $(O) config/entity.conf
++	tests/run-netns-rxfail.sh $(O) config/entity.conf
+ 	tests/run-netns-talker.sh $(O)
+ 	tests/run-netns-listener.sh $(O)
+ 	tests/run-netns-nvm.sh $(O)
+@@ -117,6 +118,11 @@ $(O)/test_gptp: tests/test_gptp.c src/gptp_time.c src/gptp_shm.c src/gptp_time.h
+ 	@mkdir -p $(O)
+ 	$(CC) $(OWN_CFLAGS) -o $@ tests/test_gptp.c src/gptp_time.c src/gptp_shm.c -lrt
+ 
++# a media input's receive socket setup made to fail, one step in one thread (tests/rxfail.py)
++$(O)/rxfail.so: tests/rxfail.c
++	@mkdir -p $(O)
++	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -shared -fPIC -o $@ $< -ldl
++
+ $(O)/test_media: tests/test_media.c src/aaf.c src/crf.c src/servo.c src/media.c src/shmblk.c src/aaf.h src/crf.h \
+ 		src/servo.h src/media.h
+ 	@mkdir -p $(O)
+diff --git a/milan-linux/tests/counters.py b/milan-linux/tests/counters.py
+index b0c4fa4..8a1e963 100755
+--- a/milan-linux/tests/counters.py
++++ b/milan-linux/tests/counters.py
+@@ -25,8 +25,19 @@ controller reads GET_COUNTERS while the streams carry one fault at a time:
+                   EARLY_TIMESTAMP; they are not processed, the grid holds
+   interruption    300 ms with nothing sent (the threshold 200 ms):
+                   STREAM_INTERRUPTED on both; the CRF input unlocks, then locks
++  early only      1.5 s of PDUs all stamped 300 ms ahead: none is processed,
++                  so both inputs are interrupted once (STREAM_INTERRUPTED), as
++                  for a gap, though PDUs keep arriving; the CRF input unlocks
+   rebind          UNBIND_RX and BIND_RX of STREAM_INPUT 1: its counters start
+                   from zero (Milan v1.2 5.3.8.10)
++  burst           with milan-ctrld and milan-mediad held, UNBIND_RX, BIND_RX,
++                  UNBIND_RX, BIND_RX of STREAM_INPUT 0, UNBIND_RX and BIND_RX
++                  of STREAM_INPUT 1, then GET_COUNTERS of both, queued: served
++                  in one go, each binding is counted and both inputs read zero
++                  at once, before milan-mediad runs again; then they count
++                  from zero for the new binding
++  rebind at once  BIND_RX of STREAM_INPUT 1 and GET_COUNTERS the moment its
++                  response is seen, five times: zero at once
+   talker          STREAM_OUTPUT 0 (Milan v1.2 Table 5.4): one STREAM_START,
+                   FRAMES_TX per interval, MEDIA_RESET and TIMESTAMP_UNCERTAIN
+                   zero, since it never toggles mr nor sets tu, as its PDUs show
+@@ -195,6 +206,156 @@ def delta(a: list[int], b: list[int]) -> dict:
+     return {SI[k]: b[k] - a[k] for k in range(12) if SI[k] and b[k] != a[k]}
+ 
+ 
++def binds(a, sink: int) -> int:
++    x = peer.milan_dp(a.dp, a.shm).get(f"sink{sink}", "")
++    return int(x.split("binds:")[1].split()[0]) if "binds:" in x else -1
++
++
++def hold(p: subprocess.Popen) -> None:
++    p.send_signal(signal.SIGSTOP)
++    os.waitpid(p.pid, os.WUNTRACED)
++
++
++def get_counters(c, k: int) -> int:
++    """GET_COUNTERS of STREAM_INPUT k sent, not waited for: its sequence_id."""
++    c.seq = (c.seq + 1) & 0xFFFF
++    c.wire.send(c.dut_mac, aecp.aecpdu(aecp.AEM_CMD, c.eid, peer.CONTROLLER, c.seq, aecp.GET_COUNTERS,
++                                       struct.pack(">HH", aecp.D_STREAM_INPUT, k)))
++    return c.seq
++
++
++def burst(g, a, c, wire, eid: int, ctrld, mediad, talker, aaf: Stream, crf: Stream) -> None:
++    """UNBIND_RX and BIND_RX queued while milan-ctrld is held, so one loop pass serves several of them, and
++    GET_COUNTERS after them while milan-mediad is held, so only the bind count can zero the counters: each binding
++    zeroes its input's counters (Milan v1.2 5.3.8.10), however fast the sequence."""
++    talker.fault([(aaf, "skip", 1), (crf, "skip", 1)])
++    time.sleep(1.2)
++    old = [read(c, 0), read(c, 1)]
++    g.check("burst: before it, both inputs have counted for their binding (SEQ_NUM_MISMATCH, FRAMES_RX)",
++            all(len(q) == 12 and q[3] >= 1 and q[11] >= 2 for q in old), str(old))
++    before = [binds(a, 0), binds(a, 1)]
++    hold(mediad)
++    hold(ctrld)
++    t = time.monotonic()
++    queued = [(peer.UNBIND_RX_CMD, 0, 0x7100), (peer.BIND_RX_CMD, 0, 0x7101), (peer.UNBIND_RX_CMD, 0, 0x7102),
++              (peer.BIND_RX_CMD, 0, 0x7103), (peer.UNBIND_RX_CMD, 1, 0x7110), (peer.BIND_RX_CMD, 1, 0x7111)]
++    for typ, luid, seq in queued:
++        wire.send(peer.ADP_ACMP_MC, peer.acmpdu(typ, controller=peer.CONTROLLER, talker=peer.TALKER_PEER,
++                                                listener=eid, tuid=luid, luid=luid, seq=seq))
++    asked = {k: get_counters(c, k) for k in (0, 1)}
++    time.sleep(0.03)
++    ctrld.send_signal(signal.SIGCONT)
++    last_bind = {}
++    for typ, luid, seq in queued:
++        r = wire.wait(lambda f: peer.is_sub(peer.SUB_ACMP, typ + 1)(f) and peer.parse_acmp(f[14:])["seq"] == seq,
++                      1.0, t)
++        g.check(f"burst: {'BIND_RX' if typ == peer.BIND_RX_CMD else 'UNBIND_RX'} STREAM_INPUT {luid} "
++                f"({seq:#x}): SUCCESS", r is not None and peer.parse_acmp(r[1][14:])["status"] == 0)
++        if r is not None and typ == peer.BIND_RX_CMD:
++            last_bind[luid] = r[0]
++    # at once after the last BIND_RX response: before the far side's next look at the media block
++    now = {k: get_counters(c, k) for k in (0, 1)}
++
++    def answer(seq: int):
++        r = wire.wait(lambda f: aecp.is_aecp(f) and (lambda q: q["msg"] == aecp.AEM_RSP and q["seq"] == seq
++                                                      and q["cmd"] == aecp.GET_COUNTERS
++                                                      and not q["unsolicited"])(aecp.parse_aecp(f[14:])), 1.0, t)
++        q = aecp.parse_aecp(r[1][14:]) if r else None
++        if q is None or q["status"] != aecp.SUCCESS or len(q["payload"]) < 136:
++            return None, None, []
++        return r[0], aecp.u32(q["payload"], 4), [aecp.u32(q["payload"], 8 + 4 * j) for j in range(12)]
++    for k in (0, 1):
++        # queued behind the bindings on the wire, but AECP may be served first in the same pass: answered after
++        # the binding's response, it is the new binding's (zero); before, the old one's
++        at, valid, values = answer(asked[k])
++        after_bind = at is not None and k in last_bind and at > last_bind[k]
++        g.check(f"burst: GET_COUNTERS STREAM_INPUT {k} queued with them: valid 0xf3f; "
++                f"{'answered after its BIND_RX response, all zero' if after_bind else 'answered first, the old binding'}"
++                "'s", valid == 0xF3F and (values == [0] * 12 if after_bind else values[3] >= 1),
++                f"{valid if valid is None else hex(valid)} {values}")
++        at, valid, values = answer(now[k])
++        g.check(f"burst: GET_COUNTERS STREAM_INPUT {k} at once after the last BIND_RX response, milan-mediad held: "
++                "valid 0xf3f, all zero", valid == 0xF3F and values == [0] * 12,
++                f"{valid if valid is None else hex(valid)} {values}")
++    after = [binds(a, 0), binds(a, 1)]
++    g.check("burst: each binding counted, two for STREAM_INPUT 0, one for STREAM_INPUT 1",
++            after == [before[0] + 2, before[1] + 1], f"{before} -> {after}")
++    # the talker's answers to the probes the bindings sent, so both inputs settle again
++    time.sleep(0.1)
++    with wire.lock:
++        probes = [f for at, f in wire.frames if at >= t and peer.is_sub(peer.SUB_ACMP, peer.PROBE_TX_CMD)(f)]
++    for f in probes:
++        q = peer.parse_acmp(f[14:])
++        stream = aecp.TALKER_STREAM_AAF if q["luid"] == 0 else aecp.TALKER_STREAM_CRF
++        wire.send(peer.ADP_ACMP_MC, peer.acmpdu(peer.PROBE_TX_RSP, stream_id=stream, controller=q["controller"],
++                                                talker=peer.TALKER_PEER, listener=eid, tuid=q["tuid"],
++                                                luid=q["luid"], dmac=peer.PEER_STREAM_DMAC + q["luid"],
++                                                seq=q["seq"], vlan=2))
++    time.sleep(0.3)
++    held = [aecp.counters(c, aecp.D_STREAM_INPUT, k) for k in (0, 1)]
++    g.check("burst: GET_COUNTERS again, milan-mediad still held: both valid 0xf3f, all zero",
++            held == [(0xF3F, [0] * 12)] * 2, str(held))
++    mediad.send_signal(signal.SIGCONT)
++    time.sleep(1.2)
++    fresh = [read(c, 0), read(c, 1)]
++    g.check("burst: milan-mediad running again, both count from zero for the new binding: no SEQ_NUM_MISMATCH, "
++            "FRAMES_RX 1 to 3", all(len(q) == 12 and q[2:11] == [0] * 9 and 1 <= q[11] <= 3 for q in fresh),
++            str(fresh))
++    out = subprocess.run([a.dp, a.shm, a.media], capture_output=True, text=True, check=False).stdout
++    served = {k: f"binds:{after[k]}" in next((x for x in out.splitlines()
++                                               if x.startswith(f"milan_stream_input{k}=")), "") for k in (0, 1)}
++    g.check("burst: milan-mediad zeroed each input for its latest binding (its bind count is the datapath's)",
++            served == {0: True, 1: True}, out.replace("\n", " ")[-400:])
++    sinks = [peer.milan_dp(a.dp, a.shm).get(f"sink{k}", "") for k in (0, 1)]
++    g.check("burst: both inputs listening again", all("listening:1" in x for x in sinks), str(sinks))
++
++
++def rebind_at_once(g, a, c, wire, eid: int) -> None:
++    """BIND_RX of STREAM_INPUT 1, and GET_COUNTERS the moment its response is seen, five times: the new binding
++    reads zero at once, though milan-mediad has not yet zeroed for it and the far side last read its block up to
++    100 ms before; the previous binding counted FRAMES_RX, which the unbind keeps."""
++    for n in range(5):
++        time.sleep(1.2)
++        aecp.unbind(g, wire, eid, 1, 1)
++        time.sleep(0.3)
++        kept = read(c, 1)
++        t = time.monotonic()
++        seq = 0x7200 + n
++        wire.send(peer.ADP_ACMP_MC, peer.acmpdu(peer.BIND_RX_CMD, controller=peer.CONTROLLER, talker=peer.TALKER_PEER,
++                                                listener=eid, tuid=1, luid=1, seq=seq))
++        rsp = wire.wait(lambda f: peer.is_sub(peer.SUB_ACMP, peer.BIND_RX_RSP)(f)
++                        and peer.parse_acmp(f[14:])["seq"] == seq, 1.0, t)
++        asked = get_counters(c, 1)
++        r = wire.wait(lambda f: aecp.is_aecp(f) and (lambda q: q["msg"] == aecp.AEM_RSP and q["seq"] == asked
++                                                      and q["cmd"] == aecp.GET_COUNTERS
++                                                      and not q["unsolicited"])(aecp.parse_aecp(f[14:])), 1.0, t)
++        q = aecp.parse_aecp(r[1][14:]) if r else None
++        ok = q is not None and q["status"] == aecp.SUCCESS and len(q["payload"]) >= 136
++        valid = aecp.u32(q["payload"], 4) if ok else None
++        values = [aecp.u32(q["payload"], 8 + 4 * j) for j in range(12)] if ok else []
++        g.check(f"rebind {n + 1} of 5: unbound, STREAM_INPUT 1 kept its FRAMES_RX", len(kept) == 12 and kept[11] >= 1,
++                str(kept))
++        g.check(f"rebind {n + 1} of 5: GET_COUNTERS STREAM_INPUT 1 at once after the BIND_RX response "
++                f"({(r[0] - rsp[0]) * 1000 if r and rsp else -1:.1f} ms): valid 0xf3f, all zero",
++                rsp is not None and valid == 0xF3F and values == [0] * 12,
++                f"{valid if valid is None else hex(valid)} {values}")
++        probe = wire.wait(lambda f: peer.is_sub(peer.SUB_ACMP, peer.PROBE_TX_CMD)(f)
++                          and peer.parse_acmp(f[14:])["luid"] == 1, 1.0, t)
++        if probe is not None:
++            p = peer.parse_acmp(probe[1][14:])
++            wire.send(peer.ADP_ACMP_MC, peer.acmpdu(peer.PROBE_TX_RSP, stream_id=aecp.TALKER_STREAM_CRF,
++                                                    controller=p["controller"], talker=peer.TALKER_PEER, listener=eid,
++                                                    tuid=p["tuid"], luid=p["luid"], dmac=peer.PEER_STREAM_DMAC + 1,
++                                                    seq=p["seq"], vlan=2))
++        sink = ""
++        for _ in range(50):
++            sink = peer.milan_dp(a.dp, a.shm).get("sink1", "")
++            if "listening:1" in sink:
++                break
++            time.sleep(0.02)
++        g.check(f"rebind {n + 1} of 5: settled again", "listening:1" in sink, sink)
++
++
+ def main() -> int:
+     ap = argparse.ArgumentParser()
+     for k in ("--dut", "--peer", "--build", "--entity", "--tmp"):
+@@ -209,9 +370,11 @@ def main() -> int:
+     a.dp = os.path.join(a.build, "milan-dp")
+     a.shm = f"/milan-dp-ctr-{os.getpid()}"
+     media_name = f"/milan-media-ctr-{os.getpid()}"
++    a.media = media_name
+     gptp_name = f"flexptpd-ctr-{os.getpid()}"
+     ptp = aecp.Flexptpd(gptp_name, eid)
+     wire = peer.Wire(a.peer, dut_mac)
++    wire.control_only()
+     c = aecp.Controller(wire, dut_mac, eid, (peer.CONTROLLER,))
+     logs = [open(os.path.join(a.tmp, n), "w") for n in ("ctrld-ctr.log", "mediad-ctr.log")]
+     ctrld = subprocess.Popen([os.path.join(a.build, "milan-ctrld"), "-i", a.dut, "-e", a.entity, "-g", gptp_name,
+@@ -291,6 +454,14 @@ def main() -> int:
+                 and raw["unsupported_format"] == "3" and int(raw["late_timestamp"] or 0) >= 1
+                 and raw["early_timestamp"] == "3" and raw["stream_interrupted"] == "1" and raw["grid_breaks"] == "0",
+                 str(raw))
++        # PDUs that keep arriving, none of them processed: an interruption, judged on each PDU, not only on a
++        # receive that times out (which a stream every 2 ms under a 5 ms timeout may never reach)
++        step("1.5 s of PDUs all stamped 300 ms ahead", 1.5,
++             {**frames, **aaf_lock, "EARLY_TIMESTAMP": (2, 4), "STREAM_INTERRUPTED": (1, 1)},
++             {**frames, "EARLY_TIMESTAMP": (2, 4), "STREAM_INTERRUPTED": (1, 1), "MEDIA_UNLOCKED": (1, 1)},
++             [(aaf, "early", 100000), (crf, "early", 100000)])
++        talker.fault([(aaf, "early", 0), (crf, "early", 0)])
++        time.sleep(1.0)
+         # rebinding: zeroed for the new binding (Milan v1.2 5.3.8.10)
+         aecp.unbind(g, wire, eid, 1, 1)
+         time.sleep(0.5)
+@@ -313,6 +484,9 @@ def main() -> int:
+         g.check("GET_COUNTERS STREAM_OUTPUT 0: valid 0x1f; STREAM_START 1, STREAM_STOP 0, MEDIA_RESET 0, "
+                 "TIMESTAMP_UNCERTAIN 0, FRAMES_TX counting 500 ms intervals",
+                 v == 0x1F and q[:4] == [1, 0, 0, 0] and 20 <= q[4] <= 80, f"{v} {q[:5]}")
++        # last: holding milan-mediad holds its talker too
++        burst(g, a, c, wire, eid, ctrld, mediad, talker, aaf, crf)
++        rebind_at_once(g, a, c, wire, eid)
+     finally:
+         if talker is not None:
+             talker.close()
+diff --git a/milan-linux/tests/peer.py b/milan-linux/tests/peer.py
+index 9cbfb74..83e18a6 100755
+--- a/milan-linux/tests/peer.py
++++ b/milan-linux/tests/peer.py
+@@ -23,6 +23,7 @@ Usage (as root in the namespace): peer.py --dut veth0 --peer veth1 --ctrld BIN -
+ from __future__ import annotations
+ 
+ import argparse
++import ctypes
+ import mmap
+ import os
+ import signal
+@@ -139,6 +140,19 @@ class Wire:
+             with self.lock:
+                 self.frames.append((time.monotonic(), data))
+ 
++    def control_only(self) -> None:
++        """Have the kernel pass only untagged AVTP control frames (subtype 0xF0 and up: ADP, AECP, ACMP, MAAP),
++        so stream data on the link, thousands of PDUs a second, cannot crowd out what the tests wait for."""
++        prog = [(0x28, 0, 0, 12),               # ldh [12]: the EtherType
++                (0x15, 0, 3, AVTP),             # jeq AVTP, or drop
++                (0x30, 0, 0, 14),               # ldb [14]: the subtype
++                (0x35, 0, 1, 0xF0),             # jge 0xF0, or drop
++                (0x06, 0, 0, 0xFFFF),           # ret: keep
++                (0x06, 0, 0, 0)]                # ret: drop
++        self._filter = ctypes.create_string_buffer(b"".join(struct.pack("HBBI", *i) for i in prog))
++        fprog = struct.pack("HL", len(prog), ctypes.addressof(self._filter))
++        self.sock.setsockopt(socket.SOL_SOCKET, 26, fprog)     # SO_ATTACH_FILTER
++
+     def send(self, dst: bytes, payload: bytes) -> None:
+         self.sock.send(eth(dst, self.src, payload))
+ 
+diff --git a/milan-linux/tests/run-netns-nvm.sh b/milan-linux/tests/run-netns-nvm.sh
+index 165495a..7caf009 100755
+--- a/milan-linux/tests/run-netns-nvm.sh
++++ b/milan-linux/tests/run-netns-nvm.sh
+@@ -11,6 +11,9 @@
+ #   2. unbound, killed, restarted: B stays unbound (A6.2)
+ #   3. bind and unbind in a loop, SIGKILL at a random point, restart, every
+ #      round: the store always boots on an accepted slot, never a torn one (A6.3)
++# A binding restored at boot is a not-bound to bound change (Milan v1.2
++# 5.3.8.10): the sink's bind count moves past the one the killed process left,
++# so the media plane zeroes its counters for it.
+ #
+ # usage: run-netns-nvm.sh <build dir> [rounds]
+ 
+@@ -55,6 +58,7 @@ fail=0
+ check() { if [ "$2" -eq 0 ]; then echo "[PASS] $1: $3"; else echo "[FAIL] $1: $3"; fail=1; fi; }
+ sink() { "$B/milan-dp" "$DPB" 2>/dev/null | sed -n 's/^sink0=//p'; }
+ listening() { sink | grep -q listening:1; }
++binds() { sink | sed -n 's/.*binds:\([0-9]*\).*/\1/p'; }
+ wait_listening() { # <seconds>
+ 	i=0; while [ "$i" -lt $(($1 * 10)) ] && ! listening; do sleep 0.1; i=$((i + 1)); done; listening
+ }
+@@ -68,6 +72,7 @@ sleep 3        # MAAP on both, before the talker can answer a probe
+ python3 -I "$HERE/bind.py" veth0 020000fffe000002 020000fffe000001 0 0 >/dev/null
+ check "bound" "$(wait_listening 3; echo $?)" "$(sink)"
+ sleep 3
++n0=$(binds)
+ kill -9 "$CB"; wait "$CB" 2>/dev/null || true
+ t0=$(date +%s%N)
+ start_b
+@@ -76,6 +81,9 @@ t1=$(date +%s%N)
+ check "A6.1 binding survives a power cut; fast connect without a controller" \
+ 	"$([ "$ok" = 0 ] && last_boot | grep -q 'bindings restored'; echo $?)" \
+ 	"settled $(( (t1 - t0) / 1000000 )) ms after the restart; $(last_boot)"
++n1=$(binds)
++check "A6.1 the restored binding is counted on from the killed process's bind count" \
++	"$([ -n "$n0" ] && [ "$n1" = $((n0 + 1)) ] && sink | grep -q 'bound:1'; echo $?)" "binds $n0 -> $n1: $(sink)"
+ 
+ # 2. unbind, power cut: stays unbound
+ python3 -I - <<'PY'
+@@ -90,6 +98,8 @@ kill -9 "$CB"; wait "$CB" 2>/dev/null || true
+ start_b
+ sleep 5
+ check "A6.2 an unbind survives a power cut" "$(listening && echo 1 || echo 0)" "$(sink)"
++check "A6.2 restarted unbound: not bound, the bind count kept" \
++	"$(sink | grep -q 'bound:0' && [ "$(binds)" = "$n1" ]; echo $?)" "binds $n1 -> $(binds): $(sink)"
+ 
+ # 3. power cuts at random points of bind/unbind, every round restarted
+ bad=0
+diff --git a/milan-linux/tests/run-netns-rxfail.sh b/milan-linux/tests/run-netns-rxfail.sh
+new file mode 100755
+index 0000000..b042875
+--- /dev/null
++++ b/milan-linux/tests/run-netns-rxfail.sh
+@@ -0,0 +1,30 @@
++#!/bin/sh
++
++# SPDX-FileCopyrightText: Copyright (c) 2026 Kebag-Logic
++# SPDX-License-Identifier: Apache-2.0
++
++# Run tests/rxfail.py: milan-ctrld on veth0, milan-mediad started again for
++# each receive setup failure rxfail.so injects, the controller on veth1, in a
++# private user and network namespace (unshare -rn), so it needs no root and
++# touches no real interface.
++#
++# usage: run-netns-rxfail.sh <build dir> [entity.conf]
++
++set -e
++HERE=$(cd "$(dirname "$0")" && pwd)
++
++if [ "$1" != --inside ]; then
++	B=$(realpath "${1:?usage: run-netns-rxfail.sh <build dir> [entity.conf]}")
++	ENTITY=$(realpath "${2:-$HERE/../config/entity.conf}")
++	exec unshare -rn sh "$0" --inside "$B" "$ENTITY"
++fi
++B=$2; ENTITY=$3
++TMP=$(mktemp -d)
++trap 'rm -rf "$TMP"' EXIT
++
++ip link set lo up
++ip link add veth0 address 02:1a:2b:3c:4d:5e type veth peer name veth1 address 02:00:00:00:00:02
++ip link set veth0 up
++ip link set veth1 up
++sleep 0.2
++python3 -I "$HERE/rxfail.py" --dut veth0 --peer veth1 --build "$B" --entity "$ENTITY" --tmp "$TMP"
+diff --git a/milan-linux/tests/rxfail.c b/milan-linux/tests/rxfail.c
+new file mode 100644
+index 0000000..ebc1236
+--- /dev/null
++++ b/milan-linux/tests/rxfail.c
+@@ -0,0 +1,135 @@
++// SPDX-FileCopyrightText: Copyright (c) 2026 Kebag-Logic
++// SPDX-License-Identifier: Apache-2.0
++//
++// rxfail.c - an LD_PRELOAD library for tests/rxfail.py: makes one step of a
++// media input's receive socket setup (src/rxsock.c) fail, in one thread of
++// milan-mediad only, and says on stderr what it did.
++//
++//   RXFAIL_THREAD  the thread's name (milan-listener, milan-crf-rx)
++//   RXFAIL_STEP    interface, socket, filter, bind or timeout
++//
++// Each failure, and the close of a descriptor that thread opened, is written
++// to stderr as "rxfail: <thread> <what>", so a test can tell that a failed
++// setup left nothing open.
++
++#define _GNU_SOURCE
++#include <dlfcn.h>
++#include <errno.h>
++#include <linux/filter.h>
++#include <net/if.h>
++#include <stdarg.h>
++#include <stdbool.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/prctl.h>
++#include <sys/socket.h>
++#include <unistd.h>
++
++static __thread int opened = -1;        // the descriptor socket() gave this thread
++
++static bool targeted(const char *step)
++{
++	const char *t = getenv("RXFAIL_THREAD"), *s = getenv("RXFAIL_STEP");
++	char name[16] = {0};
++	if (t == NULL || s == NULL || prctl(PR_GET_NAME, name) != 0) {
++		return false;
++	}
++	return strcmp(name, t) == 0 && strcmp(s, step) == 0;
++}
++
++static bool in_thread(void)
++{
++	const char *t = getenv("RXFAIL_THREAD");
++	char name[16] = {0};
++	return t != NULL && prctl(PR_GET_NAME, name) == 0 && strcmp(name, t) == 0;
++}
++
++static void say(const char *fmt, ...)
++{
++	char line[160];
++	va_list ap;
++	va_start(ap, fmt);
++	int n = vsnprintf(line, sizeof line, fmt, ap);
++	va_end(ap);
++	if (n > 0) {
++		(void)!write(2, line, (size_t)n < sizeof line ? (size_t)n : sizeof line - 1u);
++	}
++}
++
++static int injected(const char *step, int err)
++{
++	say("rxfail: %s %s failed (%s)\n", getenv("RXFAIL_THREAD"), step, strerror(err));
++	errno = err;
++	return -1;
++}
++
++unsigned int if_nametoindex(const char *ifname)
++{
++	static unsigned int (*real)(const char *);
++	if (real == NULL) {
++		real = (unsigned int (*)(const char *))dlsym(RTLD_NEXT, "if_nametoindex");
++	}
++	if (targeted("interface")) {
++		(void)injected("interface", ENODEV);
++		return 0;
++	}
++	return real(ifname);
++}
++
++int socket(int domain, int type, int protocol)
++{
++	static int (*real)(int, int, int);
++	if (real == NULL) {
++		real = (int (*)(int, int, int))dlsym(RTLD_NEXT, "socket");
++	}
++	if (domain == AF_PACKET && targeted("socket")) {
++		return injected("socket", EMFILE);
++	}
++	int fd = real(domain, type, protocol);
++	if (domain == AF_PACKET && in_thread()) {
++		opened = fd;
++		say("rxfail: %s opened fd %d\n", getenv("RXFAIL_THREAD"), fd);
++	}
++	return fd;
++}
++
++int setsockopt(int fd, int level, int name, const void *value, socklen_t len)
++{
++	static int (*real)(int, int, int, const void *, socklen_t);
++	if (real == NULL) {
++		real = (int (*)(int, int, int, const void *, socklen_t))dlsym(RTLD_NEXT, "setsockopt");
++	}
++	if (fd == opened && level == SOL_SOCKET && name == SO_ATTACH_FILTER && targeted("filter")) {
++		return injected("filter", ENOMEM);
++	}
++	if (fd == opened && level == SOL_SOCKET && name == SO_RCVTIMEO && targeted("timeout")) {
++		return injected("timeout", EINVAL);
++	}
++	return real(fd, level, name, value, len);
++}
++
++int bind(int fd, const struct sockaddr *addr, socklen_t len)
++{
++	static int (*real)(int, const struct sockaddr *, socklen_t);
++	if (real == NULL) {
++		real = (int (*)(int, const struct sockaddr *, socklen_t))dlsym(RTLD_NEXT, "bind");
++	}
++	if (fd == opened && targeted("bind")) {
++		return injected("bind", EADDRNOTAVAIL);
++	}
++	return real(fd, addr, len);
++}
++
++int close(int fd)
++{
++	static int (*real)(int);
++	if (real == NULL) {
++		real = (int (*)(int))dlsym(RTLD_NEXT, "close");
++	}
++	if (fd >= 0 && fd == opened) {
++		say("rxfail: %s closed fd %d\n", getenv("RXFAIL_THREAD"), fd);
++		opened = -1;
++	}
++	return real(fd);
++}
+diff --git a/milan-linux/tests/rxfail.py b/milan-linux/tests/rxfail.py
+new file mode 100644
+index 0000000..c423c3c
+--- /dev/null
++++ b/milan-linux/tests/rxfail.py
+@@ -0,0 +1,155 @@
++#!/usr/bin/env python3
++# SPDX-FileCopyrightText: Copyright (c) 2026 Kebag-Logic
++# SPDX-License-Identifier: Apache-2.0
++"""rxfail.py - a media input whose receive socket cannot be set up reports none of its counters valid.
++
++milan-ctrld runs on the DUT side of the veth pair run-netns-rxfail.sh makes,
++and milan-mediad is started again for each case, its talker, AAF listener and
++CRF receive path on. rxfail.so (tests/rxfail.c) makes one setup step fail in
++one of its receiving threads; a controller on the peer side reads
++GET_COUNTERS:
++
++  control             nothing fails: STREAM_INPUT 0 and 1 valid 0xf3f
++  each step, each     interface, socket, filter, bind, receive timeout, in
++  input               the listener (STREAM_INPUT 0) or the CRF path
++                      (STREAM_INPUT 1): that input none valid, the other 0xf3f,
++                      milan-mediad still running, the failure logged with its
++                      step, and the descriptor it opened closed
++  no interface        milan-mediad on an interface that does not exist: both
++                      inputs none valid, both failures logged
++
++Usage (as root in the namespace): rxfail.py --dut veth0 --peer veth1 --build DIR --entity FILE --tmp DIR
++"""
++
++from __future__ import annotations
++
++import argparse
++import importlib.util
++import os
++import re
++import signal
++import subprocess
++import sys
++import time
++from pathlib import Path
++
++HERE = Path(__file__).resolve().parent
++sys.dont_write_bytecode = True
++
++
++def load(name: str):
++    spec = importlib.util.spec_from_file_location(name, HERE / f"{name}.py")
++    mod = importlib.util.module_from_spec(spec)
++    spec.loader.exec_module(mod)
++    return mod
++
++
++aecp = load("aecp")
++peer = aecp.peer
++
++THREADS = (("milan-listener", 0, "listener on"), ("milan-crf-rx", 1, "CRF input on"))
++STEPS = (("interface", "interface"), ("socket", "socket"), ("filter", "filter"), ("bind", "bind"),
++         ("timeout", "receive timeout"))
++
++
++def main() -> int:
++    ap = argparse.ArgumentParser()
++    for k in ("--dut", "--peer", "--build", "--entity", "--tmp"):
++        ap.add_argument(k, required=True)
++    a = ap.parse_args()
++    g = peer.Grader()
++    probe = peer.socket.socket(peer.socket.AF_PACKET, peer.socket.SOCK_RAW, 0)
++    probe.bind((a.dut, 0))
++    dut_mac = probe.getsockname()[4]
++    probe.close()
++    eid = peer.mac_int(dut_mac[:3] + b"\xff\xfe" + dut_mac[3:])
++    shm = f"/milan-dp-rxf-{os.getpid()}"
++    media_name = f"/milan-media-rxf-{os.getpid()}"
++    gptp_name = f"flexptpd-rxf-{os.getpid()}"
++    ptp = aecp.Flexptpd(gptp_name, eid)
++    wire = peer.Wire(a.peer, dut_mac)
++    wire.control_only()
++    c = aecp.Controller(wire, dut_mac, eid, (peer.CONTROLLER,))
++    ctrld_log = open(os.path.join(a.tmp, "ctrld-rxf.log"), "w")
++    ctrld = subprocess.Popen([os.path.join(a.build, "milan-ctrld"), "-i", a.dut, "-e", a.entity, "-g", gptp_name,
++                              "-d", shm, "-m", media_name, "-N", "none", "-n"], stdout=ctrld_log, stderr=ctrld_log)
++    shim = os.path.join(a.build, "rxfail.so")
++    last = ""
++
++    def run(name: str, ifname: str, env: dict) -> tuple[bool, dict, str]:
++        """milan-mediad for one case: alive after 1 s, each input's counters_valid, its log."""
++        nonlocal last
++        path = os.path.join(a.tmp, f"mediad-rxf-{name}.log")
++        with open(path, "w") as log:
++            p = subprocess.Popen([os.path.join(a.build, "milan-mediad"), "-i", ifname, "-r", "talker,listener,crf",
++                                  "-S", "0", "-P", "0", "-d", shm, "-m", media_name],
++                                 stdout=log, stderr=log, env={**os.environ, **env})
++            time.sleep(1.0)
++            alive = p.poll() is None
++            valid = {k: aecp.counters(c, aecp.D_STREAM_INPUT, k)[0] for k in (0, 1)}
++            p.send_signal(signal.SIGTERM)
++            try:
++                p.wait(timeout=5)
++            except subprocess.TimeoutExpired:
++                p.kill()
++                p.wait()
++        last = open(path).read()
++        return alive, valid, last
++
++    try:
++        r = wire.wait(lambda f: peer.is_sub(peer.SUB_ADP, peer.ADP_AVAILABLE)(f), 7.0)
++        g.check("ADP: ENTITY_AVAILABLE", r is not None)
++        alive, valid, log = run("control", a.dut, {"LD_PRELOAD": shim, "RXFAIL_THREAD": "milan-listener",
++                                                   "RXFAIL_STEP": "none"})
++        g.check("control, nothing fails: STREAM_INPUT 0 and 1 valid 0xf3f, nothing logged as failed",
++                alive and valid == {0: 0xF3F, 1: 0xF3F} and "not received" not in log and "failed" not in log,
++                f"alive {alive} valid {valid}")
++        for thread, index, says in THREADS:
++            other = 1 - index
++            for step, logged in STEPS:
++                alive, valid, log = run(f"{thread}-{step}", a.dut, {"LD_PRELOAD": shim, "RXFAIL_THREAD": thread,
++                                                                     "RXFAIL_STEP": step})
++                name = f"{thread} {step} fails"
++                g.check(f"{name}: injected", f"rxfail: {thread} {step} failed" in log)
++                g.check(f"{name}: STREAM_INPUT {index} none valid, STREAM_INPUT {other} 0xf3f, milan-mediad "
++                        "running", alive and valid.get(index) == 0 and valid.get(other) == 0xF3F,
++                        f"alive {alive} valid {valid}")
++                g.check(f"{name}: logged with its step", f"{says} {a.dut}: {logged}:" in log
++                        and f"STREAM_INPUT {index} is not received, none of its counters valid" in log,
++                        next((x for x in log.splitlines() if "not received" in x), "no line"))
++                opened = re.search(rf"rxfail: {thread} opened fd (\d+)", log)
++                if step in ("interface", "socket"):
++                    g.check(f"{name}: no descriptor opened", opened is None)
++                else:
++                    g.check(f"{name}: the descriptor it opened is closed", opened is not None
++                            and f"rxfail: {thread} closed fd {opened.group(1)}" in log)
++        alive, valid, log = run("missing", "missing0", {})
++        g.check("no such interface: STREAM_INPUT 0 and 1 none valid, milan-mediad running",
++                alive and valid == {0: 0, 1: 0}, f"alive {alive} valid {valid}")
++        g.check("no such interface: both failures logged",
++                "listener on missing0: interface:" in log and "CRF input on missing0: interface:" in log)
++    finally:
++        if ctrld.poll() is None:
++            ctrld.send_signal(signal.SIGTERM)
++            try:
++                ctrld.wait(timeout=5)
++            except subprocess.TimeoutExpired:
++                ctrld.kill()
++        c.stop = True
++        wire.stop = True
++        ptp.close()
++        for name in (shm, media_name):
++            try:
++                os.unlink("/dev/shm" + name)
++            except OSError:
++                pass
++        ctrld_log.close()
++    print(f"rxfail: {'PASS' if g.failed == 0 else 'FAIL'} ({g.failed} failed)")
++    if g.failed:
++        print("--- last milan-mediad log ---")
++        print(last[-4000:])
++    return 1 if g.failed else 0
++
++
++if __name__ == "__main__":
++    sys.exit(main())

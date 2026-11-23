@@ -1,0 +1,138 @@
+ninja: Entering directory `$VALIDATION_STORAGE/pb2aecp-a830/r4/lavdecc-build'
+[1/55] Building CXX object externals/nih/src/CMakeFiles/la_networkInterfaceHelper_static.dir/libraryInfo.cpp.o
+[2/55] Building CXX object externals/nih/src/CMakeFiles/la_networkInterfaceHelper_static.dir/ipAddressInfo.cpp.o
+[3/55] Building CXX object externals/nih/src/CMakeFiles/la_networkInterfaceHelper_static.dir/networkInterfaceHelper_unix.cpp.o
+[4/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/logger.cpp.o
+[5/55] Building CXX object externals/nih/src/CMakeFiles/la_networkInterfaceHelper_static.dir/ipAddress.cpp.o
+[6/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/utils.cpp.o
+[7/55] Building CXX object externals/nih/src/CMakeFiles/la_networkInterfaceHelper_static.dir/networkInterfaceHelper_common.cpp.o
+[8/55] Linking CXX static library externals/nih/src/libla_networkInterfaceHelper_static.a
+[9/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/streamFormatInfo.cpp.o
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/streamFormatInfo.cpp:64:66: note: ‘#pragma message: TODO: Make this template works on all endianess’
+   64 | #pragma message("TODO: Make this template works on all endianess")
+      |                                                                  ^
+[10/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/executor.cpp.o
+[11/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/watchDog.cpp.o
+[12/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/protocol/protocolAcmpdu.cpp.o
+[13/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/protocol/protocolAdpdu.cpp.o
+[14/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/protocol/protocolAecpdu.cpp.o
+[15/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/avdecc.cpp.o
+[16/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/protocol/protocolAemAecpdu.cpp.o
+[17/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/protocol/protocolAaAecpdu.cpp.o
+[18/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/protocol/protocolAvtpdu.cpp.o
+[19/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/protocol/protocolVuAecpdu.cpp.o
+[20/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/protocolInterface/pcapDynamicLinking.cpp.o
+[21/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/protocol/protocolMvuAecpdu.cpp.o
+[22/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/protocol/protocolMvuPayloads.cpp.o
+[23/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/protocol/protocolDefines.cpp.o
+[24/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/protocolInterface/cobsSerialization.cpp.o
+[25/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/protocolInterface/protocolInterface.cpp.o
+[26/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/stateMachine/advertiseStateMachine.cpp.o
+[27/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/protocolInterface/protocolInterface_pcap.cpp.o
+[28/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/stateMachine/discoveryStateMachine.cpp.o
+[29/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/protocolInterface/protocolInterface_serial.cpp.o
+[30/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/stateMachine/commandStateMachine.cpp.o
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/stateMachine/commandStateMachine.cpp: In member function ‘void la::avdecc::protocol::stateMachine::CommandStateMachine::handleAcmpResponse(const la::avdecc::protocol::Acmpdu&)’:
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/stateMachine/commandStateMachine.cpp:371:144: note: ‘#pragma message: TODO: This only work for CONTROLLER messages, not for LISTENER-TALKER communication. Will probably have to check command type’
+  371 | #pragma message("TODO: This only work for CONTROLLER messages, not for LISTENER-TALKER communication. Will probably have to check command type")
+      |                                                                                                                                                ^
+[31/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/protocolInterface/protocolInterface_local.cpp.o
+[32/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/protocolInterface/protocolInterface_virtual.cpp.o
+[33/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/protocol/protocolAemPayloads.cpp.o
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/protocol/protocolAemPayloads.cpp: In function ‘la::avdecc::entity::model::MemoryObjectDescriptor la::avdecc::protocol::aemPayload::deserializeReadMemoryObjectDescriptorResponse(const la::avdecc::protocol::AemAecpdu::Payload&, size_t, la::avdecc::protocol::AemAecpStatus)’:
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/protocol/protocolAemPayloads.cpp:662:153: note: ‘#pragma message: TODO: Unpack the new field added in corrigendum document (but preserve compatibility with older devices if the field is not present!!)’
+  662 | #pragma message("TODO: Unpack the new field added in corrigendum document (but preserve compatibility with older devices if the field is not present!!)")
+      |                                                                                                                                                         ^
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/protocol/protocolAemPayloads.cpp: In function ‘la::avdecc::Serializer<48> la::avdecc::protocol::aemPayload::serializeSetStreamInfoCommand(la::avdecc::entity::model::DescriptorType, la::avdecc::entity::model::DescriptorIndex, const la::avdecc::entity::model::StreamInfo&)’:
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/protocol/protocolAemPayloads.cpp:1402:96: note: ‘#pragma message: TODO: Pack the new fields added in IEEE1722.1-2021 (and use the correct size)’
+ 1402 | #pragma message("TODO: Pack the new fields added in IEEE1722.1-2021 (and use the correct size)")
+      |                                                                                                ^
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/protocol/protocolAemPayloads.cpp: In function ‘std::tuple<la::avdecc::entity::model::DescriptorType, short unsigned int, la::avdecc::entity::model::StreamInfo> la::avdecc::protocol::aemPayload::deserializeSetStreamInfoCommand(const la::avdecc::protocol::AemAecpdu::Payload&)’:
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/protocol/protocolAemPayloads.cpp:1436:71: note: ‘#pragma message: TODO: Unpack the new fields added in IEEE1722.1-2021’
+ 1436 | #pragma message("TODO: Unpack the new fields added in IEEE1722.1-2021")
+      |                                                                       ^
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/protocol/protocolAemPayloads.cpp: In function ‘la::avdecc::Serializer<56> la::avdecc::protocol::aemPayload::serializeGetStreamInfoResponse(la::avdecc::entity::model::DescriptorType, la::avdecc::entity::model::DescriptorIndex, const la::avdecc::entity::model::StreamInfo&)’:
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/protocol/protocolAemPayloads.cpp:1523:96: note: ‘#pragma message: TODO: Pack the new fields added in IEEE1722.1-2021 (and use the correct size)’
+ 1523 | #pragma message("TODO: Pack the new fields added in IEEE1722.1-2021 (and use the correct size)")
+      |                                                                                                ^
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/protocol/protocolAemPayloads.cpp: In function ‘std::tuple<la::avdecc::entity::model::DescriptorType, short unsigned int, la::avdecc::entity::model::StreamInfo> la::avdecc::protocol::aemPayload::deserializeGetStreamInfoResponse(la::avdecc::entity::LocalEntity::AemCommandStatus, const la::avdecc::protocol::AemAecpdu::Payload&)’:
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/protocol/protocolAemPayloads.cpp:1561:71: note: ‘#pragma message: TODO: Unpack the new fields added in IEEE1722.1-2021’
+ 1561 | #pragma message("TODO: Unpack the new fields added in IEEE1722.1-2021")
+      |                                                                       ^
+[34/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/stateMachine/stateMachineManager.cpp.o
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/stateMachine/stateMachineManager.cpp: In member function ‘la::avdecc::protocol::ProtocolInterface::Error la::avdecc::protocol::stateMachine::Manager::sendAecpCommand(la::avdecc::protocol::Aecpdu::UniquePointer&&, const la::avdecc::protocol::ProtocolInterface::AecpCommandResultHandler&)’:
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/stateMachine/stateMachineManager.cpp:557:164: note: ‘#pragma message: TODO: If TargetEntity is a LocalEntity, then bypass the CommandStateMachine, directly dispatch the message (and asynchroneously trigger onResult)’
+  557 | #pragma message("TODO: If TargetEntity is a LocalEntity, then bypass the CommandStateMachine, directly dispatch the message (and asynchroneously trigger onResult)")
+      |                                                                                                                                                                    ^
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/stateMachine/stateMachineManager.cpp: In member function ‘la::avdecc::protocol::ProtocolInterface::Error la::avdecc::protocol::stateMachine::Manager::sendAcmpCommand(la::avdecc::protocol::Acmpdu::UniquePointer&&, const la::avdecc::protocol::ProtocolInterface::AcmpCommandResultHandler&)’:
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/stateMachine/stateMachineManager.cpp:563:164: note: ‘#pragma message: TODO: If TargetEntity is a LocalEntity, then bypass the CommandStateMachine, directly dispatch the message (and asynchroneously trigger onResult)’
+  563 | #pragma message("TODO: If TargetEntity is a LocalEntity, then bypass the CommandStateMachine, directly dispatch the message (and asynchroneously trigger onResult)")
+      |                                                                                                                                                                    ^
+[35/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/entity/entityModelTypes.cpp.o
+[36/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/entity/localEntityImpl.cpp.o
+[37/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/entity/aemHandler.cpp.o
+[38/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/endStationImpl.cpp.o
+[39/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/entity/controllerEntityImpl.cpp.o
+[40/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/entity/aggregateEntityImpl.cpp.o
+[41/55] Building CXX object src/controller/CMakeFiles/la_avdecc_controller_static.dir/avdeccController.cpp.o
+[42/55] Building CXX object src/controller/CMakeFiles/la_avdecc_controller_static.dir/avdeccControllerImplDelegateOverrides.cpp.o
+[43/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/entity/entityModelControlValues.cpp.o
+[44/55] Building CXX object src/controller/CMakeFiles/la_avdecc_controller_static.dir/avdeccControllerImplHandlers.cpp.o
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/controller/avdeccControllerImplHandlers.cpp: In member function ‘void la::avdecc::controller::ControllerImpl::onGetDynamicInfoResult(const la::avdecc::entity::controller::Interface*, la::avdecc::UniqueIdentifier, la::avdecc::entity::LocalEntity::AemCommandStatus, const la::avdecc::entity::controller::DynamicInfoParameters&, const la::avdecc::entity::controller::DynamicInfoParameters&, uint16_t, la::avdecc::controller::ControlledEntityImpl::EnumerationStep)’:
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/controller/avdeccControllerImplHandlers.cpp:261:106: note: ‘#pragma message: TODO: Use an unordered_map of std::function (with std::bind) to dispatch descriptorType’
+  261 | #pragma message("TODO: Use an unordered_map of std::function (with std::bind) to dispatch descriptorType")
+      |                                                                                                          ^
+[45/55] Building CXX object src/controller/CMakeFiles/la_avdecc_controller_static.dir/avdeccControllerProxy.cpp.o
+[46/55] Building CXX object src/controller/CMakeFiles/la_avdecc_controller_static.dir/virtualEntityModelVisitor.cpp.o
+[47/55] Building CXX object src/controller/CMakeFiles/la_avdecc_controller_static.dir/entityModelChecksum.cpp.o
+[48/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/entity/controllerCapabilityDelegate.cpp.o
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/entity/controllerCapabilityDelegate.cpp: In member function ‘void la::avdecc::entity::controller::CapabilityDelegate::setControllerDelegate(la::avdecc::entity::controller::Delegate*)’:
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/entity/controllerCapabilityDelegate.cpp:110:142: note: ‘#pragma message: TODO: Protect the _controllerDelegate so it cannot be changed while it's being used (use pi's lock ?? Check for deadlocks!)’
+  110 | #pragma message("TODO: Protect the _controllerDelegate so it cannot be changed while it's being used (use pi's lock ?? Check for deadlocks!)")
+      |                                                                                                                                              ^
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/entity/controllerCapabilityDelegate.cpp: In member function ‘void la::avdecc::entity::controller::CapabilityDelegate::getDynamicInfo(la::avdecc::UniqueIdentifier, const la::avdecc::entity::controller::DynamicInfoParameters&, const la::avdecc::entity::controller::Interface::GetDynamicInfoHandler&) const’:
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/entity/controllerCapabilityDelegate.cpp:2000:84: note: ‘#pragma message: TODO: Somehow, check for maximum payload size (both send AND recv’
+ 2000 | #pragma message("TODO: Somehow, check for maximum payload size (both send AND recv")
+      |                                                                                    ^
+[49/55] Building CXX object src/controller/CMakeFiles/la_avdecc_controller_static.dir/avdeccControllerImplOverrides.cpp.o
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/controller/avdeccControllerImplOverrides.cpp: In member function ‘virtual void la::avdecc::controller::ControllerImpl::readDeviceMemory(la::avdecc::UniqueIdentifier, uint64_t, uint64_t, const la::avdecc::controller::Controller::ReadDeviceMemoryProgressHandler&, const la::avdecc::controller::Controller::ReadDeviceMemoryCompletionHandler&) const’:
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/controller/avdeccControllerImplOverrides.cpp:2492:261: note: ‘#pragma message: TODO: Find a way to have the DeviceMemoryBuffer being properly moved all the way through the lambdas and handlers. Currently some handlers are copied, so the DeviceMemoryBuffer is copied instead of being moved causing unecessary reallocations’
+ 2492 | #pragma message("TODO: Find a way to have the DeviceMemoryBuffer being properly moved all the way through the lambdas and handlers. Currently some handlers are copied, so the DeviceMemoryBuffer is copied instead of being moved causing unecessary reallocations")
+      |                                                                                                                                                                                                                                                                     ^
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/controller/avdeccControllerImplOverrides.cpp: In member function ‘virtual void la::avdecc::controller::ControllerImpl::startUploadMemoryObjectOperation(la::avdecc::UniqueIdentifier, la::avdecc::entity::model::DescriptorIndex, uint64_t, const la::avdecc::controller::Controller::StartMemoryObjectOperationHandler&) const’:
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/controller/avdeccControllerImplOverrides.cpp:2692:212: note: ‘#pragma message: TODO: Modify the Serializer/Deserializer classes so they can use a provided buffer (MemoryBuffer), instead of always using a static internal buffer. Template the class so the container is that!’
+ 2692 | #pragma message("TODO: Modify the Serializer/Deserializer classes so they can use a provided buffer (MemoryBuffer), instead of always using a static internal buffer. Template the class so the container is that!")
+      |                                                                                                                                                                                                                    ^
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/controller/avdeccControllerImplOverrides.cpp: In member function ‘virtual void la::avdecc::controller::ControllerImpl::writeDeviceMemory(la::avdecc::UniqueIdentifier, uint64_t, la::avdecc::controller::Controller::DeviceMemoryBuffer, const la::avdecc::controller::Controller::WriteDeviceMemoryProgressHandler&, const la::avdecc::controller::Controller::WriteDeviceMemoryCompletionHandler&) const’:
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/controller/avdeccControllerImplOverrides.cpp:2708:259: note: ‘#pragma message: TODO: Find a way to have the DeviceMemoryBuffer being properly moved all the way through the lambdas and handlers. Currently some handlers are copied, so the DeviceMemoryBuffer is copied instead of being moved causing unecessary allocations’
+ 2708 | #pragma message("TODO: Find a way to have the DeviceMemoryBuffer being properly moved all the way through the lambdas and handlers. Currently some handlers are copied, so the DeviceMemoryBuffer is copied instead of being moved causing unecessary allocations")
+      |                                                                                                                                                                                                                                                                   ^
+[50/55] Building CXX object src/controller/CMakeFiles/la_avdecc_controller_static.dir/avdeccControlledEntityJsonSerializer.cpp.o
+[51/55] Building CXX object src/controller/CMakeFiles/la_avdecc_controller_static.dir/avdeccControlledEntityImpl.cpp.o
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/controller/avdeccControlledEntityImpl.cpp:42:123: note: ‘#pragma message: TODO: Add check in all methods, if the class is locked or not. We want the lock to be taken for all APIs’
+   42 | #pragma message("TODO: Add check in all methods, if the class is locked or not. We want the lock to be taken for all APIs")
+      |                                                                                                                           ^
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/controller/avdeccControlledEntityImpl.cpp: In member function ‘virtual const la::avdecc::controller::model::LocaleNode* la::avdecc::controller::ControlledEntityImpl::findLocaleNode(la::avdecc::entity::model::ConfigurationIndex, const std::string&) const’:
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/controller/avdeccControlledEntityImpl.cpp:455:69: note: ‘#pragma message: TODO: Parse 'locale' parameter and find best match’
+  455 | #pragma message("TODO: Parse 'locale' parameter and find best match")
+      |                                                                     ^
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/controller/avdeccControlledEntityImpl.cpp: In member function ‘void la::avdecc::controller::ControlledEntityImpl::buildEntityModelGraph(const la::avdecc::entity::model::EntityTree&)’:
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/controller/avdeccControlledEntityImpl.cpp:3631:75: note: ‘#pragma message: TODO: Add Controls (AvbInterface children) - 1722.1-2021’
+ 3631 | #pragma message("TODO: Add Controls (AvbInterface children) - 1722.1-2021")
+      |                                                                           ^
+[52/55] Building CXX object src/controller/CMakeFiles/la_avdecc_controller_static.dir/avdeccControllerImpl.cpp.o
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/controller/avdeccControllerImpl.cpp: In static member function ‘static void la::avdecc::controller::ControllerImpl::chooseLocale(la::avdecc::controller::ControlledEntityImpl*, la::avdecc::entity::model::ConfigurationIndex, const std::string&, const std::function<void(short unsigned int)>&)’:
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/controller/avdeccControllerImpl.cpp:2589:160: note: ‘#pragma message: TODO: Split _preferedLocale into language/country, then if findLocaleDescriptor fails and language is not 'en', try to find a locale for 'en'’
+ 2589 | #pragma message("TODO: Split _preferedLocale into language/country, then if findLocaleDescriptor fails and language is not 'en', try to find a locale for 'en'")
+      |                                                                                                                                                                ^
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/controller/avdeccControllerImpl.cpp: In member function ‘void la::avdecc::controller::ControllerImpl::flushPackedDynamicInfoQueries(la::avdecc::controller::ControlledEntityImpl*, const la::avdecc::entity::controller::DynamicInfoParameters&, la::avdecc::controller::ControlledEntityImpl::EnumerationStep)’:
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/controller/avdeccControllerImpl.cpp:4067:158: note: ‘#pragma message: TODO: Optimize this code by trying to pack as much as possible in a single query (searching for another smaller command if one doesn't fit)’
+ 4067 | #pragma message("TODO: Optimize this code by trying to pack as much as possible in a single query (searching for another smaller command if one doesn't fit)")
+      |                                                                                                                                                              ^
+[53/55] Building CXX object src/CMakeFiles/la_avdecc_static.dir/entity/entityModelJsonSerializer.cpp.o
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/entity/entityModelJsonSerializer.cpp: In function ‘json la::avdecc::entity::model::jsonSerializer::dumpConfigurationTrees(const std::map<short unsigned int, la::avdecc::entity::model::ConfigurationTree>&, Flags, bool&)’:
+$VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/src/entity/entityModelJsonSerializer.cpp:483:63: note: ‘#pragma message: TODO: Load VIDEO/SENSOR/CONTROL_BLOCK’
+  483 | #       pragma message("TODO: Load VIDEO/SENSOR/CONTROL_BLOCK")
+      |                                                               ^
+[54/55] Linking CXX static library src/libla_avdecc_static.a
+[55/55] Linking CXX static library src/controller/libla_avdecc_controller_static.a

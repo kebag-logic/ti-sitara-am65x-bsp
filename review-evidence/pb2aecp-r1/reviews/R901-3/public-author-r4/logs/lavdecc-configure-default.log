@@ -1,0 +1,53 @@
+-- The C compiler identification is GNU 16.2.1
+-- The CXX compiler identification is GNU 16.2.1
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- CMake Macros v12.0
+-- CU_PROJECT_URLABOUTINFO not set, using default value: http://www.l-acoustics.com
+-- CU_BETA_TAG not set, using default value: -beta
+-- CU_DOTNET_FRAMEWORK_VERSION not set, using default value: net8.0
+-- CU_PROJECT_COMPANYNAME not set, using default value: L-Acoustics
+-- CU_PROJECT_LEGALCOPYRIGHT not set, using default value: (c) L-Acoustics and its contributors
+-- CU_PROJECT_READABLE_COPYRIGHT not set, using default value: Copyright 2016-2026, L-Acoustics and its contributors
+-- CU_PROJECT_MARKETING_VERSION_DIGITS not set, using default value: 2 digits
+-- Version: 10.1.0
+-- Build type: Release
+-- Using the multi-header code from $VALIDATION_STORAGE/pb2aecp-a830/lavdecc/src/externals/3rdparty/json/include/
+-- Building Network Interface Helper Library
+-- Defining project la_networkInterfaceHelper
+-- Added alias for la_networkInterfaceHelper_static (la_networkInterfaceHelper::static)
+CMake Warning at cmake/cmakeUtils/ProjectMacros.cmake:1896 (message):
+  MARKETING_VERSION_DIGITS and MARKETING_VERSION_POSTFIX are not set, please
+  upgrade bashUtils to the latest version (ignore if gen_cmake/gen_install is
+  not used)
+Call Stack (most recent call first):
+  externals/nih/CMakeLists.txt:137 (cu_finalize)
+
+
+-- Building Avdecc library
+-- Defining project la_avdecc
+-- Added alias for la_avdecc_cxx (la_avdecc::shared)
+-- Added alias for la_avdecc_static (la_avdecc::static)
+-- Building Avdecc Controller library
+-- Defining project la_avdecc_controller
+-- Added alias for la_avdecc_controller_cxx (la_avdecc_controller::shared)
+-- Added alias for la_avdecc_controller_static (la_avdecc_controller::static)
+CMake Warning at cmake/cmakeUtils/ProjectMacros.cmake:1896 (message):
+  MARKETING_VERSION_DIGITS and MARKETING_VERSION_POSTFIX are not set, please
+  upgrade bashUtils to the latest version (ignore if gen_cmake/gen_install is
+  not used)
+Call Stack (most recent call first):
+  CMakeLists.txt:285 (cu_finalize)
+
+
+-- Configuring done (0.7s)
+-- Generating done (0.0s)
+-- Build files have been written to: $VALIDATION_STORAGE/pb2aecp-a830/r4/lavdecc-build

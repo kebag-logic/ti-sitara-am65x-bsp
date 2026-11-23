@@ -1,0 +1,8 @@
+command: sh $REVIEWS/pb2aecp-r901-3-packet/scratch/startup-tests/run-netns-counters.sh $REVIEWS/pb2aecp-r901-3-packet/scratch/native $REVIEWS/r901-3-pb2aecp/milan-linux/config/entity.conf
+[PASS] ADP: ENTITY_AVAILABLE
+mediad process still running: True
+missing interface STREAM_INPUT 0 valid 0x0 values [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+[PASS] failed receive path has no valid counters 0
+missing interface STREAM_INPUT 1 valid 0x0 values [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+[PASS] failed receive path has no valid counters 1
+counters: PASS (0 failed)

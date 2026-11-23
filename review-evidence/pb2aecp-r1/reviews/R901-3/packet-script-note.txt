@@ -1,0 +1,10 @@
+Public author-r4/receipts/aarch64/milan-bridge.sh is a redacted evidence copy.
+Tracked source SHA-256: 6cf38b8dac1ae9946afe0e5524ac1c372747764f26a5602e9e54cb75badbb488
+Published copy SHA-256: 83cc00f83f63a1de1f3a02286c0558f1f93f6047936770be6e471e9864f38e4a
+The public manifest explicitly records original_sha256, published_sha256 and path_redacted=true.
+The sole diff is the default JOURNAL assignment:
+source: JOURNAL=${AVB_JOURNAL:-$VALIDATION_STORAGE/journal.bin}
+published: JOURNAL=${AVB_JOURNAL:-$VALIDATION_STORAGE/journal.bin}
+With neither environment variable set these expand to $VALIDATION_STORAGE/journal.bin and /journal.bin respectively.
+The author install list says this unchanged script need not be replaced. The required three daemon binaries are separate.
+Recommendation: label the redacted copy non-deployable and direct any optional script installation to the exact source commit; retain the original/public hash distinction.
