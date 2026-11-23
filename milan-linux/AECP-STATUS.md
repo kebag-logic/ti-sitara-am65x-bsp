@@ -1,101 +1,110 @@
-# PocketBeagle 2 AECP: round 1 stopped
+# AECP on the board: status
 
-Status: STOP, pending an upstream descriptor-generation profile for the board.
-ETA: implementation cannot be scheduled until that profile and the stream
-inventory are settled. This is evidence for issue #29, not a completed AECP
-integration or a claim of Milan compliance.
+Status: milan-ctrld serves milan-fpga's AECP from a host AEM store generated
+from the board's own end-station config. Enumeration, the command set the
+firmware implements and ACMP binding of both STREAM_INPUTs pass on a veth pair.
+**No Milan conformance is claimed for the board**: its media plane does not
+clock from the CRF input, and the gaps below remain.
 
-The examined milan-fpga revision is
-`854bd7236792ce1adbd10c43b13a6a5002ad3bb6`. Its GitHub archive SHA-256 is
-`771dd977c21eb2c3428641d951e3455ea22681f6d0b203e7c51d28ac68ebbd38`.
-The archive and its generator dependencies were fetched and the following
-probes run against that unmodified source. The production pin remains unchanged:
-an incomplete pin migration would leave the existing build broken.
+The pin is **provisional**: `milan-fpga.pin` names `677d605f`, the head of
+milan-fpga's `pf-linuxprof-1` (milan-fpga#983, the descriptor-only host profile
+this config needs), which has no published archive yet. Its sha256 reads
+`provisional` until the archive's is known; the host build takes the tree from
+a local checkout (`MILAN_FPGA_LOCAL`), and the Buildroot package cannot
+download it until then.
 
-## Required upstream boundary
+## The entity
 
-Both `sw/firmware/ctrl/adp/adp_entity.py` and
-`sw/firmware/ctrl/aecp/aecp_entity.py` call the same builder's `load_config`.
-At this revision, `sw/builder/endstation_builder.py:4006` accepts only `arty`
-and `ax7101` board targets. `load_config` at line 4625 also requires the
-fabric gPTP owner. A configuration selecting the board is refused, as is
-an otherwise accepted diagnostic configuration with `fabric_gptp: false`.
-The bridge actually uses Linux's CPTS PHC and flexptpd, as described by its
-startup script and the board's checked-in `avb.env`.
+`config/endstation_pb2_bridge.yaml` is milan-fpga's host profile
+(`board.target: host`, `board.gptp_owner: host-phc`). It states the board's
+inventory once, and `tools/gen-config.sh` generates everything else from it
+through milan-fpga's generators. `make check` refuses a stale file.
 
-The smallest necessary upstream change identified here is a descriptor-only
-Linux platform profile in the existing builder/config loader. It must accept
-the host's audio, clock and interface facts without imposing FPGA pin/clock
-constraints or a fabric gPTP owner, and feed the existing ADP, AEM image and
-shape generators unchanged. Existing FPGA profiles must retain their checks.
-Adding just a board-name alias would not remove the gPTP-owner constraint.
-This is a generator/schema change, not a C build flag. No such change was
-made here, and no need to change the portable AECP command core was established.
-
-## Stream inventory needs clarification
-
-The request specifies two AAF sources and two sinks. The current daemon runs
-one talker and one listener, both index 0 (`src/milan_mediad.c:262` and `:287`),
-at 48 kHz, eight channels, signed 32-bit AAF samples, six samples per packet.
-`milan-bridge.sh` does not override the channel count or select another stream.
-Its current generated ADP counts of two each describe the older one-AAF plus
-one-CRF shape; they do not demonstrate two active AAF streams per direction.
-The listener also requires the configured channel count (`src/listener.c:212`).
-Advertising additional stream formats or clock sources requires corresponding
-media support; a descriptor image alone does not supply it.
-
-Milan v1.2 sections 7.2.2 and 7.2.3 require a CRF input for an AAF talker,
-and CRF input/output for a listener with two AAF inputs per clock domain.
-Consequently:
-
-| Interpretation | Generated total outputs/inputs | Firmware shape check |
-| --- | --- | --- |
-| Two AAF outputs, one AAF input and one CRF input, no CRF output | 2/2 | Accepted |
-| Two AAF outputs and two AAF inputs, with CRF input/output | 3/3 | Refused |
-| Two AAF outputs and two AAF inputs, no CRF | Not generated | Builder refuses missing CRF output |
-
-For 3/3, `sw/firmware/ctrl/loop/ctrl_loop.h:397` emits its `THE SHAPES`
-error. Its timing rows only cover 2/2 and 9/9, at one or two interfaces.
-The generated `CTRL_SRP_SOURCES` and `CTRL_SRP_SINKS` must describe the actual
-image; overriding them to another shape or dropping the generated header
-would silently use timing assumptions for a different entity. If 3/3 is the
-intended inventory, an additional upstream change must supply a justified
-timing row for that shape, or an explicit host scheduling profile, with its
-own checks. The present probe establishes a compile refusal, not timing
-measurements or bounds for Linux.
-
-## Reproduction
-
-Unpack the archive of the revision above and place its pinned generator
-dependencies under it:
-
-| Directory | Revision |
+| Descriptor | What it is |
 | --- | --- |
-| `protocol-processor` | `801ef2283ec793e35a2590fc6593c90313a64041` |
-| `gptp-processor` | `1616fc8f062fbf58c35ad31674b5b233207bbdb8` |
+| STREAM_INPUT 0 | AAF, 48 kHz, 8 channels, 32-bit (the Base family completed, Milan v1.2 6.4) |
+| STREAM_INPUT 1 | CRF, `0x041060010000BB80` (Milan v1.2 7.2.2, 7.3.2) |
+| STREAM_OUTPUT 0 | AAF, the same format |
+| CLOCK_SOURCE 0, 1 | INTERNAL, and the CRF input's, located on STREAM_INPUT 1 |
+| AVB_INTERFACE 0 | flexptpd's dataset at its pin: priorities 248/248, clockClass 248, accuracy 0xFE, variance 0xFFFF, log intervals -3/0/0, port 1 |
 
-With PyYAML and a host C compiler available, run from `milan-linux`:
+ADP advertises 1 source and 2 sinks. There is no second AAF stream and no CRF
+output (Milan v1.2 7.2.3 asks one only of a listener with two AAF inputs). The
+entity_model_id is pinned to `0x001BC50AC1000100` (IEEE 1722.1-2021 7.2.1:
+controllers cache the model by it). The image is 32 descriptors, 5784 bytes.
 
-```sh
-python3 -B tests/probe-aecp-prerequisites.py /path/to/milan-fpga /tmp/pb2-aecp-probe
-```
+The image bakes the config's MAC into three mac-derived fields (ENTITY
+entity_id, AVB_INTERFACE mac_address and clock_identity). milan-ctrld verifies
+the generated image against its generated CRC, checks that those fields are one
+mac-derived identity and that `entity.conf` and the compiled shape describe the
+same model, then writes eth0's identity into a copy and loads that copy against
+its own CRC. ADP and AECP therefore name the same entity (IEEE 1722.1-2021
+Table 7-2).
 
-The probe writes each input, generated shape header and complete command log
-outside the firmware tree. It requires the named generator refusals and the
-3/3 compile refusal, plus a successful 2/2 control. Its diagnostic inputs
-inherit FPGA settings solely to isolate each check; they are not deployable
-configurations for the board. A successful probe is evidence of the blocker,
-not a passing firmware gate or an enumeration test.
+## How it runs
 
-The pin move would also require `third_party/tsn-c-stack` at
-`715589c1db7cf67e2f3259fd7083ebc7f0923376`: ADP, ACMP, MAAP and the wire layer
-have moved there. The host and Buildroot archive recipes currently omit it.
+The boot is the split platform's (`sw/firmware/ctrl/plat/ctrl_plat.c`), with
+the firmware unchanged. The image is verified. The application, AECP and
+contract 2.3's face are composed. The saved state is applied through AECP's
+owner. The mailbox opens with ADP held, AECP is released at the store's
+accepted terminal, and ADP starts last (Milan v1.2 5.6.1). Two platform parts
+have no counterpart here. SRP is not attached (#14). The receive monitor's
+per-input format contexts (#946) are fabric registers for AAF inputs above 0,
+and this entity has none. Every unit is compiled with the board's shape header
+and `CTRL_HOST_PLATFORM`, which selects THE SHAPES' host row for (1, 1, 2)
+(milan-fpga#983). That row's figures are a stated host scheduling profile, not
+a measurement on the board.
 
-## Work not completed
+The face's windows are answered by `src/aecp_far.c` from what the board has:
 
-No production pin change, AECP integration, generated board configuration,
-descriptor image, `make check`, firmware gate, veth enumeration test or
-aarch64 cross build is claimed. No board was contacted or installed, and
-no branch was pushed. IEEE 1722.1-2021 section 7.2.1's required Configuration
-descriptor remains the original unresolved issue. Work stopped at the
-explicit instruction to report any needed upstream change beyond a build flag.
+| AECP | Answered from |
+| --- | --- |
+| GET_STREAM_INFO, STREAM_OUTPUT | the datapath block: stream ID, MAAP address, VLAN |
+| GET_STREAM_INFO, STREAM_INPUT | ACMP's view, through the firmware's bridge |
+| SET_STREAM_FORMAT | supported only for each stream's current format, the one the media plane runs |
+| GET_AVB_INFO | flexptpd: grandmaster, mean link delay, asCapable, gPTP enabled; SR class A at PCP 3, VLAN 2 |
+| GET_AS_PATH | flexptpd, where it determines the path: the board as grandmaster, or the grandmaster one step away; otherwise not answered |
+| GET_COUNTERS | AVB_INTERFACE LINK_UP, LINK_DOWN, GPTP_GM_CHANGED; CLOCK_DOMAIN LOCKED, UNLOCKED (flexptpd's lock); STREAM_INPUT 0 and STREAM_OUTPUT 0 from milan-mediad's media block |
+| ADD/REMOVE_AUDIO_MAPPINGS | refused at the edit's begin: NOT_SUPPORTED |
+| F_COMMIT (settings) | acknowledged at once |
+
+## What is not met, and why no Milan conformance is claimed
+
+1. **The CRF input binds and counts, but nothing clocks from it.**
+   STREAM_INPUT 1 binds over ACMP, settles, appears in the datapath block and in
+   GET_STREAM_INFO, and is counted among ADP's sinks. milan-mediad receives
+   only STREAM_INPUT 0 and plays it on its own gPTP-derived clock. AECP accepts
+   SET_CLOCK_SOURCE to the CRF source (index 1), as the model offers it, but
+   the media plane does not follow it.
+2. **STREAM_INPUT 1's counters:** answered with none valid, because no media
+   program receives the CRF stream (Milan v1.2 5.4.2.25, Table 5.16).
+   TIMESTAMP_UNCERTAIN (STREAM_INPUT 0, STREAM_OUTPUT 0) and STREAM_OUTPUT 0's
+   MEDIA_RESET are not counted by milan-mediad and are not reported valid.
+3. **Dynamic input maps:** ADD and REMOVE_AUDIO_MAPPINGS answer NOT_SUPPORTED
+   (Milan v1.2 5.4.2.27, 5.4.2.28). The media plane renders stream channel n to
+   USB channel n and has no router. GET_AUDIO_MAP serves that identity map.
+4. **Formats:** STREAM_INPUT 0 advertises the Base family (Milan v1.2 6.4),
+   but SET_STREAM_FORMAT takes only the 8-channel format the media plane runs.
+5. **GET_AS_PATH** is not answered beyond one step from the grandmaster,
+   because flexptpd publishes no path trace.
+6. **No SRP** (#14): GET_AVB_INFO's SRP_ENABLED is clear, and no MSRP field of
+   GET_STREAM_INFO is valid.
+7. **REBOOT** answers NOT_IMPLEMENTED: this platform has no reset port.
+8. **Timing:** the loop's budgets are the host row's stated profile. The
+   millisecond bounds of AECP notices and SRP are not measured on the board.
+
+## Evidence
+
+- `make check`: `config/` current; `test_media`, `test_gptp`; `tests/peer.py`
+  (ADP, MAAP, ACMP); `tests/aecp.py`, 87 checks: enumeration of all 32
+  descriptors, GET_MILAN_INFO and the system unique ID, ACQUIRE
+  (NOT_SUPPORTED), LOCK, the 5.4 command set, an unsolicited notification,
+  GET_COUNTERS over a media block with known values, BIND_RX on STREAM_INPUT 0
+  and 1, and the KLJ2-to-KLJ3 journal move; the talker, listener and
+  saved-state power-cut suites.
+- The aarch64 cross build: `make CC=aarch64-linux-gnu-gcc`, which produces
+  `milan-ctrld`.
+
+Not done: nothing was installed on a board. The Buildroot build waits for the
+published archive. milan-fpga's own firmware gate at the pin was run in part
+(milan-fpga#983's receipts list which).

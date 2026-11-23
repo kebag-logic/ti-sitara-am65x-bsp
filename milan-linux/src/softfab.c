@@ -191,9 +191,12 @@ static void poll_gptp(struct softfab *sf)
 	} else if (now - sf->gptp_fresh_ms > GPTP_STALE_MS) {
 		gptp_shm_close(&sf->gptp);
 		sf->gptp_fresh_ms = now;
+		sf->gptp_seen = false;
 		return;
 	}
 
+	sf->gptp_last = st;
+	sf->gptp_seen = true;
 	sf->as_capable = st.as_capable;
 
 	uint64_t gm = gptp_status_grandmaster(&st);

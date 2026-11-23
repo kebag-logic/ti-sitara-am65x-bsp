@@ -73,6 +73,8 @@ struct softfab {
 	uint64_t gptp_next_ms;          // the next poll
 	uint32_t gptp_updates;          // the block's update counter at the last change
 	uint64_t gptp_fresh_ms;         // when it last changed
+	struct gptp_status gptp_last;   // its last consistent read (AECP's GET_AVB_INFO, GET_AS_PATH)
+	bool gptp_seen;                 // ... once there is one
 	struct softfab_stats stats;
 };
 
