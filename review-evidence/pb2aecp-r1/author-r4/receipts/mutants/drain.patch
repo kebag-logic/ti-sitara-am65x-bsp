@@ -1,0 +1,24 @@
+diff -ru $LANES/pb2-aecp/milan-linux/src/crf_rx.c $VALIDATION_STORAGE/pb2aecp-a830/r4/mut/drain/src/crf_rx.c
+--- $LANES/pb2-aecp/milan-linux/src/crf_rx.c	2026-11-23 14:11:33.639318463 +0100
++++ $VALIDATION_STORAGE/pb2aecp-a830/r4/mut/drain/src/crf_rx.c	2026-11-23 14:15:52.687628278 +0100
+@@ -181,8 +181,6 @@
+ 				cur_stream = cur_mac = 0;
+ 				set_filter(fd, 0);
+ 				// what the socket holds from before is not this binding's to count
+-				while (recv(fd, frame, sizeof frame, MSG_DONTWAIT) > 0) {
+-				}
+ 				if (listening) {
+ 					cur_stream = k.stream_id;
+ 					cur_mac = k.dest_mac;
+diff -ru $LANES/pb2-aecp/milan-linux/src/listener.c $VALIDATION_STORAGE/pb2aecp-a830/r4/mut/drain/src/listener.c
+--- $LANES/pb2-aecp/milan-linux/src/listener.c	2026-11-23 14:11:33.636273076 +0100
++++ $VALIDATION_STORAGE/pb2aecp-a830/r4/mut/drain/src/listener.c	2026-11-23 14:15:52.687460506 +0100
+@@ -214,8 +214,6 @@
+ 				memset(&cur, 0, sizeof cur);
+ 				set_filter(fd, 0);
+ 				// what the socket holds from before is not this binding's to count
+-				while (recv(fd, frame, sizeof frame, MSG_DONTWAIT) > 0) {
+-				}
+ 				if (listening) {
+ 					cur = (struct lstream){k.stream_id, k.dest_mac};
+ 					set_filter(fd, k.dest_mac);

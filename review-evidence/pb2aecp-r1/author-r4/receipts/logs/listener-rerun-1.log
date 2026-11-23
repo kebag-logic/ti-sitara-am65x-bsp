@@ -1,0 +1,15 @@
+[PASS] talker A streaming: after 2 s
+bind: BIND_RX_RESPONSE status 0
+[PASS] B settled on A's stream: stream_id:0200000000010000 dest_mac:91e0f0002820 vlan:2 listening:1 bound:1 binds:1
+[INFO] B locked after 4 s, playback pitch 1000081
+[PASS] FRAMES_RX at 8000/s: 80329 PDUs in 10 s
+[PASS] no SEQ_NUM_MISMATCH, LATE_TIMESTAMP or STREAM_INTERRUPTED: seq 0 -> 0, late 0 -> 0, interrupted 0 -> 0
+[PASS] no jump and no underrun: jumps 0 -> 0, underruns 0 -> 0
+[PASS] presentation error within 125 us: -71935..70435 ns, average -569 ns
+[PASS] playback pitch cancels the host's -50 ppm: pitch 1000049 (1000050 +/- 50 expected)
+--- ramp-check of the last 9 s B's host recorded ---
+$VALIDATION_STORAGE/pb2aecp-a830/r4/tmp/tmp.a6fiXU150X/tail.wav: 8 ch, 32-bit, 48000 Hz, shift 0
+  frames 432000: skipped 0 leading, 0 trailing silent; ramp from counter 353610, 432000 frames checked (9.000 s)
+  dropped 0  repeated 0  silent-inside 0  invalid 0  bit errors 0 (per channel [0, 0, 0, 0, 0, 0, 0, 0])
+RESULT: PASS
+listener: PASS

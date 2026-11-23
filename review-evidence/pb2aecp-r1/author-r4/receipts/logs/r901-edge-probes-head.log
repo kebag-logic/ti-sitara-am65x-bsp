@@ -1,0 +1,29 @@
+command: sh $VALIDATION_STORAGE/pb2aecp-a830/r4/r901-probes-head/scratch/edge-tests/run-netns-counters.sh $VALIDATION_STORAGE/pb2aecp-a830/r4/r901-probes-head/scratch/native $VALIDATION_STORAGE/pb2aecp-a830/r4/head-src/milan-linux/config/entity.conf
+[PASS] ADP: ENTITY_AVAILABLE
+[PASS] GET_COUNTERS STREAM_INPUT 0 and 1 before any binding: counted (valid 0xf3f), all zero: [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
+[PASS] ACMP BIND_RX STREAM_INPUT 0: SUCCESS: 0
+[PASS] ACMP STREAM_INPUT 0: PROBE_TX_COMMAND to talker unique id 0
+[PASS] datapath: sink 0 listening to stream 0200000000020000: stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:1
+[PASS] GET_STREAM_INFO STREAM_INPUT 0: bound to the stream (CONNECTED, STREAM_ID_VALID): f600000602050220020060000200000000020000
+[PASS] ACMP BIND_RX STREAM_INPUT 1: SUCCESS: 0
+[PASS] ACMP STREAM_INPUT 1: PROBE_TX_COMMAND to talker unique id 1
+[PASS] datapath: sink 1 listening to stream 0200000000020001: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:1
+[PASS] GET_STREAM_INFO STREAM_INPUT 1: bound to the stream (CONNECTED, STREAM_ID_VALID): f6000006041060010000bb800200000000020001
+EARLY baseline CRF [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5]
+EARLY sustained CRF [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 2, 8]
+EARLY media {}
+[PASS] CRF early-only stream interrupts and unlocks after receive timeout: [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 2, 8]
+[PASS] burst command SUCCESS 9
+[PASS] burst command SUCCESS 7
+REBIND before stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:1 [2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 4, 10]
+REBIND after stream_id:0000000000000000 dest_mac:000000000000 vlan:0 listening:0 bound:1 binds:2 [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+[PASS] burst rebind counted
+[PASS] burst rebind zeroed earlier EARLY_TIMESTAMP: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+[PASS] ACMP UNBIND_RX STREAM_INPUT 1: SUCCESS
+[PASS] ACMP BIND_RX STREAM_INPUT 1: SUCCESS: 0
+[PASS] ACMP STREAM_INPUT 1: PROBE_TX_COMMAND to talker unique id 1
+[PASS] datapath: sink 1 listening to stream 0200000000020001: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:3
+[PASS] GET_STREAM_INFO STREAM_INPUT 1: bound to the stream (CONNECTED, STREAM_ID_VALID): f6000006041060010000bb800200000000020001
+SERIAL after stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:3 [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
+[PASS] separated rebind zeroes earlier EARLY_TIMESTAMP
+counters: PASS (0 failed)
