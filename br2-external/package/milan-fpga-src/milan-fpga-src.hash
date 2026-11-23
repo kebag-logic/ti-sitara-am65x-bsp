@@ -1,6 +1,4 @@
 # milan-linux/milan-fpga.pin: MILAN_FPGA_SHA256, TSN_C_STACK_SHA256, LWSRP_SHA256
-# PROVISIONAL: milan-fpga 677d605f37c3a80654df1dd2cde053b57242845b (milan-fpga#983) has
-# no published archive yet, so it has no line here and this package cannot
-# download it; its sha256 line is added with the publication, as the pin's is.
 sha256  a0662e54f7204c1b3a780010092f1e7077b3949722dda823d262b717c264cb62  715589c1db7cf67e2f3259fd7083ebc7f0923376.tar.gz
 sha256  4c9ad613b3a1742dd20851ee7fe8d81ce8c436df48b521aa807c9f6d1d9383c9  08ee86e812a0eb5e1dc6cd61b494d8baf3491348.tar.gz
+sha256  e9a782af56ef7acfe514452f532cf913d154e4ee4597059e1dfe207f98d39756  677d605f37c3a80654df1dd2cde053b57242845b.tar.gz

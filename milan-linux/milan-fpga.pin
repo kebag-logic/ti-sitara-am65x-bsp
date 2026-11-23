@@ -3,16 +3,13 @@
 # is a reviewed change: rerun `make check`, milan-fpga's own firmware gate at
 # the new revision, and regenerate config/ (tools/gen-config.sh).
 #
-# PROVISIONAL: the head of milan-fpga's pf-linuxprof-1 (milan-fpga#983, the
-# descriptor-only host profile config/endstation_pb2_bridge.yaml is written
-# for), before it is published. There is no GitHub archive of it yet, so its
-# sha256 is "provisional" and tools/fetch-milan-fpga.sh takes the tree from a
-# local checkout (MILAN_FPGA_LOCAL). Replace both with the published
-# revision's archive sha256 before this is released.
+# The head of milan-fpga PR #986 (milan-fpga#983, the descriptor-only host
+# profile config/endstation_pb2_bridge.yaml is written for). Move the pin to
+# that PR's merge commit once it lands on dev-soft-core.
 MILAN_FPGA_REPO=https://github.com/kebag-logic/milan-fpga
 MILAN_FPGA_REV=677d605f37c3a80654df1dd2cde053b57242845b
 # sha256 of $(MILAN_FPGA_REPO)/archive/$(MILAN_FPGA_REV).tar.gz
-MILAN_FPGA_SHA256=provisional
+MILAN_FPGA_SHA256=e9a782af56ef7acfe514452f532cf913d154e4ee4597059e1dfe207f98d39756
 # The TSN stack the firmware's ADP, ACMP, MAAP and wire layer come from (the
 # gitlink third_party/tsn-c-stack at MILAN_FPGA_REV): every build needs it.
 TSN_C_STACK_REPO=https://github.com/kebag-logic/tsn-c-stack
