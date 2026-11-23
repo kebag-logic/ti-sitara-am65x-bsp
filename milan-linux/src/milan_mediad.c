@@ -365,6 +365,18 @@ int main(int argc, char **argv)
 		if (opt.crf) {
 			crf_rx_report(&crf, &x);
 		}
+		// an input whose receive socket could not be set up counts nothing, and
+		// reports none of its counters valid; said once, the rest runs on
+		const char *step;
+		int err;
+		if (opt.listener && rxsock_failed(&ls.rx, &step, &err)) {
+			say(LOG_ERR, "listener on %s: %s: %s; STREAM_INPUT 0 is not received, none of its counters valid",
+			    opt.ifname, step, strerror(err));
+		}
+		if (opt.crf && rxsock_failed(&crf.rx, &step, &err)) {
+			say(LOG_ERR, "CRF input on %s: %s: %s; STREAM_INPUT 1 is not received, none of its counters valid",
+			    opt.ifname, step, strerror(err));
+		}
 		milan_media_begin(media);
 		media->gptp_rate_ppb = (int64_t)((clk.model.rate - 1.0) * 1e9);
 		media->gptp_residual_ns = clk.residual_ns;

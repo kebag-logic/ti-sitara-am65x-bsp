@@ -107,6 +107,21 @@ struct grid {
 	uint64_t run_events;            // the events since it, at the nominal step
 };
 
+// no Milan PDU of the stream processed for interrupt_ns (Milan v1.2 Table 5.6
+// STREAM_INTERRUPTED): unlocked, and waiting for the next to start the grid over
+static void interrupt(struct crf_rx *x, struct milan_media_crf *r, enum cstate *state, bool *have_seq,
+		      struct grid *g)
+{
+	r->stream_interrupted++;
+	r->milan.value[MILAN_SI_STREAM_INTERRUPTED]++;
+	set_locked(r, false);
+	r->active = 0;
+	*state = C_WAITING;
+	*have_seq = false;
+	g->have = false;
+	live_update(x, r);
+}
+
 static void *crf_rx_main(void *arg)
 {
 	struct crf_rx *x = arg;
@@ -114,25 +129,20 @@ static void *crf_rx_main(void *arg)
 	struct milan_media_crf rep;
 	memset(&rep, 0, sizeof rep);
 	rep.margin_min_ns = INT32_MAX;
-	rep.milan.valid = MILAN_SI_VALID;       // this thread counts all ten (media.h)
 	struct milan_obs obs;
 	milan_counters_zero(&rep.milan, &obs, 0, milan_mono_ns());
-	live_update(x, &rep);
+	(void)pthread_setname_np(pthread_self(), "milan-crf-rx");
 
-	int ifindex = (int)if_nametoindex(c->ifname);
-	int fd = socket(AF_PACKET, SOCK_RAW | SOCK_CLOEXEC, htons(ETH_P_ALL));
-	struct sockaddr_ll sll = {.sll_family = AF_PACKET, .sll_protocol = htons(ETH_P_ALL), .sll_ifindex = ifindex};
-	struct timeval tv = {0, 5000};
-	if (fd < 0 || ifindex == 0 || set_filter(fd, 0) != 0 || bind(fd, (struct sockaddr *)&sll, sizeof sll) != 0 ||
-	    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv) != 0) {
-		// no receive path: nothing counts the input, so none of its counters is valid
-		rep.milan.valid = 0;
+	// no receive path: nothing counts the input, so none of its counters is
+	// valid; they are once it receives (rxsock.h)
+	int ifindex = 0;
+	int fd = rxsock_open(&x->rx, c->ifname, set_filter, &ifindex);
+	if (fd < 0) {
 		live_update(x, &rep);
-		if (fd >= 0) {
-			close(fd);
-		}
 		return NULL;
 	}
+	rep.milan.valid = MILAN_SI_VALID;       // this thread counts all ten (media.h)
+	live_update(x, &rep);
 	int one = 1;
 	(void)setsockopt(fd, SOL_PACKET, PACKET_IGNORE_OUTGOING, &one, sizeof one);
 
@@ -170,6 +180,9 @@ static void *crf_rx_main(void *arg)
 				state = C_NONE;
 				cur_stream = cur_mac = 0;
 				set_filter(fd, 0);
+				// what the socket holds from before is not this binding's to count
+				while (recv(fd, frame, sizeof frame, MSG_DONTWAIT) > 0) {
+				}
 				if (listening) {
 					cur_stream = k.stream_id;
 					cur_mac = k.dest_mac;
@@ -205,14 +218,7 @@ static void *crf_rx_main(void *arg)
 			uint8_t peek;
 			bool pending = n <= 0 && recv(fd, &peek, 1, MSG_PEEK | MSG_DONTWAIT) > 0;
 			if (state == C_RUNNING && !pending && now - last_rx > c->interrupt_ns) {
-				rep.stream_interrupted++;
-				rep.milan.value[MILAN_SI_STREAM_INTERRUPTED]++;
-				set_locked(&rep, false);
-				rep.active = 0;
-				state = C_WAITING;
-				have_seq = false;
-				g.have = false;
-				live_update(x, &rep);
+				interrupt(x, &rep, &state, &have_seq, &g);
 			}
 			if (!ours) {
 				continue;
@@ -250,9 +256,14 @@ static void *crf_rx_main(void *arg)
 			rep.late_timestamp++;
 			milan_obs_note(&obs, MILAN_SI_LATE_TIMESTAMP);
 		} else if (margin > c->early_ns) {
-			// too far in the future to process: counted, and not laid on the grid
+			// too far in the future to process: counted, and not laid on the grid,
+			// so a run of them interrupts the stream as a gap would, judged on
+			// each one, not only when a receive times out
 			rep.early_timestamp++;
 			milan_obs_note(&obs, MILAN_SI_EARLY_TIMESTAMP);
+			if (state == C_RUNNING && now - last_rx > c->interrupt_ns) {
+				interrupt(x, &rep, &state, &have_seq, &g);
+			}
 			continue;
 		}
 		int32_t m32 = margin < INT32_MIN ? INT32_MIN : margin > INT32_MAX ? INT32_MAX : (int32_t)margin;

@@ -245,21 +245,25 @@ static void env_persist(void *ctx, unsigned sink)
 	say(LOG_DEBUG, "sink %u: binding changed", sink);
 }
 
-// ACMP's bound state into the datapath block, and the count of not-bound to
-// bound changes that zeroes an input's Milan counters (Milan v1.2 5.3.8.10).
-// Read every loop pass, so a binding the saved state restores at boot counts
-// as one too.
-static void publish_bound(void)
+// The bound state into the datapath block, and the count of not-bound to bound
+// changes that zeroes an input's Milan counters (Milan v1.2 5.3.8.10), at the
+// owner's boundary: the publication's BINDING.BOUND, which ACMP writes before
+// it answers BIND_RX or UNBIND_RX, and for a binding the saved state restores
+// at boot (softfab.h). Each edge is seen in the write that makes it, so a
+// burst that unbinds and binds again within one loop pass counts its binding,
+// and the count is in the block before the response leaves or a later
+// GET_COUNTERS is answered (aecp_far.c). Inside the firmware's write: no call
+// back into it, and the block is never inside another update here.
+static void sink_bound(void *ctx, unsigned sink, bool bound)
 {
-	for (unsigned k = 0; k < acmp_cfg.n_sinks && k < ACMP_MAX_SINKS && k < MILAN_DP_MAX_SINKS; ++k) {
-		bool bound = app.acmp.acmp.sinks[k].bound;
-		if (bound != (dp->sinks[k].bound != 0u)) {
-			milan_dp_begin(dp);
-			dp->sinks[k].bound = bound;
-			dp->sinks[k].binds += bound ? 1u : 0u;
-			milan_dp_end(dp);
-		}
+	(void)ctx;
+	if (dp == NULL || sink >= MILAN_DP_MAX_SINKS) {
+		return;
 	}
+	milan_dp_begin(dp);
+	dp->sinks[sink].bound = bound;
+	dp->sinks[sink].binds += bound ? 1u : 0u;
+	milan_dp_end(dp);
 }
 
 static void env_changed(void *ctx, unsigned sink)
@@ -665,6 +669,7 @@ int main(int argc, char **argv)
 		.ifname = opt.ifname,
 		.gptp_shm = opt.gptp_shm,
 		.gptp_poll_ms = opt.gptp_poll_ms,
+		.bound_changed = sink_bound,
 	};
 	if (softfab_open(&fab, &fcfg) != 0) {
 		return 1;
@@ -700,7 +705,6 @@ int main(int argc, char **argv)
 		}
 		softfab_pump(&fab, handled == 0u);
 		publish_gptp();
-		publish_bound();
 		aecp_far_poll(&far);
 		if (dump_requested) {
 			dump_requested = 0;

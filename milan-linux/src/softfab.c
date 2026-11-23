@@ -90,9 +90,35 @@ uint32_t mbx_hal_read32(uint32_t byte_offset)
 	return mbx_model_read(&bound->model, byte_offset);
 }
 
+_Static_assert(MBX_N_PUB_SINKS <= 32u, "a bit per sink of the publication block");
+
+// Each sink's BINDING.BOUND as the publication block holds it after a write,
+// against the last seen: every edge, in the write that made it, so a loop pass
+// that binds, unbinds and binds again shows each one.
+static void bound_edges(struct softfab *sf)
+{
+	const uint32_t *pub = sf->model.pub[0];
+	uint32_t now = 0;
+	for (unsigned k = 0; k < MBX_N_PUB_SINKS; ++k) {
+		uint32_t binding = pub[(MBX_PUB_SINK_BASE + MBX_PUB_SINK_STRIDE * k + MBX_PUB_SINK_REG_BINDING) / 4u];
+		now |= ((binding >> MBX_BINDING_BOUND_LSB) & 1u) << k;
+	}
+	uint32_t moved = now ^ sf->pub_bound;
+	sf->pub_bound = now;
+	for (unsigned k = 0; moved != 0u && k < MBX_N_PUB_SINKS; ++k) {
+		if ((moved >> k) & 1u) {
+			moved &= ~(1u << k);
+			if (sf->cfg.bound_changed != NULL) {
+				sf->cfg.bound_changed(sf->cfg.bound_ctx, k, (now >> k) & 1u);
+			}
+		}
+	}
+}
+
 void mbx_hal_write32(uint32_t byte_offset, uint32_t value)
 {
 	mbx_model_write(&bound->model, byte_offset, value, 0xFu);
+	bound_edges(bound);
 	tx_flush(bound);
 }
 

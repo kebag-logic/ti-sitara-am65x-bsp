@@ -37,10 +37,19 @@
 #include "gptp_shm.h"
 #include "mbx_model.h"
 
+// A sink's BINDING.BOUND moved in the publication block (the processor's
+// acmp_bound_o; MAILBOX_CONTRACT: the firmware writes it before the BIND_RX or
+// UNBIND_RX response). Called inside the firmware's write that moved it, once
+// per edge, however many edges one loop pass makes; it must not call into the
+// firmware.
+typedef void softfab_bound_fn(void *ctx, unsigned sink, bool bound);
+
 struct softfab_config {
 	const char *ifname;
 	const char *gptp_shm;           // flexptpd's status block; NULL = no gPTP plane
 	unsigned gptp_poll_ms;          // its polling period
+	softfab_bound_fn *bound_changed; // NULL for none
+	void *bound_ctx;
 };
 
 struct softfab_stats {
@@ -77,6 +86,7 @@ struct softfab {
 	uint64_t gptp_fresh_ms;         // when it last changed (or the mapping's baseline was read)
 	struct gptp_status gptp_last;   // the last read of live status (AECP's GET_AVB_INFO, GET_AS_PATH)
 	bool gptp_seen;                 // the status is live: its update counter moved within GPTP_STALE_MS
+	uint32_t pub_bound;             // bit k: sink k's BINDING.BOUND on interface 0, as last seen
 	struct softfab_stats stats;
 };
 

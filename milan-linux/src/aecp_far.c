@@ -69,16 +69,24 @@ static struct aecp_far_counters stream_counters(const struct aecp_far *f, const 
 // Which media program counts which stream: milan-mediad's AAF listener
 // STREAM_INPUT 0, its CRF receive path STREAM_INPUT 1 (crf_rx.h), its talker
 // STREAM_OUTPUT 0. Any other stream of the model has none.
+static struct aecp_far_counters input_counters(const struct aecp_far *f, unsigned index)
+{
+	struct aecp_far_counters none = {0};
+	const struct milan_media *m = &f->media_copy;
+	if (index >= f->cfg.n_inputs) {
+		return none;
+	}
+	return index == 0u ? stream_counters(f, &m->listener.milan, 0)
+	     : index == 1u ? stream_counters(f, &m->crf.milan, 1) : none;
+}
+
 static void stream_poll(struct aecp_far *f, struct aecp_far_counters *in, struct aecp_far_counters *out)
 {
 	memset(in, 0, sizeof *in * AECP_FAR_COUNTED);
 	memset(out, 0, sizeof *out * AECP_FAR_COUNTED);
 	const struct milan_media *m = &f->media_copy;
-	if (f->cfg.n_inputs > 0u) {
-		in[0] = stream_counters(f, &m->listener.milan, 0);
-	}
-	if (f->cfg.n_inputs > 1u) {
-		in[1] = stream_counters(f, &m->crf.milan, 1);
+	for (unsigned k = 0; k < AECP_FAR_COUNTED; ++k) {
+		in[k] = input_counters(f, k);
 	}
 	if (f->cfg.n_outputs > 0u) {
 		out[0] = stream_counters(f, &m->talker.milan, -1);
@@ -96,8 +104,10 @@ static bool counters(const struct aecp_far *f, uint16_t type, uint16_t index, st
 		put(out, CD_LOCKED, f->locks);
 		put(out, CD_UNLOCKED, f->unlocks);
 	} else if (type == STREAM_INPUT && index < f->cfg.n_inputs) {
+		// against the bind count as it is now, not as the last poll saw it: a
+		// binding made since then has its counters at zero (stream_counters)
 		if (index < AECP_FAR_COUNTED) {
-			*out = f->input[index];
+			*out = input_counters(f, index);
 		}
 	} else if (type == STREAM_OUTPUT && index < f->cfg.n_outputs) {
 		if (index < AECP_FAR_COUNTED) {

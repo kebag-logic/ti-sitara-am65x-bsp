@@ -36,6 +36,7 @@
 #include "datapath.h"
 #include "gptp_time.h"
 #include "media.h"
+#include "rxsock.h"
 #include "shmblk.h"
 
 struct listener_cfg {
@@ -61,6 +62,7 @@ struct listener {
 	struct listener_cfg cfg;
 	pthread_t thread;
 	atomic_bool stop;
+	struct rxsock_state rx;         // its receive socket's setup
 	struct listener_live live;
 };
 

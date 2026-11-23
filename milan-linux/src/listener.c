@@ -73,6 +73,19 @@ static void live_update(struct listener *ls, const struct milan_media_listener *
 	shmblk_end(&ls->live);
 }
 
+// nothing played for interrupt_ns: the playback stops, and is placed again
+// from the next PDU it can play
+static void stop_playback(struct listener *ls, struct milan_media_listener *r, enum lstate *state, bool *have_seq)
+{
+	interrupted(r);
+	set_locked(r, false);
+	r->active = 0;
+	ls->cfg.snk->stop(ls->cfg.snk);
+	*state = L_WAITING;
+	*have_seq = false;
+	live_update(ls, r);
+}
+
 void listener_report(const struct listener *ls, struct milan_media_listener *out)
 {
 	struct listener_live copy;
@@ -140,19 +153,19 @@ static void *listener_main(void *arg)
 	memset(&rep, 0, sizeof rep);
 	rep.pitch = 1000000;
 	rep.in_flight_ns = c->in_flight_ns;
-	rep.milan.valid = MILAN_SI_VALID;       // this thread counts all ten (media.h)
 	struct milan_obs obs;
 	milan_counters_zero(&rep.milan, &obs, 0, milan_mono_ns());
-	live_update(ls, &rep);
+	(void)pthread_setname_np(pthread_self(), "milan-listener");
 
-	int ifindex = (int)if_nametoindex(c->ifname);
-	int fd = socket(AF_PACKET, SOCK_RAW | SOCK_CLOEXEC, htons(ETH_P_ALL));
-	struct sockaddr_ll sll = {.sll_family = AF_PACKET, .sll_protocol = htons(ETH_P_ALL), .sll_ifindex = ifindex};
-	struct timeval tv = {0, 5000};
-	if (fd < 0 || ifindex == 0 || set_filter(fd, 0) != 0 || bind(fd, (struct sockaddr *)&sll, sizeof sll) != 0 ||
-	    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv) != 0) {
+	// none valid until it receives: a failed setup leaves them so (rxsock.h)
+	int ifindex = 0;
+	int fd = rxsock_open(&ls->rx, c->ifname, set_filter, &ifindex);
+	if (fd < 0) {
+		live_update(ls, &rep);
 		return NULL;
 	}
+	rep.milan.valid = MILAN_SI_VALID;       // this thread counts all ten (media.h)
+	live_update(ls, &rep);
 	int one = 1;
 	(void)setsockopt(fd, SOL_PACKET, PACKET_IGNORE_OUTGOING, &one, sizeof one);
 	// room for half a second of PDUs, should the thread be held off its core
@@ -200,6 +213,9 @@ static void *listener_main(void *arg)
 				state = L_NONE;
 				memset(&cur, 0, sizeof cur);
 				set_filter(fd, 0);
+				// what the socket holds from before is not this binding's to count
+				while (recv(fd, frame, sizeof frame, MSG_DONTWAIT) > 0) {
+				}
 				if (listening) {
 					cur = (struct lstream){k.stream_id, k.dest_mac};
 					set_filter(fd, k.dest_mac);
@@ -221,13 +237,7 @@ static void *listener_main(void *arg)
 			uint8_t peek;
 			bool pending = recv(fd, &peek, 1, MSG_PEEK | MSG_DONTWAIT) > 0;
 			if (state == L_RUNNING && !pending && now - last_rx > c->interrupt_ns) {
-				interrupted(&rep);
-				set_locked(&rep, false);
-				rep.active = 0;
-				snk->stop(snk);
-				state = L_WAITING;
-				have_seq = false;
-				live_update(ls, &rep);
+				stop_playback(ls, &rep, &state, &have_seq);
 			}
 			continue;
 		}
@@ -275,18 +285,18 @@ static void *listener_main(void *arg)
 			milan_obs_note(&obs, MILAN_SI_UNSUPPORTED_FORMAT);
 			// nothing to play for interrupt_ns, though PDUs of another format arrive
 			if (state == L_RUNNING && now - last_rx > c->interrupt_ns) {
-				interrupted(&rep);
-				set_locked(&rep, false);
-				rep.active = 0;
-				snk->stop(snk);
-				state = L_WAITING;
-				have_seq = false;
-				live_update(ls, &rep);
+				stop_playback(ls, &rep, &state, &have_seq);
 			}
 			continue;
 		}
 		if (early) {
-			continue;               // too far in the future to process (Milan v1.2 Table 5.6): not played
+			// too far in the future to process (Milan v1.2 Table 5.6): not played,
+			// so a run of them interrupts the playback as a gap would, judged on
+			// each one, not only when a receive times out
+			if (state == L_RUNNING && now - last_rx > c->interrupt_ns) {
+				stop_playback(ls, &rep, &state, &have_seq);
+			}
+			continue;
 		}
 		rep.frames_rx++;
 		last_rx = now;

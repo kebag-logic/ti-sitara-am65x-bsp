@@ -25,8 +25,19 @@ controller reads GET_COUNTERS while the streams carry one fault at a time:
                   EARLY_TIMESTAMP; they are not processed, the grid holds
   interruption    300 ms with nothing sent (the threshold 200 ms):
                   STREAM_INTERRUPTED on both; the CRF input unlocks, then locks
+  early only      1.5 s of PDUs all stamped 300 ms ahead: none is processed,
+                  so both inputs are interrupted once (STREAM_INTERRUPTED), as
+                  for a gap, though PDUs keep arriving; the CRF input unlocks
   rebind          UNBIND_RX and BIND_RX of STREAM_INPUT 1: its counters start
                   from zero (Milan v1.2 5.3.8.10)
+  burst           with milan-ctrld and milan-mediad held, UNBIND_RX, BIND_RX,
+                  UNBIND_RX, BIND_RX of STREAM_INPUT 0, UNBIND_RX and BIND_RX
+                  of STREAM_INPUT 1, then GET_COUNTERS of both, queued: served
+                  in one go, each binding is counted and both inputs read zero
+                  at once, before milan-mediad runs again; then they count
+                  from zero for the new binding
+  rebind at once  BIND_RX of STREAM_INPUT 1 and GET_COUNTERS the moment its
+                  response is seen, five times: zero at once
   talker          STREAM_OUTPUT 0 (Milan v1.2 Table 5.4): one STREAM_START,
                   FRAMES_TX per interval, MEDIA_RESET and TIMESTAMP_UNCERTAIN
                   zero, since it never toggles mr nor sets tu, as its PDUs show
@@ -195,6 +206,149 @@ def delta(a: list[int], b: list[int]) -> dict:
     return {SI[k]: b[k] - a[k] for k in range(12) if SI[k] and b[k] != a[k]}
 
 
+def binds(a, sink: int) -> int:
+    x = peer.milan_dp(a.dp, a.shm).get(f"sink{sink}", "")
+    return int(x.split("binds:")[1].split()[0]) if "binds:" in x else -1
+
+
+def hold(p: subprocess.Popen) -> None:
+    p.send_signal(signal.SIGSTOP)
+    os.waitpid(p.pid, os.WUNTRACED)
+
+
+def get_counters(c, k: int) -> int:
+    """GET_COUNTERS of STREAM_INPUT k sent, not waited for: its sequence_id."""
+    c.seq = (c.seq + 1) & 0xFFFF
+    c.wire.send(c.dut_mac, aecp.aecpdu(aecp.AEM_CMD, c.eid, peer.CONTROLLER, c.seq, aecp.GET_COUNTERS,
+                                       struct.pack(">HH", aecp.D_STREAM_INPUT, k)))
+    return c.seq
+
+
+def burst(g, a, c, wire, eid: int, ctrld, mediad, talker, aaf: Stream, crf: Stream) -> None:
+    """UNBIND_RX and BIND_RX queued while milan-ctrld is held, so one loop pass serves several of them, and
+    GET_COUNTERS after them while milan-mediad is held, so only the bind count can zero the counters: each binding
+    zeroes its input's counters (Milan v1.2 5.3.8.10), however fast the sequence."""
+    talker.fault([(aaf, "skip", 1), (crf, "skip", 1)])
+    time.sleep(1.2)
+    old = [read(c, 0), read(c, 1)]
+    g.check("burst: before it, both inputs have counted for their binding (SEQ_NUM_MISMATCH, FRAMES_RX)",
+            all(len(q) == 12 and q[3] >= 1 and q[11] >= 2 for q in old), str(old))
+    before = [binds(a, 0), binds(a, 1)]
+    hold(mediad)
+    hold(ctrld)
+    t = time.monotonic()
+    queued = [(peer.UNBIND_RX_CMD, 0, 0x7100), (peer.BIND_RX_CMD, 0, 0x7101), (peer.UNBIND_RX_CMD, 0, 0x7102),
+              (peer.BIND_RX_CMD, 0, 0x7103), (peer.UNBIND_RX_CMD, 1, 0x7110), (peer.BIND_RX_CMD, 1, 0x7111)]
+    for typ, luid, seq in queued:
+        wire.send(peer.ADP_ACMP_MC, peer.acmpdu(typ, controller=peer.CONTROLLER, talker=peer.TALKER_PEER,
+                                                listener=eid, tuid=luid, luid=luid, seq=seq))
+    asked = {k: get_counters(c, k) for k in (0, 1)}
+    time.sleep(0.03)
+    ctrld.send_signal(signal.SIGCONT)
+    last_bind = {}
+    for typ, luid, seq in queued:
+        r = wire.wait(lambda f: peer.is_sub(peer.SUB_ACMP, typ + 1)(f) and peer.parse_acmp(f[14:])["seq"] == seq,
+                      1.0, t)
+        g.check(f"burst: {'BIND_RX' if typ == peer.BIND_RX_CMD else 'UNBIND_RX'} STREAM_INPUT {luid} "
+                f"({seq:#x}): SUCCESS", r is not None and peer.parse_acmp(r[1][14:])["status"] == 0)
+        if r is not None and typ == peer.BIND_RX_CMD:
+            last_bind[luid] = r[0]
+    # at once after the last BIND_RX response: before the far side's next look at the media block
+    now = {k: get_counters(c, k) for k in (0, 1)}
+
+    def answer(seq: int):
+        r = wire.wait(lambda f: aecp.is_aecp(f) and (lambda q: q["msg"] == aecp.AEM_RSP and q["seq"] == seq
+                                                      and q["cmd"] == aecp.GET_COUNTERS
+                                                      and not q["unsolicited"])(aecp.parse_aecp(f[14:])), 1.0, t)
+        q = aecp.parse_aecp(r[1][14:]) if r else None
+        if q is None or q["status"] != aecp.SUCCESS or len(q["payload"]) < 136:
+            return None, None, []
+        return r[0], aecp.u32(q["payload"], 4), [aecp.u32(q["payload"], 8 + 4 * j) for j in range(12)]
+    for k in (0, 1):
+        # queued behind the bindings on the wire, but AECP may be served first in the same pass: answered after
+        # the binding's response, it is the new binding's (zero); before, the old one's
+        at, valid, values = answer(asked[k])
+        after_bind = at is not None and k in last_bind and at > last_bind[k]
+        g.check(f"burst: GET_COUNTERS STREAM_INPUT {k} queued with them: valid 0xf3f; "
+                f"{'answered after its BIND_RX response, all zero' if after_bind else 'answered first, the old binding'}"
+                "'s", valid == 0xF3F and (values == [0] * 12 if after_bind else values[3] >= 1),
+                f"{valid if valid is None else hex(valid)} {values}")
+        at, valid, values = answer(now[k])
+        g.check(f"burst: GET_COUNTERS STREAM_INPUT {k} at once after the last BIND_RX response, milan-mediad held: "
+                "valid 0xf3f, all zero", valid == 0xF3F and values == [0] * 12,
+                f"{valid if valid is None else hex(valid)} {values}")
+    after = [binds(a, 0), binds(a, 1)]
+    g.check("burst: each binding counted, two for STREAM_INPUT 0, one for STREAM_INPUT 1",
+            after == [before[0] + 2, before[1] + 1], f"{before} -> {after}")
+    # the talker's answers to the probes the bindings sent, so both inputs settle again
+    time.sleep(0.1)
+    with wire.lock:
+        probes = [f for at, f in wire.frames if at >= t and peer.is_sub(peer.SUB_ACMP, peer.PROBE_TX_CMD)(f)]
+    for f in probes:
+        q = peer.parse_acmp(f[14:])
+        stream = aecp.TALKER_STREAM_AAF if q["luid"] == 0 else aecp.TALKER_STREAM_CRF
+        wire.send(peer.ADP_ACMP_MC, peer.acmpdu(peer.PROBE_TX_RSP, stream_id=stream, controller=q["controller"],
+                                                talker=peer.TALKER_PEER, listener=eid, tuid=q["tuid"],
+                                                luid=q["luid"], dmac=peer.PEER_STREAM_DMAC + q["luid"],
+                                                seq=q["seq"], vlan=2))
+    time.sleep(0.3)
+    held = [aecp.counters(c, aecp.D_STREAM_INPUT, k) for k in (0, 1)]
+    g.check("burst: GET_COUNTERS again, milan-mediad still held: both valid 0xf3f, all zero",
+            held == [(0xF3F, [0] * 12)] * 2, str(held))
+    mediad.send_signal(signal.SIGCONT)
+    time.sleep(1.2)
+    fresh = [read(c, 0), read(c, 1)]
+    g.check("burst: milan-mediad running again, both count from zero for the new binding: no SEQ_NUM_MISMATCH, "
+            "FRAMES_RX 1 to 3", all(len(q) == 12 and q[2:11] == [0] * 9 and 1 <= q[11] <= 3 for q in fresh),
+            str(fresh))
+    out = subprocess.run([a.dp, a.shm, a.media], capture_output=True, text=True, check=False).stdout
+    served = {k: f"binds:{after[k]}" in next((x for x in out.splitlines()
+                                               if x.startswith(f"milan_stream_input{k}=")), "") for k in (0, 1)}
+    g.check("burst: milan-mediad zeroed each input for its latest binding (its bind count is the datapath's)",
+            served == {0: True, 1: True}, out.replace("\n", " ")[-400:])
+    sinks = [peer.milan_dp(a.dp, a.shm).get(f"sink{k}", "") for k in (0, 1)]
+    g.check("burst: both inputs listening again", all("listening:1" in x for x in sinks), str(sinks))
+
+
+def rebind_at_once(g, a, c, wire, eid: int) -> None:
+    """BIND_RX of STREAM_INPUT 1, and GET_COUNTERS the moment its response is seen, five times: the new binding
+    reads zero at once, though milan-mediad has not yet zeroed for it and the far side last read its block up to
+    100 ms before; the previous binding counted FRAMES_RX, which the unbind keeps."""
+    for n in range(5):
+        time.sleep(1.2)
+        aecp.unbind(g, wire, eid, 1, 1)
+        time.sleep(0.3)
+        kept = read(c, 1)
+        t = time.monotonic()
+        seq = 0x7200 + n
+        wire.send(peer.ADP_ACMP_MC, peer.acmpdu(peer.BIND_RX_CMD, controller=peer.CONTROLLER, talker=peer.TALKER_PEER,
+                                                listener=eid, tuid=1, luid=1, seq=seq))
+        rsp = wire.wait(lambda f: peer.is_sub(peer.SUB_ACMP, peer.BIND_RX_RSP)(f)
+                        and peer.parse_acmp(f[14:])["seq"] == seq, 1.0, t)
+        asked = get_counters(c, 1)
+        r = wire.wait(lambda f: aecp.is_aecp(f) and (lambda q: q["msg"] == aecp.AEM_RSP and q["seq"] == asked
+                                                      and q["cmd"] == aecp.GET_COUNTERS
+                                                      and not q["unsolicited"])(aecp.parse_aecp(f[14:])), 1.0, t)
+        q = aecp.parse_aecp(r[1][14:]) if r else None
+        ok = q is not None and q["status"] == aecp.SUCCESS and len(q["payload"]) >= 136
+        valid = aecp.u32(q["payload"], 4) if ok else None
+        values = [aecp.u32(q["payload"], 8 + 4 * j) for j in range(12)] if ok else []
+        g.check(f"rebind {n + 1} of 5: unbound, STREAM_INPUT 1 kept its FRAMES_RX", len(kept) == 12 and kept[11] >= 1,
+                str(kept))
+        g.check(f"rebind {n + 1} of 5: GET_COUNTERS STREAM_INPUT 1 at once after the BIND_RX response "
+                f"({(r[0] - rsp[0]) * 1000 if r and rsp else -1:.1f} ms): valid 0xf3f, all zero",
+                rsp is not None and valid == 0xF3F and values == [0] * 12,
+                f"{valid if valid is None else hex(valid)} {values}")
+        probe = wire.wait(lambda f: peer.is_sub(peer.SUB_ACMP, peer.PROBE_TX_CMD)(f)
+                          and peer.parse_acmp(f[14:])["luid"] == 1, 1.0, t)
+        if probe is not None:
+            p = peer.parse_acmp(probe[1][14:])
+            wire.send(peer.ADP_ACMP_MC, peer.acmpdu(peer.PROBE_TX_RSP, stream_id=aecp.TALKER_STREAM_CRF,
+                                                    controller=p["controller"], talker=peer.TALKER_PEER, listener=eid,
+                                                    tuid=p["tuid"], luid=p["luid"], dmac=peer.PEER_STREAM_DMAC + 1,
+                                                    seq=p["seq"], vlan=2))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     for k in ("--dut", "--peer", "--build", "--entity", "--tmp"):
@@ -209,6 +363,7 @@ def main() -> int:
     a.dp = os.path.join(a.build, "milan-dp")
     a.shm = f"/milan-dp-ctr-{os.getpid()}"
     media_name = f"/milan-media-ctr-{os.getpid()}"
+    a.media = media_name
     gptp_name = f"flexptpd-ctr-{os.getpid()}"
     ptp = aecp.Flexptpd(gptp_name, eid)
     wire = peer.Wire(a.peer, dut_mac)
@@ -291,6 +446,14 @@ def main() -> int:
                 and raw["unsupported_format"] == "3" and int(raw["late_timestamp"] or 0) >= 1
                 and raw["early_timestamp"] == "3" and raw["stream_interrupted"] == "1" and raw["grid_breaks"] == "0",
                 str(raw))
+        # PDUs that keep arriving, none of them processed: an interruption, judged on each PDU, not only on a
+        # receive that times out (which a stream every 2 ms under a 5 ms timeout may never reach)
+        step("1.5 s of PDUs all stamped 300 ms ahead", 1.5,
+             {**frames, **aaf_lock, "EARLY_TIMESTAMP": (2, 4), "STREAM_INTERRUPTED": (1, 1)},
+             {**frames, "EARLY_TIMESTAMP": (2, 4), "STREAM_INTERRUPTED": (1, 1), "MEDIA_UNLOCKED": (1, 1)},
+             [(aaf, "early", 100000), (crf, "early", 100000)])
+        talker.fault([(aaf, "early", 0), (crf, "early", 0)])
+        time.sleep(1.0)
         # rebinding: zeroed for the new binding (Milan v1.2 5.3.8.10)
         aecp.unbind(g, wire, eid, 1, 1)
         time.sleep(0.5)
@@ -313,6 +476,9 @@ def main() -> int:
         g.check("GET_COUNTERS STREAM_OUTPUT 0: valid 0x1f; STREAM_START 1, STREAM_STOP 0, MEDIA_RESET 0, "
                 "TIMESTAMP_UNCERTAIN 0, FRAMES_TX counting 500 ms intervals",
                 v == 0x1F and q[:4] == [1, 0, 0, 0] and 20 <= q[4] <= 80, f"{v} {q[:5]}")
+        # last: holding milan-mediad holds its talker too
+        burst(g, a, c, wire, eid, ctrld, mediad, talker, aaf, crf)
+        rebind_at_once(g, a, c, wire, eid)
     finally:
         if talker is not None:
             talker.close()

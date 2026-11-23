@@ -42,6 +42,7 @@
 #include "datapath.h"
 #include "gptp_time.h"
 #include "media.h"
+#include "rxsock.h"
 #include "shmblk.h"
 
 #define CRF_RX_LOCK_STEPS 25u           // 50 ms of 2 ms steps on the grid
@@ -67,6 +68,7 @@ struct crf_rx {
 	struct crf_rx_cfg cfg;
 	pthread_t thread;
 	atomic_bool stop;
+	struct rxsock_state rx;         // its receive socket's setup
 	struct crf_rx_live live;
 };
 
