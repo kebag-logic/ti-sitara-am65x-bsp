@@ -1,0 +1,9 @@
+milan-linux/milan-fpga.pin at the BSP head:
+  MILAN_FPGA_REV=677d605f37c3a80654df1dd2cde053b57242845b   (milan-fpga pf-linuxprof-1 head, not published)
+  MILAN_FPGA_SHA256=provisional                            (no GitHub archive exists yet)
+  TSN_C_STACK_REV=715589c1db7cf67e2f3259fd7083ebc7f0923376  sha256 a0662e54f7204c1b3a780010092f1e7077b3949722dda823d262b717c264cb62 (published archive, fetched and hashed)
+  LWSRP_REV=08ee86e812a0eb5e1dc6cd61b494d8baf3491348        sha256 4c9ad613b3a1742dd20851ee7fe8d81ce8c436df48b521aa807c9f6d1d9383c9 (published archive, fetched and hashed)
+  PROTOCOL_PROCESSOR_REV=801ef2283ec793e35a2590fc6593c90313a64041, GPTP_PROCESSOR_REV=1616fc8f062fbf58c35ad31674b5b233207bbdb8 (generators only)
+The tree every build and test here used: MILAN_FPGA_LOCAL=<the pf-linuxprof-1 lane> tools/fetch-milan-fpga.sh --with-submodules,
+i.e. `git archive 677d605f` of the lane plus `git archive` of each submodule at its gitlink in that commit. Nothing was checked against a sha256.
+To finish the pin: replace MILAN_FPGA_SHA256 and add its line to br2-external/package/milan-fpga-src/milan-fpga-src.hash once the archive exists.
