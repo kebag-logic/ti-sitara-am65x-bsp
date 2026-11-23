@@ -51,6 +51,7 @@ struct softfab_stats {
 	uint64_t tx_lost;               // frames the capture lost before we sent them
 	uint64_t gm_changes;
 	uint64_t gptp_reads;            // consistent status block reads
+	uint64_t gptp_expiries;         // live status that went stale (softfab.c poll_gptp)
 };
 
 struct softfab {
@@ -71,10 +72,11 @@ struct softfab {
 	struct gptp_shm gptp;
 	bool gptp_open;
 	uint64_t gptp_next_ms;          // the next poll
-	uint32_t gptp_updates;          // the block's update counter at the last change
-	uint64_t gptp_fresh_ms;         // when it last changed
-	struct gptp_status gptp_last;   // its last consistent read (AECP's GET_AVB_INFO, GET_AS_PATH)
-	bool gptp_seen;                 // ... once there is one
+	bool gptp_counted;              // gptp_updates holds a value read from the mapped block
+	uint32_t gptp_updates;          // the block's update counter, as last read
+	uint64_t gptp_fresh_ms;         // when it last changed (or the mapping's baseline was read)
+	struct gptp_status gptp_last;   // the last read of live status (AECP's GET_AVB_INFO, GET_AS_PATH)
+	bool gptp_seen;                 // the status is live: its update counter moved within GPTP_STALE_MS
 	struct softfab_stats stats;
 };
 

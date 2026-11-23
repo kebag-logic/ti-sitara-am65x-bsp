@@ -6,6 +6,7 @@
 #include "media.h"
 
 #include <stddef.h>
+#include <time.h>
 
 #include "shmblk.h"
 
@@ -36,4 +37,40 @@ void milan_media_end(struct milan_media *m)
 bool milan_media_snapshot(const struct milan_media *m, struct milan_media *out)
 {
 	return shmblk_snapshot(m, out, sizeof *out);
+}
+
+int64_t milan_mono_ns(void)
+{
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+}
+
+void milan_counters_zero(struct milan_counters *c, struct milan_obs *o, uint32_t keep, int64_t now_ns)
+{
+	for (unsigned k = 0; k < MILAN_COUNTERS; ++k) {
+		if (!(keep & (1u << k))) {
+			c->value[k] = 0;
+		}
+	}
+	o->hits = 0;
+	o->end_ns = now_ns + MILAN_OBS_NS;
+}
+
+bool milan_obs_close(struct milan_obs *o, struct milan_counters *c, int64_t now_ns)
+{
+	if (now_ns >= 0 && now_ns < o->end_ns) {
+		return false;
+	}
+	bool moved = o->hits != 0u;
+	for (unsigned k = 0; k < MILAN_COUNTERS; ++k) {
+		if (o->hits & (1u << k)) {
+			c->value[k]++;          // 32 bits, wrapping (Milan v1.2 5.3.7.7, 5.3.8.10)
+		}
+	}
+	o->hits = 0;
+	// the next interval starts where this one ended, or now if the thread was away longer
+	int64_t at = now_ns < 0 ? milan_mono_ns() : now_ns;
+	o->end_ns = at - o->end_ns >= MILAN_OBS_NS || now_ns < 0 ? at + MILAN_OBS_NS : o->end_ns + MILAN_OBS_NS;
+	return moved;
 }

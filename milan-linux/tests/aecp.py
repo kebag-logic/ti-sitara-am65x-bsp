@@ -15,6 +15,9 @@ v1.2 section 5.4:
                    run-time identity in ENTITY and AVB_INTERFACE, STREAM_INPUT 0
                    AAF 48 kHz 8 ch 32-bit, STREAM_INPUT 1 CRF, STREAM_OUTPUT 0
                    AAF, the CRF CLOCK_SOURCE located on STREAM_INPUT 1
+  identity         the DUT's MAC differs from the generated placeholder, so
+                   ENTITY, AVB_INTERFACE and ADP carry it only if milan-ctrld
+                   wrote it into its image at run time
   Milan MVU        GET_MILAN_INFO, SET and GET_SYSTEM_UNIQUE_ID
   ownership        ACQUIRE_ENTITY (NOT_SUPPORTED, Milan v1.2 5.4.2.1), LOCK_ENTITY
                    and a second controller refused while it holds, ENTITY_AVAILABLE
@@ -26,10 +29,17 @@ v1.2 section 5.4:
                    START/STOP_STREAMING, GET_AVB_INFO, GET_AS_PATH, GET_COUNTERS
                    (the media block's counters), GET_AUDIO_MAP, ADD_AUDIO_MAPPINGS,
                    GET_DYNAMIC_INFO, REBOOT, REGISTER/DEREGISTER_UNSOLICITED_
-                   NOTIFICATION and an unsolicited notification
+                   NOTIFICATION and an unsolicited notification; GET_COUNTERS
+                   of each stream as the media block marks it, none valid where
+                   it marks none, and zero for a binding milan-mediad has not
+                   yet zeroed them for (Milan v1.2 5.3.8.10)
   ACMP             BIND_RX (CONNECT_RX_COMMAND) on STREAM_INPUT 0 and on
                    STREAM_INPUT 1, each probing its talker and settling, seen in
                    the datapath block and in GET_STREAM_INFO, then UNBIND_RX
+  gPTP faults      CLOCK_DOMAIN LOCKED/UNLOCKED against a flexptpd that stops
+                   updating its block, one whose seq stays odd, one replaced by
+                   a new block, live or not: one UNLOCKED when the status
+                   expires, no LOCKED until updates are seen again, one then
 
 It plays flexptpd (a status block with a grandmaster one step away) and
 milan-mediad (a media block with known counters), as peer.py does.
@@ -175,6 +185,10 @@ class Controller:
 
 # ---- milan-mediad's block, as media.h lays it out ----------------------------------------
 
+class Counters(ctypes.Structure):
+    _fields_ = [("valid", ctypes.c_uint32), ("binds", ctypes.c_uint32), ("value", ctypes.c_uint32 * 12)]
+
+
 class Talker(ctypes.Structure):
     _fields_ = [("active", ctypes.c_uint8), ("locked", ctypes.c_uint8), ("pad", ctypes.c_uint8 * 2),
                 ("pitch", ctypes.c_uint32), ("stream_id", ctypes.c_uint64), ("dest_mac", ctypes.c_uint64),
@@ -182,7 +196,7 @@ class Talker(ctypes.Structure):
                 ("stream_stops", ctypes.c_uint64), ("underruns", ctypes.c_uint64), ("overruns", ctypes.c_uint64),
                 ("late", ctypes.c_uint64), ("send_errors", ctypes.c_uint64), ("level_target", ctypes.c_int32),
                 ("level_min", ctypes.c_int32), ("level_max", ctypes.c_int32), ("level_avg_milli", ctypes.c_int32),
-                ("late_max_ns", ctypes.c_int32), ("pto_ns", ctypes.c_uint32)]
+                ("late_max_ns", ctypes.c_int32), ("pto_ns", ctypes.c_uint32), ("milan", Counters)]
 
 
 class Listener(ctypes.Structure):
@@ -191,20 +205,37 @@ class Listener(ctypes.Structure):
                 ("seq_mismatch", ctypes.c_uint64), ("late_timestamp", ctypes.c_uint64),
                 ("early_timestamp", ctypes.c_uint64), ("unsupported_format", ctypes.c_uint64),
                 ("media_locked", ctypes.c_uint64), ("media_unlocked", ctypes.c_uint64),
-                ("media_resets", ctypes.c_uint64), ("stream_interrupted", ctypes.c_uint64),
+                ("jumps", ctypes.c_uint64), ("stream_interrupted", ctypes.c_uint64),
+                ("timestamp_uncertain", ctypes.c_uint64), ("media_restarts", ctypes.c_uint64),
                 ("underruns", ctypes.c_uint64), ("align_min_ns", ctypes.c_int32), ("align_max_ns", ctypes.c_int32),
-                ("align_avg_ns", ctypes.c_int32), ("margin_min_ns", ctypes.c_int32), ("in_flight_ns", ctypes.c_int64)]
+                ("align_avg_ns", ctypes.c_int32), ("margin_min_ns", ctypes.c_int32), ("in_flight_ns", ctypes.c_int64),
+                ("milan", Counters)]
+
+
+class Crf(ctypes.Structure):
+    _fields_ = [("active", ctypes.c_uint8), ("locked", ctypes.c_uint8), ("pad", ctypes.c_uint8 * 6),
+                ("stream_id", ctypes.c_uint64)] + [(k, ctypes.c_uint64) for k in (
+                    "pdus", "seq_mismatch", "late_timestamp", "early_timestamp", "unsupported_format",
+                    "timestamp_uncertain", "media_restarts", "media_locked", "media_unlocked", "stream_interrupted",
+                    "grid_breaks")] + [("rate_ppb", ctypes.c_int64), ("step_err_max_ns", ctypes.c_int32),
+                                       ("margin_min_ns", ctypes.c_int32), ("milan", Counters)]
 
 
 class Media(ctypes.Structure):
     _fields_ = [("magic", ctypes.c_uint32), ("version", ctypes.c_uint32), ("seq", ctypes.c_uint32),
                 ("writer_pid", ctypes.c_uint32), ("gptp_rate_ppb", ctypes.c_int64),
                 ("gptp_residual_ns", ctypes.c_int64), ("gptp_calibrated", ctypes.c_uint8),
-                ("pad", ctypes.c_uint8 * 7), ("talker", Talker), ("listener", Listener)]
+                ("pad", ctypes.c_uint8 * 7), ("talker", Talker), ("listener", Listener), ("crf", Crf)]
+
+
+# The Milan counters the fake block holds, quadlet by quadlet (media.h; Milan v1.2 Tables 5.16, 5.17)
+SI0_VALUES = {0: 3, 1: 2, 2: 8, 3: 2, 4: 7, 5: 9, 8: 5, 9: 3, 10: 4, 11: 11}
+SI1_VALUES = {0: 1, 1: 1, 2: 1, 3: 4, 4: 2, 5: 6, 8: 3, 9: 5, 10: 7, 11: 20}
+SO0_VALUES = {0: 2, 1: 1, 2: 0, 3: 0, 4: 42}
 
 
 class FakeMedia:
-    """milan-mediad's media block (MED1, version 2) with chosen Milan counters."""
+    """milan-mediad's media block (MED1, version 3) with chosen Milan counters."""
 
     def __init__(self, name: str):
         self.path = "/dev/shm" + name
@@ -214,11 +245,12 @@ class FakeMedia:
         self.f = open(self.path, "r+b")
         self.map = mmap.mmap(self.f.fileno(), size)
         self.m = Media.from_buffer(self.map)
-        self.m.magic, self.m.version, self.m.writer_pid = 0x3144454D, 2, os.getpid()
-        self.set(listener=dict(frames_rx=8000, seq_mismatch=2, late_timestamp=3, early_timestamp=4,
-                               unsupported_format=5, media_locked=1, media_unlocked=6, media_resets=7,
-                               stream_interrupted=8),
-                 talker=dict(frames_tx=16000, stream_starts=1, stream_stops=9))
+        self.m.magic, self.m.version, self.m.writer_pid = 0x3144454D, 3, os.getpid()
+        self.set(listener=dict(frames_rx=8000, seq_mismatch=2, media_locked=3, media_unlocked=2),
+                 talker=dict(frames_tx=16000, stream_starts=2, stream_stops=1))
+        self.counters("listener", 0xF3F, 0, SI0_VALUES)
+        self.counters("crf", 0xF3F, 0, SI1_VALUES)
+        self.counters("talker", 0x1F, 0, SO0_VALUES)
 
     def set(self, listener: dict | None = None, talker: dict | None = None) -> None:
         self.m.seq += 1
@@ -226,6 +258,14 @@ class FakeMedia:
             setattr(self.m.listener, k, v)
         for k, v in (talker or {}).items():
             setattr(self.m.talker, k, v)
+        self.m.seq += 1
+
+    def counters(self, which: str, valid: int, binds: int, values: dict) -> None:
+        self.m.seq += 1
+        c = getattr(self.m, which).milan
+        c.valid, c.binds = valid, binds
+        for q in range(12):
+            c.value[q] = values.get(q, 0)
         self.m.seq += 1
 
     def close(self) -> None:
@@ -236,7 +276,43 @@ class FakeMedia:
 
 
 class Flexptpd(peer.FakeFlexptpd):
-    """peer.py's status block, its grandmaster one step away (the master's Announce stepsRemoved 0)."""
+    """peer.py's status block, its grandmaster one step away (the master's Announce stepsRemoved 0), with the
+    faults of a flexptpd that stops, sticks mid-write or is replaced."""
+
+    def pause(self) -> None:
+        """Stop updating; the block keeps its last consistent write."""
+        self.stop = True
+        time.sleep(0.15)
+
+    def resume(self) -> None:
+        self.stop = False
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def stick_odd(self) -> None:
+        """A writer gone mid-copy: seq left odd, the status unchanged."""
+        self.pause()
+        self.seq += 1
+        self.map[0:peer.SHM_HEADER.size] = peer.SHM_HEADER.pack(b"FLXPTPD\0", 1, self.seq, peer.SHM_STATUS.size, 0)
+
+    def unstick(self) -> None:
+        self.seq += 1
+        self._write()
+        self.resume()
+
+    def replace(self, live: bool) -> None:
+        """A new flexptpd's block under the same name (a new file), its update count from 1; updating if live."""
+        self.pause()
+        self.map.close()
+        self.f.close()
+        os.unlink(self.path)
+        with open(self.path, "wb") as f:
+            f.write(b"\0" * (peer.SHM_HEADER.size + peer.SHM_STATUS.size))
+        self.f = open(self.path, "r+b")
+        self.map = mmap.mmap(self.f.fileno(), peer.SHM_HEADER.size + peer.SHM_STATUS.size)
+        self.seq = self.updates = 0
+        self._write()
+        if live:
+            self.resume()
 
     def _status(self) -> bytes:
         self.updates += 1
@@ -378,7 +454,7 @@ def check_milan_info(g: peer.Grader, c: Controller) -> None:
             and len(r["payload"]) >= 10 and u64(r["payload"], 2) == 0x0123456789ABCDEF)
 
 
-def check_commands(g: peer.Grader, c: Controller, d: dict, eid: int, dut_mac: bytes) -> None:
+def check_commands(g: peer.Grader, c: Controller, d: dict, eid: int, dut_mac: bytes, media: FakeMedia) -> None:
     """The Milan v1.2 5.4.2 commands as milan-fpga's AECP implements them."""
     r, _ = c.command(GET_CONFIGURATION, b"\0" * 4)
     g.check("GET_CONFIGURATION: 0", r is not None and r["status"] == SUCCESS and u16(r["payload"], 2) == 0)
@@ -446,7 +522,7 @@ def check_commands(g: peer.Grader, c: Controller, d: dict, eid: int, dut_mac: by
     g.check("GET_AS_PATH: the grandmaster, then this board", r is not None and r["status"] == SUCCESS
             and u16(r["payload"], 2) == 2 and u64(r["payload"], 4) == GM and u64(r["payload"], 12) == eid,
             r["payload"].hex() if r else "none")
-    check_counters(g, c)
+    check_counters(g, c, media)
     r, _ = c.command(GET_AUDIO_MAP, struct.pack(">HHHH", D_STREAM_PORT_INPUT, 0, 0, 0))
     if g.check("GET_AUDIO_MAP STREAM_PORT_INPUT 0: SUCCESS", r is not None and r["status"] == SUCCESS,
                str(r and r["status"])):
@@ -479,31 +555,44 @@ def check_commands(g: peer.Grader, c: Controller, d: dict, eid: int, dut_mac: by
             and r["status"] == NOT_IMPLEMENTED, str(r and r["status"]))
 
 
-def check_counters(g: peer.Grader, c: Controller) -> None:
-    """GET_COUNTERS (Milan v1.2 5.4.2.25, Tables 5.13 to 5.17)."""
-    want = {(D_AVB_INTERFACE, 0): 0x23, (D_CLOCK_DOMAIN, 0): 0x3, (D_STREAM_INPUT, 0): 0xF1F,
-            (D_STREAM_OUTPUT, 0): 0x13, (D_STREAM_INPUT, 1): 0x0}
+def counters(c: Controller, dtype: int, index: int) -> tuple[int | None, list[int]]:
+    """GET_COUNTERS: counters_valid and the first 12 quadlets, or (None, []) without a SUCCESS."""
+    r, _ = c.command(GET_COUNTERS, struct.pack(">HH", dtype, index))
+    if r is None or r["status"] != SUCCESS or len(r["payload"]) < 136:
+        return None, []
+    return u32(r["payload"], 4), [u32(r["payload"], 8 + 4 * k) for k in range(12)]
+
+
+def values(valid: int, table: dict) -> list[int]:
+    return [table.get(k, 0) if valid & (1 << k) else 0 for k in range(12)]
+
+
+def check_counters(g: peer.Grader, c: Controller, media: FakeMedia) -> None:
+    """GET_COUNTERS (Milan v1.2 5.4.2.25, Tables 5.13 to 5.17): each stream as the media block counts it."""
+    want = {(D_AVB_INTERFACE, 0): 0x23, (D_CLOCK_DOMAIN, 0): 0x3, (D_STREAM_INPUT, 0): 0xF3F,
+            (D_STREAM_OUTPUT, 0): 0x1F, (D_STREAM_INPUT, 1): 0xF3F}
     got = {}
     for (dtype, index), valid in want.items():
-        r, _ = c.command(GET_COUNTERS, struct.pack(">HH", dtype, index))
-        ok = r is not None and r["status"] == SUCCESS
-        got[(dtype, index)] = r["payload"] if ok else b""
-        g.check(f"GET_COUNTERS {dtype:#x}/{index}: SUCCESS, counters_valid {valid:#x}",
-                ok and u32(r["payload"], 4) == valid, f"{r and r['status']} {r and r['payload'][4:8].hex()}")
-    si = got.get((D_STREAM_INPUT, 0), b"")
-    if len(si) >= 136:
-        q = [u32(si, 8 + 4 * k) for k in range(12)]
-        g.check("GET_COUNTERS STREAM_INPUT 0: milan-mediad's counters, quadlet by quadlet",
-                (q[0], q[1], q[2], q[3], q[4], q[8], q[9], q[10], q[11]) == (1, 6, 8, 2, 7, 5, 3, 4, 8000), str(q))
-    so = got.get((D_STREAM_OUTPUT, 0), b"")
-    if len(so) >= 136:
-        q = [u32(so, 8 + 4 * k) for k in range(5)]
-        g.check("GET_COUNTERS STREAM_OUTPUT 0: STREAM_START, STREAM_STOP, FRAMES_TX", (q[0], q[1], q[4]) ==
-                (1, 9, 16000), str(q))
-    avb = got.get((D_AVB_INTERFACE, 0), b"")
-    if len(avb) >= 136:
-        g.check("GET_COUNTERS AVB_INTERFACE: LINK_UP 1, GPTP_GM_CHANGED 1", (u32(avb, 8), u32(avb, 28)) == (1, 1),
-                f"{u32(avb, 8)} {u32(avb, 28)}")
+        v, q = counters(c, dtype, index)
+        got[(dtype, index)] = q
+        g.check(f"GET_COUNTERS {dtype:#x}/{index}: SUCCESS, counters_valid {valid:#x}", v == valid,
+                f"{v if v is None else hex(v)}")
+    for key, table, name in (((D_STREAM_INPUT, 0), SI0_VALUES, "STREAM_INPUT 0, the AAF listener's"),
+                             ((D_STREAM_INPUT, 1), SI1_VALUES, "STREAM_INPUT 1, the CRF receive path's"),
+                             ((D_STREAM_OUTPUT, 0), SO0_VALUES, "STREAM_OUTPUT 0, the talker's")):
+        g.check(f"GET_COUNTERS {name} Milan counters, quadlet by quadlet", got[key] == values(want[key], table),
+                str(got[key]))
+    # a stream the media block marks uncounted (its receive path not running) has none valid
+    media.counters("crf", 0, 0, SI1_VALUES)
+    time.sleep(0.3)
+    v, q = counters(c, D_STREAM_INPUT, 1)
+    g.check("GET_COUNTERS STREAM_INPUT 1 while no receive path counts it: none valid, all zero",
+            v == 0 and q == [0] * 12, f"{v} {q}")
+    media.counters("crf", 0xF3F, 0, SI1_VALUES)
+    time.sleep(0.3)
+    avb = got.get((D_AVB_INTERFACE, 0), [])
+    g.check("GET_COUNTERS AVB_INTERFACE: LINK_UP 1, GPTP_GM_CHANGED 1", len(avb) == 12 and (avb[0], avb[5]) == (1, 1),
+            str(avb))
 
 
 def check_notifications(g: peer.Grader, c: Controller) -> None:
@@ -560,6 +649,85 @@ def bind(g: peer.Grader, c: Controller, wire: peer.Wire, eid: int, a, luid: int,
             r["payload"][4:24].hex() if r else "none")
 
 
+def check_bound_counters(g: peer.Grader, c: Controller, a, media: FakeMedia) -> None:
+    """Milan v1.2 5.3.8.10: an input's counters start from zero when it goes from not bound to bound. The datapath
+    block counts those changes per sink; until milan-mediad's counters belong to the latest, they read zero."""
+    dp = peer.milan_dp(a.dp, a.shm)
+    binds = [dp.get(f"sink{k}", "") for k in range(2)]
+    g.check("datapath: each sink bound once (bound:1 binds:1)", all("bound:1 binds:1" in b for b in binds), str(binds))
+    time.sleep(0.3)
+    for index, table in ((0, SI0_VALUES), (1, SI1_VALUES)):
+        v, q = counters(c, D_STREAM_INPUT, index)
+        g.check(f"GET_COUNTERS STREAM_INPUT {index} just bound, its counters not yet zeroed by milan-mediad: valid "
+                "0xf3f, all zero", v == 0xF3F and q == [0] * 12, f"{v} {q}")
+    media.counters("listener", 0xF3F, 1, {11: 1})
+    media.counters("crf", 0xF3F, 1, {0: 1, 11: 2})
+    time.sleep(0.3)
+    v0, q0 = counters(c, D_STREAM_INPUT, 0)
+    v1, q1 = counters(c, D_STREAM_INPUT, 1)
+    g.check("GET_COUNTERS STREAM_INPUT 0 and 1 once milan-mediad counts for the binding: its counters",
+            (v0, q0, v1, q1) == (0xF3F, values(0xF3F, {11: 1}), 0xF3F, values(0xF3F, {0: 1, 11: 2})),
+            f"{q0} {q1}")
+
+
+def check_gptp_faults(g: peer.Grader, c: Controller, ptp: Flexptpd) -> None:
+    """CLOCK_DOMAIN LOCKED/UNLOCKED count flexptpd's lock while its status is live (softfab.c poll_gptp): only
+    a change of its block's update count makes the status live, 2 s without one expires it. A stopped,
+    stuck or replaced publisher is one UNLOCKED, and never a LOCKED until updates are seen again."""
+    def lock_counts() -> tuple[int, int]:
+        v, q = counters(c, D_CLOCK_DOMAIN, 0)
+        return (q[0], q[1]) if v == 0x3 else (-1, -1)
+
+    def avb_flags() -> int:
+        r, _ = c.command(GET_AVB_INFO, struct.pack(">HH", D_AVB_INTERFACE, 0))
+        return r["payload"][17] if r is not None and r["status"] == SUCCESS else -1
+
+    locks, unlocks = lock_counts()
+    g.check("gPTP live: CLOCK_DOMAIN locked once (LOCKED = UNLOCKED + 1)", locks == unlocks + 1 and locks >= 1,
+            f"{locks}/{unlocks}")
+    # 1. updates stop, the block stays: three stale periods
+    ptp.pause()
+    time.sleep(6.5)
+    l1, u1 = lock_counts()
+    g.check("flexptpd stopped, its block left (6.5 s): one UNLOCKED, no LOCKED", (l1, u1) == (locks, unlocks + 1),
+            f"{locks}/{unlocks} -> {l1}/{u1}")
+    g.check("flexptpd stopped: GET_AVB_INFO no longer AS_CAPABLE (gPTP still enabled)", avb_flags() == 0x2,
+            f"flags {avb_flags():#x}")
+    ptp.resume()
+    time.sleep(1.0)
+    l2, u2 = lock_counts()
+    g.check("flexptpd updating again: one LOCKED", (l2, u2) == (l1 + 1, u1), f"{l1}/{u1} -> {l2}/{u2}")
+    g.check("flexptpd updating again: AS_CAPABLE|GPTP_ENABLED", avb_flags() == 0x3, f"flags {avb_flags():#x}")
+    time.sleep(2.5)
+    g.check("flexptpd live for 2.5 s more: no transition", lock_counts() == (l2, u2), str(lock_counts()))
+    # 2. a writer stuck mid-copy: seq odd, every read refused
+    ptp.stick_odd()
+    time.sleep(4.5)
+    l3, u3 = lock_counts()
+    g.check("status block seq left odd (4.5 s): one UNLOCKED, no LOCKED", (l3, u3) == (l2, u2 + 1),
+            f"{l2}/{u2} -> {l3}/{u3}")
+    ptp.unstick()
+    time.sleep(1.0)
+    l4, u4 = lock_counts()
+    g.check("seq even and updating again: one LOCKED", (l4, u4) == (l3 + 1, u3), f"{l3}/{u3} -> {l4}/{u4}")
+    # 3. a new flexptpd's block replaces the old under its name, and updates
+    ptp.replace(live=True)
+    time.sleep(4.5)
+    l5, u5 = lock_counts()
+    g.check("a new, updating block under the name (4.5 s): the old one expires, the new one locks, once each",
+            (l5, u5) == (l4 + 1, u4 + 1), f"{l4}/{u4} -> {l5}/{u5}")
+    # 4. a block that replaces it and never updates: not evidence of a live flexptpd
+    ptp.replace(live=False)
+    time.sleep(6.5)
+    l6, u6 = lock_counts()
+    g.check("a new block that never updates (6.5 s): one UNLOCKED, no LOCKED from reading it",
+            (l6, u6) == (l5, u5 + 1), f"{l5}/{u5} -> {l6}/{u6}")
+    ptp.resume()
+    time.sleep(1.0)
+    l7, u7 = lock_counts()
+    g.check("that block updating: one LOCKED", (l7, u7) == (l6 + 1, u6), f"{l6}/{u6} -> {l7}/{u7}")
+
+
 def unbind(g: peer.Grader, wire: peer.Wire, eid: int, luid: int, tuid: int) -> None:
     t = time.monotonic()
     seq = 0x6100 + luid
@@ -582,6 +750,12 @@ def main() -> int:
     dut_mac = probe.getsockname()[4]
     probe.close()
     eid = peer.mac_int(dut_mac[:3] + b"\xff\xfe" + dut_mac[3:])
+    # the generated image bakes the config's MAC; the DUT must have another, or a daemon that served the
+    # image unchanged would pass every identity check
+    yaml = (HERE.parent / "config" / "endstation_pb2_bridge.yaml").read_text()
+    placeholder = bytes.fromhex(yaml.split('mac_address: "', 1)[1].split('"', 1)[0].replace(":", ""))
+    g.check("identity: the DUT's MAC is not the generated image's placeholder", dut_mac != placeholder,
+            f"{dut_mac.hex()} vs {placeholder.hex()}")
     a.shm = f"/milan-dp-aecp-{os.getpid()}"
     media_name = f"/milan-media-aecp-{os.getpid()}"
     gptp_name = f"flexptpd-aecp-{os.getpid()}"
@@ -612,6 +786,8 @@ def main() -> int:
                 bool(boot) and "legacy 0x1" in boot[0] and "slot none" in boot[0], boot[0].strip() if boot else "")
         if g.check("ADP: ENTITY_AVAILABLE (AECP open before ADP, Milan v1.2 5.6.1)", r is not None):
             p = peer.parse_adp(r[1][14:])
+            g.check("ADP: entity_id is this board's, eth0's MAC expanded (the one ENTITY must carry, Table 7-2)",
+                    p["entity_id"] == eid, f"{p['entity_id']:016x}")
             g.check("ADP: entity_model_id 0x001BC50AC1000100, 1 source, 2 sinks, AEM_SUPPORTED",
                     (p["entity_model_id"], p["talker_stream_sources"], p["listener_stream_sinks"]) == (MODEL_ID, 1, 2)
                     and p["entity_capabilities"] & 0x8 != 0)
@@ -621,14 +797,14 @@ def main() -> int:
         check_model(g, d, eid, dut_mac)
         check_milan_info(g, c)
         check_ownership(g, c)
-        check_commands(g, c, d, eid, dut_mac)
+        check_commands(g, c, d, eid, dut_mac, media)
         check_notifications(g, c)
         bind(g, c, wire, eid, a, 0, 0, TALKER_STREAM_AAF)
         bind(g, c, wire, eid, a, 1, 1, TALKER_STREAM_CRF)
-        r, _ = c.command(GET_COUNTERS, struct.pack(">HH", D_STREAM_INPUT, 1))
-        g.check("GET_COUNTERS STREAM_INPUT 1 (CRF) while bound: SUCCESS", r is not None and r["status"] == SUCCESS)
+        check_bound_counters(g, c, a, media)
         unbind(g, wire, eid, 0, 0)
         unbind(g, wire, eid, 1, 1)
+        check_gptp_faults(g, c, ptp)
         t = time.monotonic()
         proc.send_signal(signal.SIGTERM)
         r = wire.wait(peer.is_sub(peer.SUB_ADP, peer.ADP_DEPARTING), 1.0, t)

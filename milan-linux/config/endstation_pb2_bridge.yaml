@@ -12,7 +12,7 @@
 #                      (srp_entity.py): 1 interface, 1 source, 2 sinks
 #   nvm_shape_gen.h    the saved-state store's shape (nvm_bench.py)
 #
-# The stream inventory (bsp#29, the ruling of round 1):
+# The stream inventory (bsp#29):
 #   STREAM_INPUT 0   AAF, 48 kHz, 8 channels, 32-bit: what milan-mediad plays
 #                    to the USB host
 #   STREAM_INPUT 1   CRF, the media clock input an AAF talker requires (Milan

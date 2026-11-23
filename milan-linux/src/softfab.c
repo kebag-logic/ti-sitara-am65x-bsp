@@ -162,10 +162,23 @@ static void rx_netlink(struct softfab *sf)
 	}
 }
 
-// flexptpd's block, unchanged this long, belongs to a flexptpd that is gone:
-// a new one makes a new block under the same name, so map it again
+// flexptpd rewrites its block every 50 ms and counts each rewrite in `updates`.
+// A block whose count has not moved for this long, or that could not be read
+// for this long (absent, another layout, its writer stuck mid-copy with `seq`
+// odd), belongs to a flexptpd that is gone. A new one makes a new block under
+// the same name, so the mapping is dropped and made again at the next poll.
 #define GPTP_STALE_MS 2000u
 
+// Freshness. The status is live (gptp_seen) only while `updates` is seen to
+// move: the first read of a block, a block mapped again, or a block that
+// replaced the old one under its name, is not yet evidence of a live
+// publisher, since a gone flexptpd leaves its last block behind. Only a change
+// of `updates` against the last value read makes the status live, and only
+// that keeps it live. Expiry clears what the far side reports from the status
+// (CLOCK_DOMAIN's lock, asCapable, the link delay, the path): one UNLOCKED,
+// and no LOCKED until flexptpd is seen to run again. The grandmaster the
+// control plane announces is left as it was, so a publisher's stall or
+// restart is not a grandmaster change.
 static void poll_gptp(struct softfab *sf)
 {
 	if (!sf->gptp_open) {
@@ -180,18 +193,32 @@ static void poll_gptp(struct softfab *sf)
 
 	// flexptpd not running yet is not an error: the next poll looks again
 	struct gptp_status st;
-	if (!gptp_shm_read(&sf->gptp, &st)) {
-		return;
+	bool read = gptp_shm_read(&sf->gptp, &st);
+	bool moved = false;
+	if (read) {
+		sf->stats.gptp_reads++;
+		moved = sf->gptp_counted && st.updates != sf->gptp_updates;
+		if (!sf->gptp_counted || moved) {
+			sf->gptp_counted = true;
+			sf->gptp_updates = st.updates;
+			sf->gptp_fresh_ms = now;
+		}
 	}
-	sf->stats.gptp_reads++;
-
-	if (st.updates != sf->gptp_updates) {
-		sf->gptp_updates = st.updates;
-		sf->gptp_fresh_ms = now;
-	} else if (now - sf->gptp_fresh_ms > GPTP_STALE_MS) {
-		gptp_shm_close(&sf->gptp);
-		sf->gptp_fresh_ms = now;
-		sf->gptp_seen = false;
+	if (!moved) {
+		if (now - sf->gptp_fresh_ms > GPTP_STALE_MS) {
+			if (sf->gptp_seen) {
+				sf->stats.gptp_expiries++;
+			}
+			sf->gptp_seen = false;
+			sf->as_capable = false;
+			// map it again at the next poll, in case a new flexptpd made a new block;
+			// the count read there is a baseline, not a change
+			gptp_shm_close(&sf->gptp);
+			sf->gptp_counted = false;
+			sf->gptp_fresh_ms = now;
+		} else if (read && sf->gptp_seen) {
+			sf->gptp_last = st;     // unchanged since the last update, and still within its life
+		}
 		return;
 	}
 

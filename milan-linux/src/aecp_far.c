@@ -24,16 +24,9 @@ enum { STREAM_INPUT = 5u, STREAM_OUTPUT = 6u, AVB_INTERFACE = 9u, CLOCK_DOMAIN =
 #define AVB_GPTP_ENABLED 0x02u
 
 // counters_valid: bit k for quadlet k (IEEE 1722.1-2021 7.4.42.2; Milan v1.2
-// Tables 5.13 to 5.17)
+// Tables 5.13 to 5.15; the streams' in media.h, Tables 5.16 and 5.17)
 enum { AVB_LINK_UP = 0, AVB_LINK_DOWN = 1, AVB_GM_CHANGED = 5 };
 enum { CD_LOCKED = 0, CD_UNLOCKED = 1 };
-enum {
-	SI_MEDIA_LOCKED = 0, SI_MEDIA_UNLOCKED = 1, SI_STREAM_INTERRUPTED = 2, SI_SEQ_NUM_MISMATCH = 3,
-	SI_MEDIA_RESET = 4, SI_UNSUPPORTED_FORMAT = 8, SI_LATE_TIMESTAMP = 9, SI_EARLY_TIMESTAMP = 10,
-	SI_FRAMES_RX = 11
-};
-// Milan v1.2 Table 5.17 (which orders the Stream Output counters differently from 1722.1)
-enum { SO_STREAM_START = 0, SO_STREAM_STOP = 1, SO_FRAMES_TX = 4 };
 
 #define MEDIA_POLL_MS 100u
 
@@ -48,40 +41,48 @@ static void put(struct aecp_far_counters *c, unsigned quadlet, uint64_t value)
 	c->value[quadlet] = (uint32_t)value;    // a counter's 32 bits wrap
 }
 
-// STREAM_INPUT 0's Milan counters (Table 5.16), as milan-mediad counts them.
-// TIMESTAMP_UNCERTAIN is not evaluated there, so it is not reported valid.
-static struct aecp_far_counters input_counters(const struct aecp_far *f)
+// A media program's Milan counters for one stream, as it counts them: valid
+// only for the quadlets it marks valid, none while milan-mediad's block is
+// absent. A STREAM_INPUT's belong to one binding (media.h): while the
+// datapath block shows a later not-bound to bound change than the one they
+// belong to, milan-mediad has not yet zeroed them for the new binding, and
+// for that binding it has counted nothing, so they read zero.
+static struct aecp_far_counters stream_counters(const struct aecp_far *f, const struct milan_counters *m, int sink)
 {
 	struct aecp_far_counters c = {0};
 	if (!f->media_valid) {
 		return c;
 	}
-	const struct milan_media_listener *l = &f->media_copy.listener;
-	put(&c, SI_MEDIA_LOCKED, l->media_locked);
-	put(&c, SI_MEDIA_UNLOCKED, l->media_unlocked);
-	put(&c, SI_STREAM_INTERRUPTED, l->stream_interrupted);
-	put(&c, SI_SEQ_NUM_MISMATCH, l->seq_mismatch);
-	put(&c, SI_MEDIA_RESET, l->media_resets);
-	put(&c, SI_UNSUPPORTED_FORMAT, l->unsupported_format);
-	put(&c, SI_LATE_TIMESTAMP, l->late_timestamp);
-	put(&c, SI_EARLY_TIMESTAMP, l->early_timestamp);
-	put(&c, SI_FRAMES_RX, l->frames_rx);
+	uint32_t binds = m->binds;
+	struct milan_dp dp;
+	if (sink >= 0 && milan_dp_snapshot(f->dp, &dp) && (unsigned)sink < dp.n_sinks) {
+		binds = dp.sinks[sink].binds;
+	}
+	for (unsigned k = 0; k < MILAN_COUNTERS; ++k) {
+		if (m->valid & (1u << k)) {
+			put(&c, k, binds == m->binds ? m->value[k] : 0u);
+		}
+	}
 	return c;
 }
 
-// STREAM_OUTPUT 0's (Table 5.17). MEDIA_RESET and TIMESTAMP_UNCERTAIN are not
-// counted there, so they are not reported valid.
-static struct aecp_far_counters output_counters(const struct aecp_far *f)
+// Which media program counts which stream: milan-mediad's AAF listener
+// STREAM_INPUT 0, its CRF receive path STREAM_INPUT 1 (crf_rx.h), its talker
+// STREAM_OUTPUT 0. Any other stream of the model has none.
+static void stream_poll(struct aecp_far *f, struct aecp_far_counters *in, struct aecp_far_counters *out)
 {
-	struct aecp_far_counters c = {0};
-	if (!f->media_valid) {
-		return c;
+	memset(in, 0, sizeof *in * AECP_FAR_COUNTED);
+	memset(out, 0, sizeof *out * AECP_FAR_COUNTED);
+	const struct milan_media *m = &f->media_copy;
+	if (f->cfg.n_inputs > 0u) {
+		in[0] = stream_counters(f, &m->listener.milan, 0);
 	}
-	const struct milan_media_talker *t = &f->media_copy.talker;
-	put(&c, SO_STREAM_START, t->stream_starts);
-	put(&c, SO_STREAM_STOP, t->stream_stops);
-	put(&c, SO_FRAMES_TX, t->frames_tx);
-	return c;
+	if (f->cfg.n_inputs > 1u) {
+		in[1] = stream_counters(f, &m->crf.milan, 1);
+	}
+	if (f->cfg.n_outputs > 0u) {
+		out[0] = stream_counters(f, &m->talker.milan, -1);
+	}
 }
 
 static bool counters(const struct aecp_far *f, uint16_t type, uint16_t index, struct aecp_far_counters *out)
@@ -94,15 +95,18 @@ static bool counters(const struct aecp_far *f, uint16_t type, uint16_t index, st
 	} else if (type == CLOCK_DOMAIN && index == 0u) {
 		put(out, CD_LOCKED, f->locks);
 		put(out, CD_UNLOCKED, f->unlocks);
-	} else if (type == STREAM_INPUT && index == 0u) {
-		*out = f->input0;
-	} else if (type == STREAM_OUTPUT && index == 0u) {
-		*out = f->output0;
-	} else if (!((type == STREAM_INPUT && index < f->cfg.n_inputs) ||
-		     (type == STREAM_OUTPUT && index < f->cfg.n_outputs))) {
+	} else if (type == STREAM_INPUT && index < f->cfg.n_inputs) {
+		if (index < AECP_FAR_COUNTED) {
+			*out = f->input[index];
+		}
+	} else if (type == STREAM_OUTPUT && index < f->cfg.n_outputs) {
+		if (index < AECP_FAR_COUNTED) {
+			*out = f->output[index];
+		}
+	} else {
 		return false;
 	}
-	return true;                    // another stream of the model: answered, none valid
+	return true;                    // a stream nothing counts: answered, none valid
 }
 
 // GET_STREAM_INFO's words (aecp_face.c stream): 0 flags, 2 stream_id,
@@ -258,9 +262,9 @@ void aecp_far_init(struct aecp_far *f, struct softfab *fab, const struct milan_d
 	mbx_model_far_bind(&fab->model, &side);
 }
 
-static void raise_counters(struct aecp_far *f, uint16_t type)
+static void raise_counters(struct aecp_far *f, uint16_t type, uint16_t index)
 {
-	mbx_model_face_event(&f->fab->model, 0, MBX_MODEL_EV_COUNTERS, type, 0);
+	mbx_model_face_event(&f->fab->model, 0, MBX_MODEL_EV_COUNTERS, type, index);
 }
 
 void aecp_far_poll(struct aecp_far *f)
@@ -274,14 +278,14 @@ void aecp_far_poll(struct aecp_far *f)
 		} else {
 			f->link_downs++;
 		}
-		raise_counters(f, AVB_INTERFACE);
+		raise_counters(f, AVB_INTERFACE, 0);
 		mbx_model_face_event(&sf->model, 0, MBX_MODEL_EV_AVB, 0, 0);
 	}
 	uint64_t gm = sf->gm_known ? sf->gm_id : 0u;
 	if (gm != f->gm_id || sf->as_capable != f->as_capable) {
 		if (gm != f->gm_id && gm != 0u) {
 			f->gm_changes++;
-			raise_counters(f, AVB_INTERFACE);
+			raise_counters(f, AVB_INTERFACE, 0);
 		}
 		f->gm_id = gm;
 		f->as_capable = sf->as_capable;
@@ -297,7 +301,7 @@ void aecp_far_poll(struct aecp_far *f)
 		} else {
 			f->unlocks++;
 		}
-		raise_counters(f, CLOCK_DOMAIN);
+		raise_counters(f, CLOCK_DOMAIN, 0);
 	}
 	// the streams: milan-mediad's block, every MEDIA_POLL_MS
 	uint64_t now = softfab_now_ms(sf);
@@ -309,13 +313,16 @@ void aecp_far_poll(struct aecp_far *f)
 		f->media = milan_media_open(f->cfg.media_name);
 	}
 	f->media_valid = f->media != NULL && milan_media_snapshot(f->media, &f->media_copy);
-	struct aecp_far_counters in = input_counters(f), out = output_counters(f);
-	if (memcmp(&in, &f->input0, sizeof in) != 0) {
-		f->input0 = in;
-		raise_counters(f, STREAM_INPUT);
-	}
-	if (memcmp(&out, &f->output0, sizeof out) != 0) {
-		f->output0 = out;
-		raise_counters(f, STREAM_OUTPUT);
+	struct aecp_far_counters in[AECP_FAR_COUNTED], out[AECP_FAR_COUNTED];
+	stream_poll(f, in, out);
+	for (unsigned k = 0; k < AECP_FAR_COUNTED; ++k) {
+		if (memcmp(&in[k], &f->input[k], sizeof in[k]) != 0) {
+			f->input[k] = in[k];
+			raise_counters(f, STREAM_INPUT, (uint16_t)k);
+		}
+		if (memcmp(&out[k], &f->output[k], sizeof out[k]) != 0) {
+			f->output[k] = out[k];
+			raise_counters(f, STREAM_OUTPUT, (uint16_t)k);
+		}
 	}
 }

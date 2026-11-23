@@ -19,7 +19,7 @@
 
 #define MILAN_DP_NAME "/milan-datapath"         // shm_open() name
 #define MILAN_DP_MAGIC 0x3150444Du              // "MDP1"
-#define MILAN_DP_VERSION 1u
+#define MILAN_DP_VERSION 2u
 #define MILAN_DP_MAX_SOURCES 8u
 #define MILAN_DP_MAX_SINKS 8u
 
@@ -38,7 +38,9 @@ struct milan_dp_sink {
 	uint64_t dest_mac;      // 48 bits
 	uint16_t vlan_id;
 	uint8_t listening;      // ACMP settled: receive this stream
-	uint8_t pad[5];
+	uint8_t bound;          // ACMP's bound state (Milan v1.2 5.3.8.2), settled or not
+	uint32_t binds;         // times it went from not bound to bound, which zeroes the
+				// input's Milan counters (Milan v1.2 5.3.8.10, media.h)
 };
 
 struct milan_dp {

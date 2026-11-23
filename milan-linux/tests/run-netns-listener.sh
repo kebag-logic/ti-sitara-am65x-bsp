@@ -8,8 +8,8 @@
 # controller binds bridge B's STREAM_INPUT 0 to A's STREAM_OUTPUT 0 with a Milan
 # BIND_RX. B probes A, settles, and plays the stream to its own simulated USB
 # host, 50 ppm slow, which records it. Then the recording is checked bit for bit,
-# and B's Milan counters show the stream locked, with no sequence error, no late
-# PDU and no reset once locked.
+# and B's counters show the stream locked, with no sequence error, no late PDU
+# and no jump once locked.
 #
 # Runs in a private user and network namespace (unshare -rn); no SCHED_FIFO.
 #
@@ -76,17 +76,17 @@ i=0
 while [ "$i" -lt 30 ] && [ "$(fb listener_locked)" != 1 ]; do sleep 1; i=$((i + 1)); done
 echo "[INFO] B $([ "$(fb listener_locked)" = 1 ] && echo locked || echo "not locked (host jitter)") after ${i} s, playback pitch $(fb listener_pitch)"
 r0=$(fb listener_frames_rx); s0=$(fb listener_seq_mismatch); l0=$(fb listener_late_timestamp)
-x0=$(fb listener_media_resets); u0=$(fb listener_underruns); n0=$(fb listener_stream_interrupted)
+x0=$(fb listener_jumps); u0=$(fb listener_underruns); n0=$(fb listener_stream_interrupted)
 sleep "$SECS"
 r1=$(fb listener_frames_rx); s1=$(fb listener_seq_mismatch); l1=$(fb listener_late_timestamp)
-x1=$(fb listener_media_resets); u1=$(fb listener_underruns); n1=$(fb listener_stream_interrupted)
+x1=$(fb listener_jumps); u1=$(fb listener_underruns); n1=$(fb listener_stream_interrupted)
 
 check "FRAMES_RX at 8000/s" "$(awk -v a="$r0" -v b="$r1" -v s="$SECS" 'BEGIN { r = (b - a) / s; exit !(r > 7900 && r < 8100) }'; echo $?)" \
 	"$((r1 - r0)) PDUs in $SECS s"
 check "no SEQ_NUM_MISMATCH, LATE_TIMESTAMP or STREAM_INTERRUPTED" \
 	"$([ "$s0" = "$s1" ] && [ "$l0" = "$l1" ] && [ "$n0" = "$n1" ]; echo $?)" "seq $s0 -> $s1, late $l0 -> $l1, interrupted $n0 -> $n1"
-check "no MEDIA_RESET and no underrun" "$([ "$x0" = "$x1" ] && [ "$u0" = "$u1" ]; echo $?)" \
-	"resets $x0 -> $x1, underruns $u0 -> $u1"
+check "no jump and no underrun" "$([ "$x0" = "$x1" ] && [ "$u0" = "$u1" ]; echo $?)" \
+	"jumps $x0 -> $x1, underruns $u0 -> $u1"
 check "presentation error within 125 us" "$(awk -v lo="$(fb listener_align_min_ns)" -v hi="$(fb listener_align_max_ns)" \
 	'BEGIN { exit !(lo > -125000 && hi < 125000) }'; echo $?)" \
 	"$(fb listener_align_min_ns)..$(fb listener_align_max_ns) ns, average $(fb listener_align_avg_ns) ns"
@@ -98,7 +98,7 @@ check "playback pitch cancels the host's -50 ppm" "$([ "${p:-0}" -ge 1000000 ] &
 kill "$MEDIAD_B"
 wait "$MEDIAD_B" 2>/dev/null || true
 # The recording runs from the first settlement, and its warm-up may hold the
-# jumps (MEDIA_RESET) this unprivileged host's stalls cause before the servo
+# jumps this unprivileged host's stalls cause before the servo
 # settles. Its last SECS - 1 seconds lie inside the window whose counters
 # above show no jump, no underrun and no interruption: those are checked bit for
 # bit, with nothing allowed.

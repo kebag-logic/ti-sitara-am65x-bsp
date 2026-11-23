@@ -155,6 +155,14 @@ static void run_stream(struct talker *tk, int fd, const struct stream *s, struct
 	rep->level_min = INT32_MAX;
 	rep->level_max = INT32_MIN;
 
+	// Milan v1.2 Table 5.4: a start zeroes MEDIA_RESET, TIMESTAMP_UNCERTAIN and
+	// FRAMES_TX; they count the intervals in which the PDUs this loop sends
+	// carried a toggled mr, a set tu, or went out at all
+	struct milan_obs obs;
+	milan_counters_zero(&rep->milan, &obs, 1u << MILAN_SO_STREAM_START | 1u << MILAN_SO_STREAM_STOP, milan_mono_ns());
+	rep->milan.value[MILAN_SO_STREAM_START]++;
+	bool sent_mr = s->aaf.mr;
+
 	int32_t samples[MAX_FRAMES * MAX_CHANNELS];
 	uint8_t frame[1600];
 	uint8_t seq = 0;
@@ -267,6 +275,18 @@ static void run_stream(struct talker *tk, int fd, const struct stream *s, struct
 		size_t n = aaf_build(frame, sizeof frame, &s->aaf, seq++, true, (uint32_t)(t + c->pto_ns), samples);
 		if (send(fd, frame, n, MSG_DONTWAIT) == (ssize_t)n) {
 			rep->frames_tx++;
+			// what this PDU carried: the stream's media clock never restarts
+			// (its slots are gPTP's, and a step of gPTP time starts a new
+			// stream), and its timestamps are never marked uncertain, so mr
+			// stays as it started and tu clear (aaf_params)
+			milan_obs_note(&obs, MILAN_SO_FRAMES_TX);
+			if (s->aaf.mr != sent_mr) {
+				milan_obs_note(&obs, MILAN_SO_MEDIA_RESET);
+				sent_mr = s->aaf.mr;
+			}
+			if (s->aaf.tu) {
+				milan_obs_note(&obs, MILAN_SO_TIMESTAMP_UNCERTAIN);
+			}
 		} else {
 			rep->send_errors++;
 		}
@@ -295,6 +315,7 @@ static void run_stream(struct talker *tk, int fd, const struct stream *s, struct
 			}
 			rep->locked = state == T_RUNNING && servo.locked;
 			rep->late_max_ns = late_max;
+			milan_obs_close(&obs, &rep->milan, milan_mono_ns());
 			live_update(tk, rep);
 			level_sum = 0;
 			level_n = 0;
@@ -313,6 +334,8 @@ static void run_stream(struct talker *tk, int fd, const struct stream *s, struct
 	rep->active = 0;
 	rep->locked = 0;
 	rep->stream_stops++;
+	milan_obs_close(&obs, &rep->milan, -1);
+	rep->milan.value[MILAN_SO_STREAM_STOP]++;
 	src->set_pitch(src, 1000000);
 	rep->pitch = 1000000;
 	live_update(tk, rep);
@@ -327,6 +350,7 @@ static void *talker_main(void *arg)
 	rep.level_target = (int32_t)c->level_target;
 	rep.pto_ns = c->pto_ns;
 	rep.pitch = 1000000;
+	rep.milan.valid = MILAN_SO_VALID;       // this thread counts all five (media.h)
 	live_update(tk, &rep);
 
 	int fd = -1;

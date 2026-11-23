@@ -35,19 +35,35 @@ struct lstream {
 	uint64_t dest_mac;
 };
 
-static bool stream_of(const struct listener *ls, struct lstream *s)
+// The sink in the datapath block: whether it listens, to what, and its bind
+// count. False while the block cannot be read.
+static bool sink_of(const struct listener *ls, struct milan_dp_sink *k)
 {
 	struct milan_dp dp;
 	if (!milan_dp_snapshot(ls->cfg.dp, &dp) || ls->cfg.sink >= dp.n_sinks) {
 		return false;
 	}
-	const struct milan_dp_sink *k = &dp.sinks[ls->cfg.sink];
-	if (!k->listening) {
-		return false;
-	}
-	s->stream_id = k->stream_id;
-	s->dest_mac = k->dest_mac;
+	*k = dp.sinks[ls->cfg.sink];
 	return true;
+}
+
+static void set_locked(struct milan_media_listener *r, bool locked)
+{
+	if (locked && !r->locked) {
+		r->media_locked++;
+		r->milan.value[MILAN_SI_MEDIA_LOCKED]++;
+	} else if (!locked && r->locked) {
+		r->media_unlocked++;
+		r->milan.value[MILAN_SI_MEDIA_UNLOCKED]++;
+	}
+	r->locked = locked;
+}
+
+// playback interrupted for a reason other than an unbind (Milan v1.2 Table 5.6)
+static void interrupted(struct milan_media_listener *r)
+{
+	r->stream_interrupted++;
+	r->milan.value[MILAN_SI_STREAM_INTERRUPTED]++;
 }
 
 static void live_update(struct listener *ls, const struct milan_media_listener *l)
@@ -124,6 +140,9 @@ static void *listener_main(void *arg)
 	memset(&rep, 0, sizeof rep);
 	rep.pitch = 1000000;
 	rep.in_flight_ns = c->in_flight_ns;
+	rep.milan.valid = MILAN_SI_VALID;       // this thread counts all ten (media.h)
+	struct milan_obs obs;
+	milan_counters_zero(&rep.milan, &obs, 0, milan_mono_ns());
 	live_update(ls, &rep);
 
 	int ifindex = (int)if_nametoindex(c->ifname);
@@ -146,6 +165,8 @@ static void *listener_main(void *arg)
 	servo_init(&servo, 0.0, (double)snk->pitch_min - 1e6, (double)snk->pitch_max - 1e6);
 	uint8_t last_seq = 0;
 	bool have_seq = false;
+	bool last_mr = false, have_mr = false;
+	bool jumping = false;           // the last timed PDU was jumped: one interruption, however many
 	int64_t last_rx = 0, next_check = 0, next_servo = 0;
 	double err_sum = 0;
 	unsigned err_n = 0;
@@ -153,31 +174,40 @@ static void *listener_main(void *arg)
 	uint8_t frame[2048];
 
 	while (!atomic_load(&ls->stop)) {
+		if (milan_obs_close(&obs, &rep.milan, milan_mono_ns())) {
+			live_update(ls, &rep);
+		}
 		int64_t now = gptp_now(c->clk);
 		if (now >= next_check) {
 			next_check = now + CHECK_NS;
-			struct lstream s;
-			bool listening = stream_of(ls, &s);
-			if (!listening || s.stream_id != cur.stream_id || s.dest_mac != cur.dest_mac) {
+			struct milan_dp_sink k;
+			bool read = sink_of(ls, &k);
+			bool listening = read && k.listening;
+			// a binding made since the counters were zeroed: they start again
+			// for it (Milan v1.2 5.3.8.10), from a stream started afresh
+			bool rebound = read && k.binds != rep.milan.binds;
+			if (rebound || !listening || k.stream_id != cur.stream_id || k.dest_mac != cur.dest_mac) {
 				if (state != L_NONE) {
 					membership(fd, ifindex, cur.dest_mac, false);
 					snk->stop(snk);
-					if (rep.locked) {
-						rep.media_unlocked++;
-					}
-					rep.locked = 0;
+					set_locked(&rep, false);
 					rep.active = 0;
+				}
+				if (rebound) {
+					milan_counters_zero(&rep.milan, &obs, 0, milan_mono_ns());
+					rep.milan.binds = k.binds;
 				}
 				state = L_NONE;
 				memset(&cur, 0, sizeof cur);
 				set_filter(fd, 0);
 				if (listening) {
-					cur = s;
-					set_filter(fd, s.dest_mac);
-					membership(fd, ifindex, s.dest_mac, true);
-					rep.stream_id = s.stream_id;
+					cur = (struct lstream){k.stream_id, k.dest_mac};
+					set_filter(fd, k.dest_mac);
+					membership(fd, ifindex, k.dest_mac, true);
+					rep.stream_id = k.stream_id;
 					state = L_WAITING;
 					have_seq = false;
+					have_mr = false;
 				}
 				live_update(ls, &rep);
 			}
@@ -191,11 +221,8 @@ static void *listener_main(void *arg)
 			uint8_t peek;
 			bool pending = recv(fd, &peek, 1, MSG_PEEK | MSG_DONTWAIT) > 0;
 			if (state == L_RUNNING && !pending && now - last_rx > c->interrupt_ns) {
-				rep.stream_interrupted++;
-				if (rep.locked) {
-					rep.media_unlocked++;
-				}
-				rep.locked = 0;
+				interrupted(&rep);
+				set_locked(&rep, false);
 				rep.active = 0;
 				snk->stop(snk);
 				state = L_WAITING;
@@ -208,34 +235,81 @@ static void *listener_main(void *arg)
 		if (state == L_NONE || !aaf_parse(frame, (size_t)n, &pdu) || pdu.stream_id != cur.stream_id) {
 			continue;
 		}
+		// every PDU of the stream is received, whatever its format (Table 5.6
+		// FRAMES_RX), and its header read: sequence, mr, tu, timestamp
+		milan_obs_note(&obs, MILAN_SI_FRAMES_RX);
+		if (have_seq && pdu.seq != (uint8_t)(last_seq + 1u)) {
+			rep.seq_mismatch++;
+			milan_obs_note(&obs, MILAN_SI_SEQ_NUM_MISMATCH);
+		}
+		last_seq = pdu.seq;
+		have_seq = true;
+		// IEEE 1722-2016 4.4.4.3: a toggle of mr is a media clock restart
+		bool restart = have_mr && pdu.mr != last_mr;
+		last_mr = pdu.mr;
+		have_mr = true;
+		if (restart) {
+			rep.media_restarts++;
+			milan_obs_note(&obs, MILAN_SI_MEDIA_RESET);
+		}
+		if (pdu.tu) {
+			rep.timestamp_uncertain++;
+			milan_obs_note(&obs, MILAN_SI_TIMESTAMP_UNCERTAIN);
+		}
+		// the presentation time: the 64-bit gPTP time nearest the 32-bit stamp,
+		// judged only when tv says the stamp is valid (4.4.4.5)
+		int64_t t_pres = now + (int32_t)(pdu.avtp_timestamp - (uint32_t)now);
+		int64_t margin = t_pres - now;
+		bool early = pdu.tv && margin > 4 * (int64_t)c->pto_ns;
+		if (pdu.tv && margin < 0) {
+			rep.late_timestamp++;
+			milan_obs_note(&obs, MILAN_SI_LATE_TIMESTAMP);
+		} else if (early) {
+			rep.early_timestamp++;
+			milan_obs_note(&obs, MILAN_SI_EARLY_TIMESTAMP);
+		}
 		size_t frames = pdu.data_len / (4u * c->channels);
 		if (pdu.format != AAF_FORMAT_INT_32BIT || pdu.nsr != AAF_NSR_48KHZ || pdu.channels != c->channels ||
 		    pdu.data_len % (4u * c->channels) != 0u || frames == 0u || frames > MAX_FRAMES) {
 			rep.unsupported_format++;
+			milan_obs_note(&obs, MILAN_SI_UNSUPPORTED_FORMAT);
+			// nothing to play for interrupt_ns, though PDUs of another format arrive
+			if (state == L_RUNNING && now - last_rx > c->interrupt_ns) {
+				interrupted(&rep);
+				set_locked(&rep, false);
+				rep.active = 0;
+				snk->stop(snk);
+				state = L_WAITING;
+				have_seq = false;
+				live_update(ls, &rep);
+			}
 			continue;
 		}
+		if (early) {
+			continue;               // too far in the future to process (Milan v1.2 Table 5.6): not played
+		}
 		rep.frames_rx++;
-		if (have_seq && pdu.seq != (uint8_t)(last_seq + 1u)) {
-			rep.seq_mismatch++;
-		}
-		last_seq = pdu.seq;
-		have_seq = true;
 		last_rx = now;
-
-		// the presentation time: the 64-bit gPTP time nearest the 32-bit stamp
-		int64_t t_pres = now + (int32_t)(pdu.avtp_timestamp - (uint32_t)now);
-		int64_t margin = t_pres - now;
-		if (margin < 0) {
-			rep.late_timestamp++;
-		} else if (margin > 4 * (int64_t)c->pto_ns) {
-			rep.early_timestamp++;
+		// a media clock restart: the stream is placed again, as after an
+		// interruption (4.4.4.3: the Listener adjusts quickly to the new clock)
+		if (restart && state == L_RUNNING) {
+			set_locked(&rep, false);
+			state = L_WAITING;
 		}
-		rep.margin_min_ns = margin < rep.margin_min_ns ? (int32_t)margin : rep.margin_min_ns;
+		// a stamp to place and steer by: valid (tv), and not marked uncertain (tu)
+		bool timed = pdu.tv && !pdu.tu;
+		if (!pdu.tv && state == L_WAITING) {
+			continue;               // nothing to place the stream's first frame by
+		}
+		if (pdu.tv) {
+			rep.margin_min_ns = margin < rep.margin_min_ns ? (int32_t)margin : rep.margin_min_ns;
+		}
 		aaf_samples_to_host(samples, pdu.data, frames * c->channels);
 		const int32_t *first = samples;
 
 		if (state == L_WAITING) {
 			// place the first frame at its presentation time
+			jumping = false;
 			snk->stop(snk);
 			servo_init(&servo, 0.0, servo.lo, servo.hi);
 			snk->set_pitch(snk, 1000000);
@@ -255,20 +329,35 @@ static void *listener_main(void *arg)
 			continue;
 		}
 
-		// when this PDU's first frame will reach the host, against when it should
+		// when this PDU's first frame will reach the host, against when it should;
+		// a stamp that is not valid, or marked uncertain (it may not be gPTP
+		// time, 4.4.4.7), is played as it comes and neither jumps nor steers
 		int64_t err = now + (int64_t)snk->delay(snk) * 1000000000 / FS + c->in_flight_ns - t_pres;
-		if (err > RESET_NS) {
+		if (!timed) {
+			// played as it comes
+		} else if (err > RESET_NS) {
+			// a jump puts the stream back on time: its playback interrupted, once
+			// for the PDUs in a row that need one
 			size_t drop = (size_t)(err * FS / 1000000000);
-			rep.media_resets++;
+			rep.jumps++;
+			if (!jumping) {
+				interrupted(&rep);
+			}
+			jumping = true;
 			if (drop >= frames) {
 				continue;
 			}
 			first += drop * c->channels;
 			frames -= drop;
 		} else if (err < -RESET_NS) {
-			rep.media_resets++;
+			rep.jumps++;
+			if (!jumping) {
+				interrupted(&rep);
+			}
+			jumping = true;
 			write_silence(snk, -err * FS / 1000000000);
 		} else {
+			jumping = false;
 			err_sum += (double)err;
 			err_n++;
 			rep.align_min_ns = err < rep.align_min_ns ? (int32_t)err : rep.align_min_ns;
@@ -289,13 +378,7 @@ static void *listener_main(void *arg)
 				}
 				rep.align_avg_ns = (int32_t)avg;
 			}
-			bool locked = servo.locked;
-			if (locked && !rep.locked) {
-				rep.media_locked++;
-			} else if (!locked && rep.locked) {
-				rep.media_unlocked++;
-			}
-			rep.locked = locked;
+			set_locked(&rep, servo.locked);
 			rep.underruns = snk->underruns;
 			live_update(ls, &rep);
 			err_sum = 0;

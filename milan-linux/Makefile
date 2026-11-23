@@ -52,8 +52,8 @@ OWN_CFLAGS := -std=gnu11 -O2 -Wall -Wextra -Werror -Isrc $(FW_INC) $(SHAPE) $(CF
 CTRLD_SRCS := src/milan_ctrld.c src/softfab.c src/gptp_shm.c src/datapath.c src/shmblk.c src/entity_conf.c \
 	src/nvm_file.c src/aecp_far.c src/media.c
 CTRLD_OBJS := $(addprefix $(O)/,$(notdir $(CTRLD_SRCS:.c=.o)))
-MEDIAD_SRCS := src/milan_mediad.c src/talker.c src/listener.c src/aaf.c src/servo.c src/gptp_time.c src/audio_alsa.c \
-	src/audio_sim.c src/datapath.c src/media.c src/shmblk.c
+MEDIAD_SRCS := src/milan_mediad.c src/talker.c src/listener.c src/crf_rx.c src/aaf.c src/crf.c src/servo.c \
+	src/gptp_time.c src/audio_alsa.c src/audio_sim.c src/datapath.c src/media.c src/shmblk.c
 MEDIAD_OBJS := $(addprefix $(O)/,$(notdir $(MEDIAD_SRCS:.c=.o)))
 DP_OBJS := $(addprefix $(O)/,milan_dp.o datapath.o media.o shmblk.o gptp_shm.o)
 
@@ -95,6 +95,7 @@ check: all check-config $(O)/test_media $(O)/test_gptp
 	$(O)/test_gptp
 	tests/run-netns.sh $(O)/milan-ctrld $(O)/milan-dp config/entity.conf
 	tests/run-netns-aecp.sh $(O)/milan-ctrld $(O)/milan-dp config/entity.conf
+	tests/run-netns-counters.sh $(O) config/entity.conf
 	tests/run-netns-talker.sh $(O)
 	tests/run-netns-listener.sh $(O)
 	tests/run-netns-nvm.sh $(O)
@@ -103,9 +104,10 @@ $(O)/test_gptp: tests/test_gptp.c src/gptp_time.c src/gptp_shm.c src/gptp_time.h
 	@mkdir -p $(O)
 	$(CC) $(OWN_CFLAGS) -o $@ tests/test_gptp.c src/gptp_time.c src/gptp_shm.c -lrt
 
-$(O)/test_media: tests/test_media.c src/aaf.c src/servo.c src/aaf.h src/servo.h
+$(O)/test_media: tests/test_media.c src/aaf.c src/crf.c src/servo.c src/media.c src/shmblk.c src/aaf.h src/crf.h \
+		src/servo.h src/media.h
 	@mkdir -p $(O)
-	$(CC) $(OWN_CFLAGS) -o $@ tests/test_media.c src/aaf.c src/servo.c -lm
+	$(CC) $(OWN_CFLAGS) -o $@ tests/test_media.c src/aaf.c src/crf.c src/servo.c src/media.c src/shmblk.c -lm -lrt
 
 install: all
 	install -D -m 0755 $(O)/milan-ctrld $(DESTDIR)$(PREFIX)/sbin/milan-ctrld

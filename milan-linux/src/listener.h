@@ -11,11 +11,19 @@
 // the presentation error. The first PDU of a stream is placed by queueing
 // silence until the error is nought. After that the servo (servo.h) holds it at
 // nought through the gadget's "Playback Pitch 1000000": a stream running late
-// makes the gadget send faster. An error past 1 ms is put right by a jump
-// (MEDIA_RESET): silence inserted, or frames dropped.
+// makes the gadget send faster. An error past 1 ms is put right by a jump:
+// silence inserted, or frames dropped, which interrupts the playback
+// (STREAM_INTERRUPTED, once for PDUs in a row that need a jump). A toggle of
+// the PDUs' mr bit (a media clock restart, IEEE 1722-2016 4.4.4.3) places the
+// stream again from that PDU; while tu is set (4.4.4.7), or tv clear, the PDUs
+// are played as they come, without a jump or a servo step. A PDU stamped more
+// than 4 x PTO ahead is too far in the future to process (EARLY_TIMESTAMP) and
+// is dropped.
 //
 // The stream comes from milan-ctrld's datapath block: the sink milan-ctrld
-// settled through ACMP. The counters follow Milan v1.2 5.3.7 (STREAM_INPUT).
+// settled through ACMP. The Milan counters are Milan v1.2 5.3.8.10's (Table
+// 5.6, media.h): MEDIA_RESET from the mr bit, TIMESTAMP_UNCERTAIN from tu,
+// zeroed when the sink goes from not bound to bound.
 
 #ifndef MILAN_LISTENER_H
 #define MILAN_LISTENER_H

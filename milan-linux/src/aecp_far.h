@@ -28,10 +28,13 @@
 //   CTR (GET_COUNTERS)             AVB_INTERFACE: LINK_UP, LINK_DOWN and
 //                                  GPTP_GM_CHANGED, counted here; CLOCK_DOMAIN:
 //                                  LOCKED and UNLOCKED, flexptpd's lock to the
-//                                  grandmaster the media clock follows;
-//                                  STREAM_INPUT 0 and STREAM_OUTPUT 0: the media
-//                                  block's Milan counters (media.h); any other
-//                                  stream: none valid
+//                                  grandmaster the media clock follows, while
+//                                  its status is live (softfab.c poll_gptp);
+//                                  STREAM_INPUT 0 (the AAF listener), 1 (the
+//                                  CRF receive path) and STREAM_OUTPUT 0 (the
+//                                  talker): the Milan counters milan-mediad
+//                                  keeps for them (media.h), valid as it marks
+//                                  them; any other stream: none valid
 //   EDIT (ADD/REMOVE_AUDIO_MAPPINGS) refused at its begin: the media plane renders
 //                                  the identity map and has no channel router,
 //                                  so AECP answers NOT_SUPPORTED
@@ -55,6 +58,7 @@
 #include "softfab.h"
 
 #define AECP_FAR_STREAMS 8u
+#define AECP_FAR_COUNTED 2u     // the streams a media program can count (aecp_far.c stream_poll)
 
 struct aecp_far_config {
 	const char *media_name;                     // the media block's shm_open() name
@@ -80,7 +84,7 @@ struct aecp_far {
 	bool link_up, gptp_locked, as_capable;
 	uint64_t gm_id;
 	uint32_t link_ups, link_downs, gm_changes, locks, unlocks;
-	struct aecp_far_counters input0, output0;   // what the last poll published
+	struct aecp_far_counters input[AECP_FAR_COUNTED], output[AECP_FAR_COUNTED]; // the last poll's
 	uint64_t next_media_ms;
 	uint32_t answers, silent, commits, refused_edits;
 };

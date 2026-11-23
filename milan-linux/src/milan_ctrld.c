@@ -245,6 +245,23 @@ static void env_persist(void *ctx, unsigned sink)
 	say(LOG_DEBUG, "sink %u: binding changed", sink);
 }
 
+// ACMP's bound state into the datapath block, and the count of not-bound to
+// bound changes that zeroes an input's Milan counters (Milan v1.2 5.3.8.10).
+// Read every loop pass, so a binding the saved state restores at boot counts
+// as one too.
+static void publish_bound(void)
+{
+	for (unsigned k = 0; k < acmp_cfg.n_sinks && k < ACMP_MAX_SINKS && k < MILAN_DP_MAX_SINKS; ++k) {
+		bool bound = app.acmp.acmp.sinks[k].bound;
+		if (bound != (dp->sinks[k].bound != 0u)) {
+			milan_dp_begin(dp);
+			dp->sinks[k].bound = bound;
+			dp->sinks[k].binds += bound ? 1u : 0u;
+			milan_dp_end(dp);
+		}
+	}
+}
+
 static void env_changed(void *ctx, unsigned sink)
 {
 	(void)ctx;
@@ -683,6 +700,7 @@ int main(int argc, char **argv)
 		}
 		softfab_pump(&fab, handled == 0u);
 		publish_gptp();
+		publish_bound();
 		aecp_far_poll(&far);
 		if (dump_requested) {
 			dump_requested = 0;
