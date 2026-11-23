@@ -1,0 +1,7 @@
+identity-mutant-build 0
+identity-mutant-distinct-test 1
+identity-pristine-distinct-test 0
+identity-mutant-original-test 1
+gptp-stale-test 0
+probe return codes: [1, 1, 0, 0] (expected baseline 0, mutant/distinct 1, pristine/distinct 0; stale is diagnostic)
+cross-build 0

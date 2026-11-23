@@ -1,0 +1,35 @@
+command: sh $REVIEWS/pb2aecp-r901-2-packet/scratch/startup-tests/run-netns-counters.sh $REVIEWS/pb2aecp-r901-2-packet/scratch/native $REVIEWS/r901-2-pb2aecp/milan-linux/config/entity.conf
+[PASS] ADP: ENTITY_AVAILABLE
+mediad process still running: True
+missing interface STREAM_INPUT 0 valid 0xf3f values [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+[FAIL] failed receive path has no valid counters 0
+missing interface STREAM_INPUT 1 valid 0x0 values [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+[PASS] failed receive path has no valid counters 1
+counters: FAIL (1 failed)
+--- ctrld-ctr.log ---
+AEM image: 5784 bytes, 32 descriptors, generated CRC e937544f verified; this board's identity 021a2bfffe3c4d5e, CRC 5b73f169
+saved state at boot (in memory): slot none seq 0 (A 0, B 0) | bindings blank, rest blank | phase 1 dirty 0 pending 0 | commits 0 ok, 0 failed, 0 skipped | unread 0x0 read faults 0 legacy 0x0
+MAAP: no addresses
+entity 021a2bfffe3c4d5e on veth0 (mac 021a2b3c4d5e, model 001bc50ac1000100, 1 sources, 2 sinks, no SRP domain): AECP open
+link up, grandmaster 0000000000000000 domain 0
+link up, grandmaster 3cc0c6fffe0a0001 domain 0
+MAAP: 1 addresses from 91e0f00000b4
+entity 021a2bfffe3c4d5e mac 021a2b3c4d5e | link up gm 3cc0c6fffe0a0001 asCapable 1 | loop passes 653 events 239 rx 2 bad 0 | fabric rx 2 admitted 2 tx 9 err 0 lost 0 filter_mismatch 0
+AECP open, unlocked 0000000000000000 | face commits 1 late 0 unanswered 0 | far answers 240 silent 0 commits 1 edits refused 0 | media block read
+AECP core: ready 1 response_owed 0 notify 0 owed 0 waiting 0 refusing 0 | busy drops 0 malformed 0 ignored 0
+ingress rate drops: adp 0 acmp 0 aecp 0 maap 0 | rx drops: adp 0 acmp 0 aecp 0 maap 0
+MAAP valid base 91e0f00000b4 count 1
+saved state now (in memory): slot none seq 0 (A 0, B 0) | bindings blank, rest blank | phase 1 dirty 0 pending 0 | commits 0 ok, 0 failed, 0 skipped | unread 0x0 read faults 0 legacy 0x0
+sink 0: state 0 bound 0 talker 0000000000000000/0 started 0 status 0
+sink 1: state 0 bound 0 talker 0000000000000000/0 started 0 status 0
+departed
+
+--- mediad-ctr.log ---
+missing0 has no PTP clock: gPTP time is CLOCK_TAI
+talker on missing0, 8 channels, PTO 50000000 ns, level 48..192 frames, PHC -1
+listener on missing0, 8 channels, USB IN pipeline 0 ns
+CRF input (sink 1) on missing0: counted, not clocked from
+crf idle stream 0000000000000000 | PDUs 0 seq 0 late 0 early 0 unsupported 0 tu 0 mr toggles 0 | locked 0 unlocked 0 interrupted 0 grid breaks 0 | rate +0.000 ppm
+listener idle stream 0000000000000000 | FRAMES_RX 0 SEQ_NUM_MISMATCH 0 LATE 0 EARLY 0 UNSUPPORTED 0 MEDIA_LOCKED 0 MEDIA_UNLOCKED 0 jumps 0 STREAM_INTERRUPTED 0 tu 0 mr toggles 0 | underruns 0 pitch 1000000 | presentation error 0..0 avg 0 ns, least margin 0 ns
+talker idle stream 0000000000000000 -> 000000000000 | PDUs 0 underruns 0 overruns 0 late 0 send errors 0 | level 0..0 avg 0.00 (target 48) pitch 1000000 | worst send delay 0 ns | gPTP rate +0.000 ppm residual 0 ns
+

@@ -1,0 +1,74 @@
+Cloning into '$REVIEWS/pb2aecp-r901-2-packet/scratch/avdecc'...
+warning: refs/tags/v4.3.1.1 080ab851ba558e8502c5d44522a3012bee007440 is not a commit!
+Note: switching to '6d61a92e7f264c69f23cdc38f50d31114e567aa0'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+Submodule 'Docker/dockerHelper' (https://github.com/christophe-calmejane/dockerHelper.git) registered for path 'Docker/dockerHelper'
+Submodule 'cmake/cmakeUtils' (https://github.com/christophe-calmejane/cmakeUtils.git) registered for path 'cmake/cmakeUtils'
+Submodule 'externals/3rdparty/fmtlib' (https://github.com/fmtlib/fmt) registered for path 'externals/3rdparty/fmtlib'
+Submodule 'externals/3rdparty/gtest' (https://github.com/google/googletest.git) registered for path 'externals/3rdparty/gtest'
+Submodule 'externals/3rdparty/json' (https://github.com/nlohmann/json) registered for path 'externals/3rdparty/json'
+Submodule 'externals/nih' (https://github.com/L-Acoustics/networkInterfaceHelper.git) registered for path 'externals/nih'
+Submodule 'scripts/bashUtils' (https://github.com/christophe-calmejane/bashUtils.git) registered for path 'scripts/bashUtils'
+Cloning into '$REVIEWS/pb2aecp-r901-2-packet/scratch/avdecc/Docker/dockerHelper'...
+Cloning into '$REVIEWS/pb2aecp-r901-2-packet/scratch/avdecc/cmake/cmakeUtils'...
+Cloning into '$REVIEWS/pb2aecp-r901-2-packet/scratch/avdecc/externals/3rdparty/fmtlib'...
+Cloning into '$REVIEWS/pb2aecp-r901-2-packet/scratch/avdecc/externals/3rdparty/gtest'...
+Cloning into '$REVIEWS/pb2aecp-r901-2-packet/scratch/avdecc/externals/3rdparty/json'...
+Cloning into '$REVIEWS/pb2aecp-r901-2-packet/scratch/avdecc/externals/nih'...
+Cloning into '$REVIEWS/pb2aecp-r901-2-packet/scratch/avdecc/scripts/bashUtils'...
+From https://github.com/christophe-calmejane/dockerHelper
+ * branch            ecd70e667147e4a969d5ae833b78421b914fdf50 -> FETCH_HEAD
+Submodule path 'Docker/dockerHelper': checked out 'ecd70e667147e4a969d5ae833b78421b914fdf50'
+From https://github.com/christophe-calmejane/cmakeUtils
+ * branch            c0a60b2081798c29eca01c4f0999dfa572fef340 -> FETCH_HEAD
+Submodule path 'cmake/cmakeUtils': checked out 'c0a60b2081798c29eca01c4f0999dfa572fef340'
+From https://github.com/fmtlib/fmt
+ * branch            f5e54359df4c26b6230fc61d38aa294581393084 -> FETCH_HEAD
+Submodule path 'externals/3rdparty/fmtlib': checked out 'f5e54359df4c26b6230fc61d38aa294581393084'
+From https://github.com/google/googletest
+ * branch            52eb8108c5bdec04579160ae17225d66034bd723 -> FETCH_HEAD
+Submodule path 'externals/3rdparty/gtest': checked out '52eb8108c5bdec04579160ae17225d66034bd723'
+From https://github.com/nlohmann/json
+ * branch            9cca280a4d0ccf0c08f47a99aa71d1b0e52f8d03 -> FETCH_HEAD
+Submodule path 'externals/3rdparty/json': checked out '9cca280a4d0ccf0c08f47a99aa71d1b0e52f8d03'
+From https://github.com/L-Acoustics/networkInterfaceHelper
+ * branch            d777db8b4d1947b1c63f4cb8aab03b0bec5f7e22 -> FETCH_HEAD
+Submodule path 'externals/nih': checked out 'd777db8b4d1947b1c63f4cb8aab03b0bec5f7e22'
+Submodule 'Docker/dockerHelper' (https://github.com/christophe-calmejane/dockerHelper.git) registered for path 'externals/nih/Docker/dockerHelper'
+Submodule 'cmake/cmakeUtils' (https://github.com/christophe-calmejane/cmakeUtils.git) registered for path 'externals/nih/cmake/cmakeUtils'
+Submodule 'externals/3rdparty/gtest' (https://github.com/google/googletest.git) registered for path 'externals/nih/externals/3rdparty/gtest'
+Submodule 'scripts/bashUtils' (https://github.com/christophe-calmejane/bashUtils.git) registered for path 'externals/nih/scripts/bashUtils'
+Cloning into '$REVIEWS/pb2aecp-r901-2-packet/scratch/avdecc/externals/nih/Docker/dockerHelper'...
+Cloning into '$REVIEWS/pb2aecp-r901-2-packet/scratch/avdecc/externals/nih/cmake/cmakeUtils'...
+Cloning into '$REVIEWS/pb2aecp-r901-2-packet/scratch/avdecc/externals/nih/externals/3rdparty/gtest'...
+Cloning into '$REVIEWS/pb2aecp-r901-2-packet/scratch/avdecc/externals/nih/scripts/bashUtils'...
+From https://github.com/christophe-calmejane/dockerHelper
+ * branch            8764b7d04eab01a129c6d3d5f299a1807b39d3d9 -> FETCH_HEAD
+Submodule path 'externals/nih/Docker/dockerHelper': checked out '8764b7d04eab01a129c6d3d5f299a1807b39d3d9'
+From https://github.com/christophe-calmejane/cmakeUtils
+ * branch            17908a20d2e36ab77510bd05fba98a6977567f48 -> FETCH_HEAD
+Submodule path 'externals/nih/cmake/cmakeUtils': checked out '17908a20d2e36ab77510bd05fba98a6977567f48'
+From https://github.com/google/googletest
+ * branch            52eb8108c5bdec04579160ae17225d66034bd723 -> FETCH_HEAD
+Submodule path 'externals/nih/externals/3rdparty/gtest': checked out '52eb8108c5bdec04579160ae17225d66034bd723'
+From https://github.com/christophe-calmejane/bashUtils
+ * branch            29b98f562d7299f32e57ad04371e19f18c9efa72 -> FETCH_HEAD
+Submodule path 'externals/nih/scripts/bashUtils': checked out '29b98f562d7299f32e57ad04371e19f18c9efa72'
+From https://github.com/christophe-calmejane/bashUtils
+ * branch            86bd20ecd118a13620ec121ccfa4ba286f47d1fc -> FETCH_HEAD
+Submodule path 'scripts/bashUtils': checked out '86bd20ecd118a13620ec121ccfa4ba286f47d1fc'

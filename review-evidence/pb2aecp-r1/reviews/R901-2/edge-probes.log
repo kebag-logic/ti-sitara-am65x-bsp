@@ -1,0 +1,78 @@
+command: sh $REVIEWS/pb2aecp-r901-2-packet/scratch/edge-tests/run-netns-counters.sh $REVIEWS/pb2aecp-r901-2-packet/scratch/native $REVIEWS/r901-2-pb2aecp/milan-linux/config/entity.conf
+[PASS] ADP: ENTITY_AVAILABLE
+[PASS] GET_COUNTERS STREAM_INPUT 0 and 1 before any binding: counted (valid 0xf3f), all zero: [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
+[PASS] ACMP BIND_RX STREAM_INPUT 0: SUCCESS: 0
+[PASS] ACMP STREAM_INPUT 0: PROBE_TX_COMMAND to talker unique id 0
+[PASS] datapath: sink 0 listening to stream 0200000000020000: stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1 bound:1 binds:1
+[PASS] GET_STREAM_INFO STREAM_INPUT 0: bound to the stream (CONNECTED, STREAM_ID_VALID): f600000602050220020060000200000000020000
+[PASS] ACMP BIND_RX STREAM_INPUT 1: SUCCESS: 0
+[PASS] ACMP STREAM_INPUT 1: PROBE_TX_COMMAND to talker unique id 1
+[PASS] datapath: sink 1 listening to stream 0200000000020001: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:1
+[PASS] GET_STREAM_INFO STREAM_INPUT 1: bound to the stream (CONNECTED, STREAM_ID_VALID): f6000006041060010000bb800200000000020001
+EARLY baseline CRF [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5]
+EARLY sustained CRF [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 2, 8]
+EARLY media {}
+[PASS] CRF early-only stream interrupts and unlocks after receive timeout: [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 2, 8]
+[PASS] burst command SUCCESS 9
+[PASS] burst command SUCCESS 7
+REBIND before stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:1 [2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 4, 10]
+REBIND after stream_id:0000000000000000 dest_mac:000000000000 vlan:0 listening:0 bound:1 binds:1 [2, 2, 1, 0, 0, 0, 0, 0, 0, 0, 4, 11]
+[FAIL] burst rebind counted
+[FAIL] burst rebind zeroed earlier EARLY_TIMESTAMP: [2, 2, 1, 0, 0, 0, 0, 0, 0, 0, 4, 11]
+[PASS] ACMP UNBIND_RX STREAM_INPUT 1: SUCCESS
+[PASS] ACMP BIND_RX STREAM_INPUT 1: SUCCESS: 0
+[PASS] ACMP STREAM_INPUT 1: PROBE_TX_COMMAND to talker unique id 1
+[PASS] datapath: sink 1 listening to stream 0200000000020001: stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:2
+[PASS] GET_STREAM_INFO STREAM_INPUT 1: bound to the stream (CONNECTED, STREAM_ID_VALID): f6000006041060010000bb800200000000020001
+SERIAL after stream_id:0200000000020001 dest_mac:91e0f000ab01 vlan:2 listening:1 bound:1 binds:2 [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
+[PASS] separated rebind zeroes earlier EARLY_TIMESTAMP
+counters: FAIL (2 failed)
+--- ctrld-ctr.log ---
+AEM image: 5784 bytes, 32 descriptors, generated CRC e937544f verified; this board's identity 021a2bfffe3c4d5e, CRC 5b73f169
+saved state at boot (in memory): slot none seq 0 (A 0, B 0) | bindings blank, rest blank | phase 1 dirty 0 pending 0 | commits 0 ok, 0 failed, 0 skipped | unread 0x0 read faults 0 legacy 0x0
+MAAP: no addresses
+entity 021a2bfffe3c4d5e on veth0 (mac 021a2b3c4d5e, model 001bc50ac1000100, 1 sources, 2 sinks, no SRP domain): AECP open
+link up, grandmaster 0000000000000000 domain 0
+link up, grandmaster 3cc0c6fffe0a0001 domain 0
+MAAP: 1 addresses from 91e0f00000b4
+sink 0: binding changed
+sink 0: bound, talker 020000fffe000002/0, acmp status 0
+sink 0: listening to stream 0200000000020000 at 91e0f000ab00, VLAN 2
+sink 0: bound, talker 020000fffe000002/0, acmp status 0
+sink 0: bound, talker 020000fffe000002/0, acmp status 0
+sink 1: binding changed
+sink 1: bound, talker 020000fffe000002/1, acmp status 0
+sink 1: listening to stream 0200000000020001 at 91e0f000ab01, VLAN 2
+sink 1: bound, talker 020000fffe000002/1, acmp status 0
+sink 1: bound, talker 020000fffe000002/1, acmp status 0
+sink 1: stopped
+sink 1: binding changed
+sink 1: unbound, talker 0000000000000000/0, acmp status 0
+sink 1: binding changed
+sink 1: bound, talker 020000fffe000002/1, acmp status 0
+sink 1: binding changed
+sink 1: unbound, talker 0000000000000000/0, acmp status 0
+sink 1: binding changed
+sink 1: bound, talker 020000fffe000002/1, acmp status 0
+sink 1: listening to stream 0200000000020001 at 91e0f000ab01, VLAN 2
+sink 1: bound, talker 020000fffe000002/1, acmp status 0
+sink 1: bound, talker 020000fffe000002/1, acmp status 0
+entity 021a2bfffe3c4d5e mac 021a2b3c4d5e | link up gm 3cc0c6fffe0a0001 asCapable 1 | loop passes 2205 events 981 rx 19 bad 0 | fabric rx 19 admitted 19 tx 29 err 0 lost 0 filter_mismatch 0
+AECP open, unlocked 0000000000000000 | face commits 8 late 0 unanswered 0 | far answers 1197 silent 0 commits 8 edits refused 0 | media block read
+AECP core: ready 1 response_owed 0 notify 0 owed 0 waiting 0 refusing 0 | busy drops 0 malformed 0 ignored 0
+ingress rate drops: adp 0 acmp 0 aecp 0 maap 0 | rx drops: adp 0 acmp 0 aecp 0 maap 0
+MAAP valid base 91e0f00000b4 count 1
+saved state now (in memory): slot A seq 1 (A 0, B 0) | bindings blank, rest blank | phase 1 dirty 0 pending 0 | commits 1 ok, 0 failed, 1 skipped | unread 0x0 read faults 0 legacy 0x0
+sink 0: state 7 bound 1 talker 020000fffe000002/0 started 1 status 0
+sink 1: state 7 bound 1 talker 020000fffe000002/1 started 1 status 0
+departed
+
+--- mediad-ctr.log ---
+veth0 has no PTP clock: gPTP time is CLOCK_TAI
+talker on veth0, 8 channels, PTO 50000000 ns, level 48..192 frames, PHC -1
+listener on veth0, 8 channels, USB IN pipeline 0 ns
+CRF input (sink 1) on veth0: counted, not clocked from
+crf active, locked stream 0200000000020001 | PDUs 3059 seq 0 late 0 early 767 unsupported 0 tu 0 mr toggles 0 | locked 3 unlocked 2 interrupted 1 grid breaks 0 | rate +0.000 ppm
+listener active, locked stream 0200000000020000 | FRAMES_RX 10617 SEQ_NUM_MISMATCH 0 LATE 0 EARLY 3069 UNSUPPORTED 0 MEDIA_LOCKED 2 MEDIA_UNLOCKED 1 jumps 0 STREAM_INTERRUPTED 1 tu 0 mr toggles 0 | underruns 7370 pitch 999998 | presentation error -44204..62573 avg 13270 ns, least margin 47225413 ns
+talker idle stream 021a2b3c4d5e0000 -> 91e0f00000b4 | PDUs 58001 underruns 0 overruns 0 late 53159 send errors 0 | level 45..45 avg 47.02 (target 48) pitch 1000000 | worst send delay 2763452 ns | gPTP rate +0.000 ppm residual 0 ns
+

@@ -1,0 +1,774 @@
+alsa.tar.bz2: OK
+checking build system type... x86_64-pc-linux-gnu
+checking host system type... aarch64-unknown-linux-gnu
+checking for a BSD-compatible install... /usr/bin/install -c
+checking whether build environment is sane... yes
+checking for aarch64-linux-gnu-strip... aarch64-linux-gnu-strip
+checking for a race-free mkdir -p... /usr/bin/mkdir -p
+checking for gawk... gawk
+checking whether make sets $(MAKE)... yes
+checking whether make supports nested variables... yes
+checking whether to enable maintainer-specific portions of Makefiles... yes
+checking whether make supports nested variables... (cached) yes
+checking for aarch64-linux-gnu-gcc... aarch64-linux-gnu-gcc
+checking whether the C compiler works... yes
+checking for C compiler default output file name... a.out
+checking for suffix of executables... 
+checking whether we are cross compiling... yes
+checking for suffix of object files... o
+checking whether the compiler supports GNU C... yes
+checking whether aarch64-linux-gnu-gcc accepts -g... yes
+checking for aarch64-linux-gnu-gcc option to enable C11 features... none needed
+checking whether aarch64-linux-gnu-gcc understands -c and -o together... yes
+checking whether make supports the include directive... yes (GNU style)
+checking dependency style of aarch64-linux-gnu-gcc... gcc3
+checking how to run the C preprocessor... aarch64-linux-gnu-gcc -E
+checking for stdio.h... yes
+checking for stdlib.h... yes
+checking for string.h... yes
+checking for inttypes.h... yes
+checking for stdint.h... yes
+checking for strings.h... yes
+checking for sys/stat.h... yes
+checking for sys/types.h... yes
+checking for unistd.h... yes
+checking for wchar.h... yes
+checking for minix/config.h... no
+checking for sys/time.h... yes
+checking whether it is safe to define __EXTENSIONS__... yes
+checking whether _XOPEN_SOURCE should be defined... no
+checking whether ln -s works... yes
+checking how to print strings... printf
+checking for a sed that does not truncate output... /usr/bin/sed
+checking for grep that handles long lines and -e... /usr/bin/grep
+checking for egrep... /usr/bin/grep -E
+checking for fgrep... /usr/bin/grep -F
+checking for ld used by aarch64-linux-gnu-gcc... /usr/aarch64-linux-gnu/bin/ld
+checking if the linker (/usr/aarch64-linux-gnu/bin/ld) is GNU ld... yes
+checking for BSD- or MS-compatible name lister (nm)... /usr/bin/aarch64-linux-gnu-nm -B
+checking the name lister (/usr/bin/aarch64-linux-gnu-nm -B) interface... BSD nm
+checking the maximum length of command line arguments... 1572864
+checking how to convert x86_64-pc-linux-gnu file names to aarch64-unknown-linux-gnu format... func_convert_file_noop
+checking how to convert x86_64-pc-linux-gnu file names to toolchain format... func_convert_file_noop
+checking for /usr/aarch64-linux-gnu/bin/ld option to reload object files... -r
+checking for aarch64-linux-gnu-file... no
+checking for file... file
+configure: WARNING: using cross tools not prefixed with host triplet
+checking for aarch64-linux-gnu-objdump... aarch64-linux-gnu-objdump
+checking how to recognize dependent libraries... pass_all
+checking for aarch64-linux-gnu-dlltool... no
+checking for dlltool... no
+checking how to associate runtime and link libraries... printf %s\n
+checking for aarch64-linux-gnu-ar... aarch64-linux-gnu-ar
+checking for archiver @FILE support... @
+checking for aarch64-linux-gnu-strip... (cached) aarch64-linux-gnu-strip
+checking for aarch64-linux-gnu-ranlib... aarch64-linux-gnu-ranlib
+checking command to parse /usr/bin/aarch64-linux-gnu-nm -B output from aarch64-linux-gnu-gcc object... ok
+checking for sysroot... no
+checking for a working dd... /usr/bin/dd
+checking how to truncate binary pipes... /usr/bin/dd bs=4096 count=1
+checking for aarch64-linux-gnu-mt... no
+checking for mt... no
+checking if : is a manifest tool... no
+checking for dlfcn.h... yes
+checking for objdir... .libs
+checking if aarch64-linux-gnu-gcc supports -fno-rtti -fno-exceptions... no
+checking for aarch64-linux-gnu-gcc option to produce PIC... -fPIC -DPIC
+checking if aarch64-linux-gnu-gcc PIC flag -fPIC -DPIC works... yes
+checking if aarch64-linux-gnu-gcc static flag -static works... yes
+checking if aarch64-linux-gnu-gcc supports -c -o file.o... yes
+checking if aarch64-linux-gnu-gcc supports -c -o file.o... (cached) yes
+checking whether the aarch64-linux-gnu-gcc linker (/usr/aarch64-linux-gnu/bin/ld) supports shared libraries... yes
+checking whether -lc should be explicitly linked in... no
+checking dynamic linker characteristics... GNU/Linux ld.so
+checking how to hardcode library paths into programs... immediate
+checking for shl_load... no
+checking for shl_load in -ldld... no
+checking for dlopen... yes
+checking whether a program can dlopen itself... cross
+checking whether stripping libraries is possible... yes
+checking if libtool supports shared libraries... yes
+checking whether to build shared libraries... yes
+checking whether to build static libraries... no
+checking if aarch64-linux-gnu-gcc supports -Wl,--no-undefined flag... yes
+checking if aarch64-linux-gnu-gcc supports -Wl,-z,defs flag... yes
+checking for egrep... (cached) /usr/bin/grep -E
+checking for an ANSI C-conforming const... yes
+checking for inline... inline
+checking for uselocale... yes
+checking for eaccess... yes
+checking for aarch64-linux-gnu-gcc options needed to detect all undeclared functions... none needed
+checking whether closefrom is declared... yes
+checking for aarch64-linux-gnu-gcc option to enable large file support... none needed
+checking for library version... major 1 minor 2 subminor 15 extrastr  extraver 1000000
+checking for versioned symbols... yes
+checking for symbolic-functions... no
+checking for custom symbol prefixes... 
+checking for debug... yes
+checking for debug assert... no
+checking for tmpdir... /tmp
+checking for softfloat... no
+checking for LFS calls... yes
+checking for libdl... checking for library containing dlsym... none required
+checking for pthread... checking for pthread_join in -lpthread... yes
+checking whether PTHREAD_MUTEX_RECURSIVE is declared... yes
+checking for __thread... yes
+checking for librt... checking for clock_gettime in -lrt... yes
+checking for use of wordexp... no
+checking for endian.h... yes
+checking for sys/endian.h... no
+checking for sys/shm.h... yes
+checking for malloc.h... yes
+checking for resmgr support... no
+checking for aload* support... yes
+checking for ALSA device file directory... /dev/snd/
+checking for aload* device file directory... /dev/
+checking whether GCC supports builtin atomic intrinsics... yes
+checking for default lockless dmix... no
+checking for max number of cards... 32
+checking for thread-safe API functions... yes
+checking that generated files are newer than configure... done
+configure: creating ./config.status
+config.status: creating Makefile
+config.status: creating doc/Makefile
+config.status: creating doc/pictures/Makefile
+config.status: creating doc/doxygen.cfg
+config.status: creating include/Makefile
+config.status: creating include/sound/Makefile
+config.status: creating include/sound/uapi/Makefile
+config.status: creating src/Versions.in
+config.status: creating src/Makefile
+config.status: creating src/control/Makefile
+config.status: creating src/mixer/Makefile
+config.status: creating src/pcm/Makefile
+config.status: creating src/pcm/scopes/Makefile
+config.status: creating src/rawmidi/Makefile
+config.status: creating src/timer/Makefile
+config.status: creating src/hwdep/Makefile
+config.status: creating src/seq/Makefile
+config.status: creating src/ucm/Makefile
+config.status: creating src/topology/Makefile
+config.status: creating src/conf/Makefile
+config.status: creating src/conf/cards/Makefile
+config.status: creating src/conf/ctl/Makefile
+config.status: creating src/conf/pcm/Makefile
+config.status: creating modules/Makefile
+config.status: creating modules/mixer/Makefile
+config.status: creating modules/mixer/simple/Makefile
+config.status: creating aserver/Makefile
+config.status: creating test/Makefile
+config.status: creating test/lsb/Makefile
+config.status: creating utils/Makefile
+config.status: creating utils/alsa-lib.spec
+config.status: creating utils/alsa.pc
+config.status: creating utils/alsa-topology.pc
+config.status: creating include/config.h
+config.status: executing depfiles commands
+config.status: executing libtool commands
+Creating asoundlib.h...
+Making all in doc
+make[1]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/doc'
+Making all in pictures
+make[2]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/doc/pictures'
+make[2]: Nothing to be done for 'all'.
+make[2]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/doc/pictures'
+make[2]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/doc'
+make[2]: Nothing to be done for 'all-am'.
+make[2]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/doc'
+make[1]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/doc'
+Making all in include
+make[1]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include'
+make  all-recursive
+make[2]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include'
+Making all in sound
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include/sound'
+Making all in uapi
+make[4]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include/sound/uapi'
+make[4]: Nothing to be done for 'all'.
+make[4]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include/sound/uapi'
+make[4]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include/sound'
+make[4]: Nothing to be done for 'all-am'.
+make[4]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include/sound'
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include/sound'
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include'
+if ! test -r alsa/local.h; then \
+	ln -s ../include alsa; \
+fi
+for f in asoundlib.h version.h; do \
+	if ! test -r ../include/$f; then \
+		ln -s $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include/$f ../include/$f; \
+	fi; \
+done
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include'
+make[2]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include'
+make[1]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include'
+Making all in src
+make[1]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src'
+aarch64-linux-gnu-gcc -DHAVE_CONFIG_H -I. -I../include  -I../include   -g -O2 -E -DHAVE_PCM_SYMS -DHAVE_TIMER_SYMS -DHAVE_RAWMIDI_SYMS -DHAVE_SEQ_SYMS -x assembler-with-cpp -o ../src/Versions ../src/Versions.in
+make  all-recursive
+make[2]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src'
+Making all in control
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/control'
+  CC       cards.lo
+  CC       tlv.lo
+  CC       eld.lo
+  CC       namehint.lo
+  CC       hcontrol.lo
+  CC       control_hw.lo
+  CC       control_empty.lo
+  CC       setup.lo
+  CC       ctlparse.lo
+  CC       control_plugin.lo
+  CC       control_remap.lo
+  CC       control_symbols.lo
+  CC       control.lo
+  CC       control_shm.lo
+  CC       control_ext.lo
+  CCLD     libcontrol.la
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/control'
+Making all in mixer
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/mixer'
+  CC       bag.lo
+  CC       simple.lo
+  CC       mixer.lo
+  CC       simple_none.lo
+  CC       simple_abst.lo
+  CCLD     libmixer.la
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/mixer'
+Making all in pcm
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/pcm'
+  CC       mask.lo
+  CC       pcm_params.lo
+  CC       interval.lo
+  CC       pcm_simple.lo
+  CC       pcm.lo
+  CC       pcm_hw.lo
+  CC       pcm_misc.lo
+  CC       pcm_symbols.lo
+  CC       pcm_mmap.lo
+  CC       pcm_generic.lo
+  CC       pcm_copy.lo
+  CC       pcm_linear.lo
+  CC       pcm_plugin.lo
+  CC       pcm_route.lo
+  CC       pcm_mulaw.lo
+make[4]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/pcm'
+make[4]: Nothing to be done for 'all-am'.
+make[4]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/pcm'
+  CC       pcm_alaw.lo
+  CC       pcm_adpcm.lo
+  CC       pcm_rate.lo
+  CC       pcm_rate_linear.lo
+  CC       pcm_plug.lo
+  CC       pcm_multi.lo
+  CC       pcm_shm.lo
+  CC       pcm_file.lo
+  CC       pcm_null.lo
+  CC       pcm_empty.lo
+  CC       pcm_share.lo
+  CC       pcm_meter.lo
+  CC       pcm_hooks.lo
+  CC       pcm_lfloat.lo
+  CC       pcm_ladspa.lo
+  CC       pcm_dmix.lo
+  CC       pcm_dshare.lo
+  CC       pcm_dsnoop.lo
+  CC       pcm_direct.lo
+  CC       pcm_asym.lo
+  CC       pcm_iec958.lo
+  CC       pcm_softvol.lo
+  CC       pcm_extplug.lo
+  CC       pcm_ioplug.lo
+  CC       pcm_mmap_emul.lo
+  CCLD     libpcm.la
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/pcm'
+Making all in timer
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/timer'
+  CC       timer.lo
+  CC       timer_hw.lo
+  CC       timer_query.lo
+  CC       timer_query_hw.lo
+  CC       timer_symbols.lo
+  CCLD     libtimer.la
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/timer'
+Making all in rawmidi
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/rawmidi'
+  CC       rawmidi.lo
+  CC       rawmidi_hw.lo
+  CC       ump.lo
+  CC       rawmidi_symbols.lo
+  CC       rawmidi_virt.lo
+  CCLD     librawmidi.la
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/rawmidi'
+Making all in hwdep
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/hwdep'
+  CC       hwdep.lo
+  CC       hwdep_hw.lo
+  CC       hwdep_symbols.lo
+  CCLD     libhwdep.la
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/hwdep'
+Making all in seq
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/seq'
+  CC       seq_hw.lo
+  CC       seq.lo
+  CC       seq_event.lo
+  CC       seq_midi_event.lo
+  CC       seq_old.lo
+  CC       seqmid.lo
+  CC       seq_symbols.lo
+seqmid.c: In function 'snd_seq_parse_address':
+seqmid.c:449:24: warning: assignment discards 'const' qualifier from pointer target type [-Wdiscarded-qualifiers]
+  449 |                 if ((p = strpbrk(arg, ":.")) != NULL) {
+      |                        ^
+  CCLD     libseq.la
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/seq'
+Making all in ucm
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/ucm'
+  CC       utils.lo
+  CC       parser.lo
+  CC       ucm_cond.lo
+  CC       ucm_subs.lo
+  CC       ucm_include.lo
+  CC       ucm_regex.lo
+  CC       main.lo
+  CC       ucm_exec.lo
+main.c: In function 'snd_use_case_get_list':
+main.c:2396:22: warning: assignment discards 'const' qualifier from pointer target type [-Wdiscarded-qualifiers]
+ 2396 |                 str1 = strchr(identifier, '/');
+      |                      ^
+main.c: In function 'snd_use_case_geti':
+main.c:2721:22: warning: assignment discards 'const' qualifier from pointer target type [-Wdiscarded-qualifiers]
+ 2721 |                 str1 = strchr(identifier, '/');
+      |                      ^
+main.c: In function 'snd_use_case_set':
+main.c:3038:22: warning: assignment discards 'const' qualifier from pointer target type [-Wdiscarded-qualifiers]
+ 3038 |                 str1 = strchr(identifier, '/');
+      |                      ^
+ucm_subs.c: In function 'strchr_with_escape':
+ucm_subs.c:832:19: warning: assignment discards 'const' qualifier from pointer target type [-Wdiscarded-qualifiers]
+  832 |                 s = strchr(str, c);
+      |                   ^
+  CCLD     libucm.la
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/ucm'
+Making all in conf
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf'
+Making all in cards
+make[4]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf/cards'
+make[4]: Nothing to be done for 'all'.
+make[4]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf/cards'
+Making all in ctl
+make[4]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf/ctl'
+make[4]: Nothing to be done for 'all'.
+make[4]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf/ctl'
+Making all in pcm
+make[4]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf/pcm'
+make[4]: Nothing to be done for 'all'.
+make[4]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf/pcm'
+make[4]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf'
+make[4]: Nothing to be done for 'all-am'.
+make[4]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf'
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf'
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src'
+  CC       conf.lo
+  CC       confeval.lo
+  CC       confmisc.lo
+  CC       input.lo
+  CC       output.lo
+  CC       error.lo
+  CC       async.lo
+  CC       dlmisc.lo
+  CC       socket.lo
+  CC       shmarea.lo
+  CC       names.lo
+  CC       userfile.lo
+conf.c: In function 'snd_config_hook_load_for_all_cards':
+conf.c:4446:51: warning: initialization discards 'const' qualifier from pointer target type [-Wdiscarded-qualifiers]
+ 4446 |                                         char *s = strchr(driver, '.');
+      |                                                   ^~~~~~
+  CCLD     libasound.la
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src'
+make[2]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src'
+make[1]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src'
+Making all in src/topology
+make[1]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/topology'
+  CC       parser.lo
+  CC       builder.lo
+  CC       ctl.lo
+  CC       dapm.lo
+  CC       pcm.lo
+  CC       data.lo
+  CC       text.lo
+  CC       channel.lo
+  CC       ops.lo
+  CC       save.lo
+  CC       elem.lo
+  CC       decoder.lo
+  CC       log.lo
+  CCLD     libatopology.la
+make[1]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/topology'
+Making all in modules
+make[1]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/modules'
+Making all in mixer
+make[2]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/modules/mixer'
+Making all in simple
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/modules/mixer/simple'
+make[3]: Nothing to be done for 'all'.
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/modules/mixer/simple'
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/modules/mixer'
+make[3]: Nothing to be done for 'all-am'.
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/modules/mixer'
+make[2]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/modules/mixer'
+make[2]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/modules'
+make[2]: Nothing to be done for 'all-am'.
+make[2]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/modules'
+make[1]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/modules'
+Making all in aserver
+make[1]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/aserver'
+  CC       aserver.o
+  CCLD     aserver
+make[1]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/aserver'
+Making all in test
+make[1]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/test'
+Making all in .
+make[2]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/test'
+make[2]: Nothing to be done for 'all-am'.
+make[2]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/test'
+Making all in lsb
+make[2]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/test/lsb'
+make[2]: Nothing to be done for 'all'.
+make[2]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/test/lsb'
+make[1]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/test'
+Making all in utils
+make[1]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/utils'
+make[1]: Nothing to be done for 'all'.
+make[1]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/utils'
+make[1]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3'
+make[1]: Nothing to be done for 'all-am'.
+make[1]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3'
+Making install in doc
+make[1]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/doc'
+Making install in pictures
+make[2]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/doc/pictures'
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/doc/pictures'
+make[3]: Nothing to be done for 'install-exec-am'.
+make[3]: Nothing to be done for 'install-data-am'.
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/doc/pictures'
+make[2]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/doc/pictures'
+make[2]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/doc'
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/doc'
+make[3]: Nothing to be done for 'install-exec-am'.
+make[3]: Nothing to be done for 'install-data-am'.
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/doc'
+make[2]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/doc'
+make[1]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/doc'
+Making install in include
+make[1]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include'
+Making install in sound
+make[2]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include/sound'
+Making install in uapi
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include/sound/uapi'
+make[4]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include/sound/uapi'
+make[4]: Nothing to be done for 'install-exec-am'.
+ /usr/bin/mkdir -p '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/include/alsa/sound/uapi'
+ /usr/bin/install -c -m 644 asound_fm.h hdsp.h hdspm.h sb16_csp.h sscape_ioctl.h emu10k1.h asoc.h tlv.h '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/include/alsa/sound/uapi'
+make[4]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include/sound/uapi'
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include/sound/uapi'
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include/sound'
+make[4]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include/sound'
+make[4]: Nothing to be done for 'install-exec-am'.
+ /usr/bin/mkdir -p '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/include/alsa/sound'
+ /usr/bin/install -c -m 644 asound_fm.h hdsp.h hdspm.h sb16_csp.h sscape_ioctl.h emu10k1.h asoc.h tlv.h type_compat.h '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/include/alsa/sound'
+make[4]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include/sound'
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include/sound'
+make[2]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include/sound'
+make[2]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include'
+if ! test -r alsa/local.h; then \
+	ln -s ../include alsa; \
+fi
+for f in asoundlib.h version.h; do \
+	if ! test -r ../include/$f; then \
+		ln -s $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include/$f ../include/$f; \
+	fi; \
+done
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include'
+make[3]: Nothing to be done for 'install-exec-am'.
+if ! test -r alsa/local.h; then \
+	ln -s ../include alsa; \
+fi
+for f in asoundlib.h version.h; do \
+	if ! test -r ../include/$f; then \
+		ln -s $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include/$f ../include/$f; \
+	fi; \
+done
+ /usr/bin/mkdir -p '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/include/alsa'
+ /usr/bin/install -c -m 644 asoundlib.h asoundef.h version.h global.h input.h output.h error.h conf.h control.h control_plugin.h control_external.h pcm.h pcm_old.h timer.h pcm_plugin.h pcm_rate.h pcm_external.h pcm_extplug.h pcm_ioplug.h rawmidi.h ump.h ump_msg.h hwdep.h mixer.h mixer_abst.h seq_event.h seq.h seqmid.h seq_midi_event.h use-case.h topology.h '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/include/alsa'
+make  install-data-hook
+make[4]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include'
+test -d $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/include/sys || mkdir -p $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/include/sys
+/usr/bin/install -c -m 644 ./sys.h $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/include/sys/asoundlib.h
+/usr/bin/install -c -m 644 ./sys.h $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/include/asoundlib.h
+make[4]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include'
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include'
+make[2]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include'
+make[1]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/include'
+Making install in src
+make[1]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src'
+make  install-recursive
+make[2]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src'
+Making install in control
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/control'
+make[4]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/control'
+make[4]: Nothing to be done for 'install-exec-am'.
+make[4]: Nothing to be done for 'install-data-am'.
+make[4]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/control'
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/control'
+Making install in mixer
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/mixer'
+make[4]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/mixer'
+make[4]: Nothing to be done for 'install-exec-am'.
+make[4]: Nothing to be done for 'install-data-am'.
+make[4]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/mixer'
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/mixer'
+Making install in pcm
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/pcm'
+make[4]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/pcm'
+make[5]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/pcm'
+make[5]: Nothing to be done for 'install-exec-am'.
+make[5]: Nothing to be done for 'install-data-am'.
+make[5]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/pcm'
+make[4]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/pcm'
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/pcm'
+Making install in timer
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/timer'
+make[4]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/timer'
+make[4]: Nothing to be done for 'install-exec-am'.
+make[4]: Nothing to be done for 'install-data-am'.
+make[4]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/timer'
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/timer'
+Making install in rawmidi
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/rawmidi'
+make[4]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/rawmidi'
+make[4]: Nothing to be done for 'install-exec-am'.
+make[4]: Nothing to be done for 'install-data-am'.
+make[4]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/rawmidi'
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/rawmidi'
+Making install in hwdep
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/hwdep'
+make[4]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/hwdep'
+make[4]: Nothing to be done for 'install-exec-am'.
+make[4]: Nothing to be done for 'install-data-am'.
+make[4]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/hwdep'
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/hwdep'
+Making install in seq
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/seq'
+make[4]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/seq'
+make[4]: Nothing to be done for 'install-exec-am'.
+make[4]: Nothing to be done for 'install-data-am'.
+make[4]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/seq'
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/seq'
+Making install in ucm
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/ucm'
+make[4]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/ucm'
+make[4]: Nothing to be done for 'install-exec-am'.
+make[4]: Nothing to be done for 'install-data-am'.
+make[4]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/ucm'
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/ucm'
+Making install in conf
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf'
+Making install in cards
+make[4]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf/cards'
+make[5]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf/cards'
+make[5]: Nothing to be done for 'install-exec-am'.
+ /usr/bin/mkdir -p '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/share/alsa/cards'
+ /usr/bin/install -c -m 644 aliases.conf AACI.conf ATIIXP.conf ATIIXP-SPDMA.conf ATIIXP-MODEM.conf AU8810.conf AU8820.conf AU8830.conf Audigy.conf Audigy2.conf Aureon51.conf Aureon71.conf CA0106.conf CMI8338.conf CMI8338-SWIEC.conf CMI8738-MC6.conf CMI8738-MC8.conf CMI8788.conf CS46xx.conf Echo_Echo3G.conf EMU10K1.conf EMU10K1X.conf ENS1370.conf ENS1371.conf ES1968.conf FM801.conf FWSpeakers.conf FireWave.conf GUS.conf HDA-Intel.conf HdmiLpeAudio.conf ICE1712.conf ICE1724.conf ICH.conf ICH4.conf ICH-MODEM.conf Loopback.conf Maestro3.conf NFORCE.conf PC-Speaker.conf '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/share/alsa/cards'
+ /usr/bin/install -c -m 644 pistachio-card.conf PMac.conf PMacToonie.conf PS3.conf RME9636.conf RME9652.conf SI7018.conf SB-XFi.conf TRID4DWAVENX.conf USB-Audio.conf YMF744.conf vc4-hdmi.conf VIA686A.conf VIA8233.conf VIA8233A.conf VIA8237.conf VX222.conf VXPocket.conf VXPocket440.conf '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/share/alsa/cards'
+make[5]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf/cards'
+make[4]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf/cards'
+Making install in ctl
+make[4]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf/ctl'
+make[5]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf/ctl'
+make[5]: Nothing to be done for 'install-exec-am'.
+ /usr/bin/mkdir -p '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/share/alsa/ctl'
+ /usr/bin/install -c -m 644 default.conf '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/share/alsa/ctl'
+make[5]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf/ctl'
+make[4]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf/ctl'
+Making install in pcm
+make[4]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf/pcm'
+make[5]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf/pcm'
+make[5]: Nothing to be done for 'install-exec-am'.
+ /usr/bin/mkdir -p '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/share/alsa/pcm'
+ /usr/bin/install -c -m 644 default.conf front.conf rear.conf center_lfe.conf side.conf surround21.conf surround40.conf surround41.conf surround50.conf surround51.conf surround71.conf iec958.conf hdmi.conf modem.conf dmix.conf dsnoop.conf dpl.conf '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/share/alsa/pcm'
+make[5]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf/pcm'
+make[4]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf/pcm'
+make[4]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf'
+make[5]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf'
+make[5]: Nothing to be done for 'install-exec-am'.
+ /usr/bin/mkdir -p '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/share/alsa'
+ /usr/bin/install -c -m 644 alsa.conf '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/share/alsa'
+make[5]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf'
+make[4]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf'
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/conf'
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src'
+make[4]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src'
+ /usr/bin/mkdir -p '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib'
+ /bin/sh ../libtool   --mode=install /usr/bin/install -c   libasound.la '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib'
+libtool: install: /usr/bin/install -c .libs/libasound.so.2.0.0 $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib/libasound.so.2.0.0
+libtool: install: (cd $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib && { ln -s -f libasound.so.2.0.0 libasound.so.2 || { rm -f libasound.so.2 && ln -s libasound.so.2.0.0 libasound.so.2; }; })
+libtool: install: (cd $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib && { ln -s -f libasound.so.2.0.0 libasound.so || { rm -f libasound.so && ln -s libasound.so.2.0.0 libasound.so; }; })
+libtool: install: /usr/bin/install -c .libs/libasound.lai $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib/libasound.la
+libtool: finish: PATH="/usr/lib/openai-codex/codex-path:$WORKSPACE_HOME/.codex/tmp/arg0-linux/codex-arg0t5T2Rj:/usr/lib/openai-codex/codex-path:$WORKSPACE_HOME/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/bin:/bin:/usr/lib/jvm/default/bin:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl:/sbin" ldconfig -n $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib
+ldconfig: $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib/libasound.so is for unknown machine 183.
+
+ldconfig: $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib/libasound.so.2 is for unknown machine 183.
+
+ldconfig: $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib/libasound.so.2.0.0 is for unknown machine 183.
+
+----------------------------------------------------------------------
+Libraries have been installed in:
+   $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib
+
+If you ever happen to want to link against installed libraries
+in a given directory, LIBDIR, you must either use libtool, and
+specify the full pathname of the library, or use the '-LLIBDIR'
+flag during linking and do at least one of the following:
+   - add LIBDIR to the 'LD_LIBRARY_PATH' environment variable
+     during execution
+   - add LIBDIR to the 'LD_RUN_PATH' environment variable
+     during linking
+   - use the '-Wl,-rpath -Wl,LIBDIR' linker flag
+   - have your system administrator add LIBDIR to '/etc/ld.so.conf'
+
+See any operating system documentation about shared libraries for
+more information, such as the ld(1) and ld.so(8) manual pages.
+----------------------------------------------------------------------
+make[4]: Nothing to be done for 'install-data-am'.
+make[4]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src'
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src'
+make[2]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src'
+make[1]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src'
+Making install in src/topology
+make[1]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/topology'
+make[2]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/topology'
+ /usr/bin/mkdir -p '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib'
+ /bin/sh ../../libtool   --mode=install /usr/bin/install -c   libatopology.la '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib'
+libtool: warning: relinking 'libatopology.la'
+libtool: install: (cd $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/topology; /bin/sh "$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/libtool"  --silent --tag CC --mode=relink aarch64-linux-gnu-gcc -g -O2 -version-info 2:0:0 -Wl,--version-script=./Versions -Wl,-z,defs -o libatopology.la -rpath $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib parser.lo builder.lo ctl.lo dapm.lo pcm.lo data.lo text.lo channel.lo ops.lo elem.lo save.lo decoder.lo log.lo ../libasound.la )
+libtool: install: /usr/bin/install -c .libs/libatopology.so.2.0.0T $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib/libatopology.so.2.0.0
+libtool: install: (cd $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib && { ln -s -f libatopology.so.2.0.0 libatopology.so.2 || { rm -f libatopology.so.2 && ln -s libatopology.so.2.0.0 libatopology.so.2; }; })
+libtool: install: (cd $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib && { ln -s -f libatopology.so.2.0.0 libatopology.so || { rm -f libatopology.so && ln -s libatopology.so.2.0.0 libatopology.so; }; })
+libtool: install: /usr/bin/install -c .libs/libatopology.lai $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib/libatopology.la
+libtool: finish: PATH="/usr/lib/openai-codex/codex-path:$WORKSPACE_HOME/.codex/tmp/arg0-linux/codex-arg0t5T2Rj:/usr/lib/openai-codex/codex-path:$WORKSPACE_HOME/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/bin:/bin:/usr/lib/jvm/default/bin:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl:/sbin" ldconfig -n $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib
+ldconfig: $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib/libatopology.so.2 is for unknown machine 183.
+
+ldconfig: $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib/libasound.so is for unknown machine 183.
+
+ldconfig: $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib/libatopology.so is for unknown machine 183.
+
+ldconfig: $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib/libasound.so.2 is for unknown machine 183.
+
+ldconfig: $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib/libatopology.so.2.0.0 is for unknown machine 183.
+
+ldconfig: $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib/libasound.so.2.0.0 is for unknown machine 183.
+
+----------------------------------------------------------------------
+Libraries have been installed in:
+   $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib
+
+If you ever happen to want to link against installed libraries
+in a given directory, LIBDIR, you must either use libtool, and
+specify the full pathname of the library, or use the '-LLIBDIR'
+flag during linking and do at least one of the following:
+   - add LIBDIR to the 'LD_LIBRARY_PATH' environment variable
+     during execution
+   - add LIBDIR to the 'LD_RUN_PATH' environment variable
+     during linking
+   - use the '-Wl,-rpath -Wl,LIBDIR' linker flag
+   - have your system administrator add LIBDIR to '/etc/ld.so.conf'
+
+See any operating system documentation about shared libraries for
+more information, such as the ld(1) and ld.so(8) manual pages.
+----------------------------------------------------------------------
+make[2]: Nothing to be done for 'install-data-am'.
+make[2]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/topology'
+make[1]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/src/topology'
+Making install in modules
+make[1]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/modules'
+Making install in mixer
+make[2]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/modules/mixer'
+Making install in simple
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/modules/mixer/simple'
+make[4]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/modules/mixer/simple'
+make[4]: Nothing to be done for 'install-data-am'.
+make[4]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/modules/mixer/simple'
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/modules/mixer/simple'
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/modules/mixer'
+make[4]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/modules/mixer'
+make[4]: Nothing to be done for 'install-exec-am'.
+make[4]: Nothing to be done for 'install-data-am'.
+make[4]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/modules/mixer'
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/modules/mixer'
+make[2]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/modules/mixer'
+make[2]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/modules'
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/modules'
+make[3]: Nothing to be done for 'install-exec-am'.
+make[3]: Nothing to be done for 'install-data-am'.
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/modules'
+make[2]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/modules'
+make[1]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/modules'
+Making install in aserver
+make[1]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/aserver'
+make[2]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/aserver'
+ /usr/bin/mkdir -p '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/bin'
+  /bin/sh ../libtool   --mode=install /usr/bin/install -c aserver '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/bin'
+libtool: install: /usr/bin/install -c .libs/aserver $REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/bin/aserver
+make[2]: Nothing to be done for 'install-data-am'.
+make[2]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/aserver'
+make[1]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/aserver'
+Making install in test
+make[1]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/test'
+Making install in .
+make[2]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/test'
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/test'
+make[3]: Nothing to be done for 'install-exec-am'.
+make[3]: Nothing to be done for 'install-data-am'.
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/test'
+make[2]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/test'
+Making install in lsb
+make[2]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/test/lsb'
+make[3]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/test/lsb'
+make[3]: Nothing to be done for 'install-exec-am'.
+make[3]: Nothing to be done for 'install-data-am'.
+make[3]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/test/lsb'
+make[2]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/test/lsb'
+make[1]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/test'
+Making install in utils
+make[1]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/utils'
+make[2]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/utils'
+make[2]: Nothing to be done for 'install-exec-am'.
+ /usr/bin/mkdir -p '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/share/aclocal'
+ /usr/bin/install -c -m 644 alsa.m4 '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/share/aclocal'
+ /usr/bin/mkdir -p '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib/pkgconfig'
+ /usr/bin/install -c -m 644 alsa.pc alsa-topology.pc '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib/pkgconfig'
+make[2]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/utils'
+make[1]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3/utils'
+make[1]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3'
+make[2]: Entering directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3'
+make[2]: Nothing to be done for 'install-exec-am'.
+make[2]: Nothing to be done for 'install-data-am'.
+make[2]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3'
+make[1]: Leaving directory '$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/alsa-lib-1.2.15.3'
+aarch64-linux-gnu-gcc -std=gnu11 -O2 -Wall -Wextra -Werror -Isrc -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/mbx -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/host -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/port -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/loop -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/adp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/maap -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/acmp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/app -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/aecp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/srp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/third_party/tsn-c-stack/include -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/third_party/lwSRP/src/include -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl_nvm -Iconfig -include config/srp_entity_gen.h -DCTRL_HOST_PLATFORM -I$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/include -c src/milan_mediad.c -o $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/milan_mediad.o
+aarch64-linux-gnu-gcc -std=gnu11 -O2 -Wall -Wextra -Werror -Isrc -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/mbx -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/host -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/port -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/loop -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/adp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/maap -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/acmp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/app -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/aecp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/srp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/third_party/tsn-c-stack/include -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/third_party/lwSRP/src/include -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl_nvm -Iconfig -include config/srp_entity_gen.h -DCTRL_HOST_PLATFORM -I$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/include -c src/talker.c -o $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/talker.o
+aarch64-linux-gnu-gcc -std=gnu11 -O2 -Wall -Wextra -Werror -Isrc -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/mbx -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/host -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/port -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/loop -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/adp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/maap -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/acmp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/app -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/aecp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/srp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/third_party/tsn-c-stack/include -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/third_party/lwSRP/src/include -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl_nvm -Iconfig -include config/srp_entity_gen.h -DCTRL_HOST_PLATFORM -I$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/include -c src/listener.c -o $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/listener.o
+aarch64-linux-gnu-gcc -std=gnu11 -O2 -Wall -Wextra -Werror -Isrc -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/mbx -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/host -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/port -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/loop -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/adp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/maap -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/acmp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/app -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/aecp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/srp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/third_party/tsn-c-stack/include -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/third_party/lwSRP/src/include -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl_nvm -Iconfig -include config/srp_entity_gen.h -DCTRL_HOST_PLATFORM -I$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/include -c src/crf_rx.c -o $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/crf_rx.o
+aarch64-linux-gnu-gcc -std=gnu11 -O2 -Wall -Wextra -Werror -Isrc -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/mbx -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/host -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/port -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/loop -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/adp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/maap -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/acmp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/app -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/aecp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/srp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/third_party/tsn-c-stack/include -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/third_party/lwSRP/src/include -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl_nvm -Iconfig -include config/srp_entity_gen.h -DCTRL_HOST_PLATFORM -I$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/include -c src/aaf.c -o $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/aaf.o
+aarch64-linux-gnu-gcc -std=gnu11 -O2 -Wall -Wextra -Werror -Isrc -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/mbx -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/host -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/port -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/loop -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/adp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/maap -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/acmp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/app -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/aecp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/srp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/third_party/tsn-c-stack/include -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/third_party/lwSRP/src/include -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl_nvm -Iconfig -include config/srp_entity_gen.h -DCTRL_HOST_PLATFORM -I$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/include -c src/crf.c -o $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/crf.o
+aarch64-linux-gnu-gcc -std=gnu11 -O2 -Wall -Wextra -Werror -Isrc -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/mbx -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/host -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/port -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/loop -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/adp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/maap -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/acmp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/app -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/aecp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/srp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/third_party/tsn-c-stack/include -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/third_party/lwSRP/src/include -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl_nvm -Iconfig -include config/srp_entity_gen.h -DCTRL_HOST_PLATFORM -I$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/include -c src/servo.c -o $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/servo.o
+aarch64-linux-gnu-gcc -std=gnu11 -O2 -Wall -Wextra -Werror -Isrc -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/mbx -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/host -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/port -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/loop -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/adp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/maap -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/acmp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/app -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/aecp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/srp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/third_party/tsn-c-stack/include -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/third_party/lwSRP/src/include -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl_nvm -Iconfig -include config/srp_entity_gen.h -DCTRL_HOST_PLATFORM -I$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/include -c src/gptp_time.c -o $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/gptp_time.o
+aarch64-linux-gnu-gcc -std=gnu11 -O2 -Wall -Wextra -Werror -Isrc -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/mbx -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/host -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/port -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/loop -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/adp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/maap -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/acmp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/app -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/aecp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/srp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/third_party/tsn-c-stack/include -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/third_party/lwSRP/src/include -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl_nvm -Iconfig -include config/srp_entity_gen.h -DCTRL_HOST_PLATFORM -I$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/include -c src/audio_alsa.c -o $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/audio_alsa.o
+aarch64-linux-gnu-gcc -std=gnu11 -O2 -Wall -Wextra -Werror -Isrc -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/mbx -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/host -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/port -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/loop -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/adp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/maap -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/acmp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/app -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/aecp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl/srp -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/third_party/tsn-c-stack/include -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/third_party/lwSRP/src/include -I$REVIEWS/pb2aecp-r901-2-packet/scratch/fpga/sw/firmware/ctrl_nvm -Iconfig -include config/srp_entity_gen.h -DCTRL_HOST_PLATFORM -I$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/include -c src/audio_sim.c -o $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/audio_sim.o
+aarch64-linux-gnu-gcc -L$REVIEWS/pb2aecp-r901-2-packet/scratch/alsa/sysroot/lib -o $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/milan-mediad $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/milan_mediad.o $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/talker.o $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/listener.o $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/crf_rx.o $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/aaf.o $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/crf.o $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/servo.o $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/gptp_time.o $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/audio_alsa.o $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/audio_sim.o $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/datapath.o $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/media.o $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/shmblk.o -lasound -lpthread -lm -lrt
+9fe4012fb698f97295fd14cb4e44e238be2e4427720aaf962dcdf4433cf708b2  $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/milan-ctrld
+0c61cd3e0d4a3f2a6b72187ad31d22c5be4b8419e6a6710e514e6a58584a86f8  $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/milan-dp
+8ea48e0503e9a29ba215c21e8e3f00fa2cd9676ec65056f7814b1376428b888c  $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/milan-gptp-watch
+162c8223b2ffc52484381e061e691e1467815294ba502a2637d4d27ac59a8b77  $REVIEWS/pb2aecp-r901-2-packet/scratch/cross/milan-mediad
