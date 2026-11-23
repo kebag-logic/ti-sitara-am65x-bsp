@@ -11,6 +11,9 @@
 #   2. unbound, killed, restarted: B stays unbound (A6.2)
 #   3. bind and unbind in a loop, SIGKILL at a random point, restart, every
 #      round: the store always boots on an accepted slot, never a torn one (A6.3)
+# A binding restored at boot is a not-bound to bound change (Milan v1.2
+# 5.3.8.10): the sink's bind count moves past the one the killed process left,
+# so the media plane zeroes its counters for it.
 #
 # usage: run-netns-nvm.sh <build dir> [rounds]
 
@@ -55,6 +58,7 @@ fail=0
 check() { if [ "$2" -eq 0 ]; then echo "[PASS] $1: $3"; else echo "[FAIL] $1: $3"; fail=1; fi; }
 sink() { "$B/milan-dp" "$DPB" 2>/dev/null | sed -n 's/^sink0=//p'; }
 listening() { sink | grep -q listening:1; }
+binds() { sink | sed -n 's/.*binds:\([0-9]*\).*/\1/p'; }
 wait_listening() { # <seconds>
 	i=0; while [ "$i" -lt $(($1 * 10)) ] && ! listening; do sleep 0.1; i=$((i + 1)); done; listening
 }
@@ -68,6 +72,7 @@ sleep 3        # MAAP on both, before the talker can answer a probe
 python3 -I "$HERE/bind.py" veth0 020000fffe000002 020000fffe000001 0 0 >/dev/null
 check "bound" "$(wait_listening 3; echo $?)" "$(sink)"
 sleep 3
+n0=$(binds)
 kill -9 "$CB"; wait "$CB" 2>/dev/null || true
 t0=$(date +%s%N)
 start_b
@@ -76,6 +81,9 @@ t1=$(date +%s%N)
 check "A6.1 binding survives a power cut; fast connect without a controller" \
 	"$([ "$ok" = 0 ] && last_boot | grep -q 'bindings restored'; echo $?)" \
 	"settled $(( (t1 - t0) / 1000000 )) ms after the restart; $(last_boot)"
+n1=$(binds)
+check "A6.1 the restored binding is counted on from the killed process's bind count" \
+	"$([ -n "$n0" ] && [ "$n1" = $((n0 + 1)) ] && sink | grep -q 'bound:1'; echo $?)" "binds $n0 -> $n1: $(sink)"
 
 # 2. unbind, power cut: stays unbound
 python3 -I - <<'PY'
@@ -90,6 +98,8 @@ kill -9 "$CB"; wait "$CB" 2>/dev/null || true
 start_b
 sleep 5
 check "A6.2 an unbind survives a power cut" "$(listening && echo 1 || echo 0)" "$(sink)"
+check "A6.2 restarted unbound: not bound, the bind count kept" \
+	"$(sink | grep -q 'bound:0' && [ "$(binds)" = "$n1" ]; echo $?)" "binds $n1 -> $(binds): $(sink)"
 
 # 3. power cuts at random points of bind/unbind, every round restarted
 bad=0

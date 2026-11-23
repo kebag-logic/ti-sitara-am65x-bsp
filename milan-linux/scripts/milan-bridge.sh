@@ -11,8 +11,9 @@
 #                 AVB_CTRLD_PRIO, logging to syslog
 #   milan-mediad  the media plane: the AAF talker fed by the UAC2 gadget and the
 #                 AAF listener feeding it back, each with the servo that steers
-#                 the host; both threads SCHED_FIFO near AVB_MEDIAD_PRIO on
-#                 AVB_RT_CPU
+#                 the host, and the CRF input's receive path, which counts
+#                 STREAM_INPUT 1 and clocks nothing; its threads SCHED_FIFO
+#                 near AVB_MEDIAD_PRIO on AVB_RT_CPU
 #
 # AVB_SRP_DOMAIN=none (until SRP, #14) runs milan-ctrld with -n: the link is
 # direct, no MSRP bridge, so a settled listener does not wait for a talker

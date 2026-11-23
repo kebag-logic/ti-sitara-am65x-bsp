@@ -274,7 +274,7 @@ the build and the tests are in [`milan-linux/README.md`](milan-linux/README.md).
 | #9 A2, entity description | `entity.conf` is generated from the 1x1 TDM8 shape; the PB2's own end-station config needs a non-FPGA target in milan-fpga's builder |
 | #10 A4, #11 A3, media clock and talker | `milan-mediad`: the talker on the media clock and the servo on the gadget's feedback. Bit-exact and gap-free in the host test with a +80 ppm host; not yet run on the board |
 | #12 A5, listener | `milan-mediad`'s listener: placed and held at its presentation time through the gadget's playback pitch, with Milan's STREAM_INPUT counters. Bit-exact between two bridges in the host test; not yet run on the board |
-| #13 A6, saved state | milan-fpga's KLJ2 store on a journal file: a binding survives a power cut and fast-connects at boot; 20 random power cuts never leave a torn journal (host test); not yet run on the board |
+| #13 A6, saved state | milan-fpga's store on a KLJ3 journal file, through AECP's owner: a binding survives a power cut and fast-connects at boot; 20 random power cuts never leave a torn journal (host test); not yet run on the board |
 | #14 A7, SRP, AECP, interop | waits for milan-fpga SRP (#690) and AECP (#665 lane F5) |
 
 With `AVB_STACK=native`, `S95avb` runs `/usr/sbin/milan-bridge.sh start` after
@@ -310,9 +310,14 @@ milan-dp
 #   talker_frames_tx=... talker_underruns=0 talker_overruns=0 talker_level_avg=24.0
 ```
 
-Until AECP arrives (#14), a controller cannot enumerate the entity. Bind
-it by entity ID with ACMP: BIND_RX names the PB2's entity ID and listener
-unique ID 0, or names it as the talker.
+A controller enumerates the entity over AECP (#29): one AAF input, the CRF
+input and one AAF output, under the pinned entity_model_id
+`0x001BC50AC1000100`, from the board's own end-station config
+(`milan-linux/config/endstation_pb2_bridge.yaml`). It binds STREAM_INPUT 0 (AAF)
+or 1 (CRF) with BIND_RX. The media plane plays STREAM_INPUT 0, counts both
+inputs and the output for GET_COUNTERS, and does not clock from the CRF input,
+so no Milan conformance is claimed: `milan-linux/AECP-STATUS.md` lists what is
+and is not met, and how a la_avdecc controller finds the entity.
 
 ---
 

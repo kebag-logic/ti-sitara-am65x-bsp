@@ -91,8 +91,9 @@ int main(int argc, char **argv)
 	}
 	for (unsigned i = 0; i < s.n_sinks && i < MILAN_DP_MAX_SINKS; ++i) {
 		const struct milan_dp_sink *x = &s.sinks[i];
-		printf("sink%u=stream_id:%016llx dest_mac:%012llx vlan:%u listening:%u\n", i,
-		       (unsigned long long)x->stream_id, (unsigned long long)x->dest_mac, x->vlan_id, x->listening);
+		printf("sink%u=stream_id:%016llx dest_mac:%012llx vlan:%u listening:%u bound:%u binds:%u\n", i,
+		       (unsigned long long)x->stream_id, (unsigned long long)x->dest_mac, x->vlan_id, x->listening,
+		       x->bound, x->binds);
 	}
 
 	// milan-mediad's block, when it runs
@@ -118,15 +119,44 @@ int main(int argc, char **argv)
 	printf("listener_active=%u\nlistener_locked=%u\nlistener_pitch=%u\nlistener_stream_id=%016llx\n"
 	       "listener_frames_rx=%llu\nlistener_seq_mismatch=%llu\nlistener_late_timestamp=%llu\n"
 	       "listener_early_timestamp=%llu\nlistener_unsupported_format=%llu\nlistener_media_locked=%llu\n"
-	       "listener_media_unlocked=%llu\nlistener_media_resets=%llu\nlistener_stream_interrupted=%llu\n"
+	       "listener_media_unlocked=%llu\nlistener_jumps=%llu\nlistener_stream_interrupted=%llu\n"
+	       "listener_timestamp_uncertain=%llu\nlistener_media_restarts=%llu\n"
 	       "listener_underruns=%llu\nlistener_align_min_ns=%d\nlistener_align_max_ns=%d\n"
 	       "listener_align_avg_ns=%d\nlistener_margin_min_ns=%d\nlistener_in_flight_ns=%lld\n",
 	       l->active, l->locked, l->pitch, (unsigned long long)l->stream_id, (unsigned long long)l->frames_rx,
 	       (unsigned long long)l->seq_mismatch, (unsigned long long)l->late_timestamp,
 	       (unsigned long long)l->early_timestamp, (unsigned long long)l->unsupported_format,
 	       (unsigned long long)l->media_locked, (unsigned long long)l->media_unlocked,
-	       (unsigned long long)l->media_resets, (unsigned long long)l->stream_interrupted,
+	       (unsigned long long)l->jumps, (unsigned long long)l->stream_interrupted,
+	       (unsigned long long)l->timestamp_uncertain, (unsigned long long)l->media_restarts,
 	       (unsigned long long)l->underruns, l->align_min_ns, l->align_max_ns, l->align_avg_ns,
 	       l->margin_min_ns, (long long)l->in_flight_ns);
+	const struct milan_media_crf *x = &m.crf;
+	printf("crf_active=%u\ncrf_locked=%u\ncrf_stream_id=%016llx\ncrf_pdus=%llu\ncrf_seq_mismatch=%llu\n"
+	       "crf_late_timestamp=%llu\ncrf_early_timestamp=%llu\ncrf_unsupported_format=%llu\n"
+	       "crf_timestamp_uncertain=%llu\ncrf_media_restarts=%llu\ncrf_media_locked=%llu\n"
+	       "crf_media_unlocked=%llu\ncrf_stream_interrupted=%llu\ncrf_grid_breaks=%llu\ncrf_rate_ppb=%lld\n"
+	       "crf_step_err_max_ns=%d\ncrf_margin_min_ns=%d\n",
+	       x->active, x->locked, (unsigned long long)x->stream_id, (unsigned long long)x->pdus,
+	       (unsigned long long)x->seq_mismatch, (unsigned long long)x->late_timestamp,
+	       (unsigned long long)x->early_timestamp, (unsigned long long)x->unsupported_format,
+	       (unsigned long long)x->timestamp_uncertain, (unsigned long long)x->media_restarts,
+	       (unsigned long long)x->media_locked, (unsigned long long)x->media_unlocked,
+	       (unsigned long long)x->stream_interrupted, (unsigned long long)x->grid_breaks,
+	       (long long)x->rate_ppb, x->step_err_max_ns, x->margin_min_ns);
+	// what GET_COUNTERS serves for each stream (media.h): valid mask, bind count, quadlets
+	const struct {
+		const char *name;
+		const struct milan_counters *c;
+	} served[] = {{"milan_stream_output0", &t->milan}, {"milan_stream_input0", &l->milan},
+		      {"milan_stream_input1", &x->milan}};
+	for (unsigned k = 0; k < sizeof served / sizeof served[0]; ++k) {
+		const struct milan_counters *c = served[k].c;
+		printf("%s=valid:%03x binds:%u", served[k].name, c->valid, c->binds);
+		for (unsigned q = 0; q < MILAN_COUNTERS; ++q) {
+			printf(" %u", c->value[q]);
+		}
+		printf("\n");
+	}
 	return 0;
 }

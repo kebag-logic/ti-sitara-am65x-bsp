@@ -42,9 +42,9 @@ size_t aaf_build(uint8_t *out, size_t cap, const struct aaf_params *p, uint8_t s
 	put_be(out + eth - 2, AAF_ETHERTYPE, 2);
 	uint8_t *h = out + eth;
 	h[0] = AAF_SUBTYPE;
-	h[1] = (uint8_t)(0x80u | (tv ? 0x01u : 0u));    // sv = 1, version 0
+	h[1] = (uint8_t)(0x80u | (p->mr ? 0x08u : 0u) | (tv ? 0x01u : 0u));    // sv = 1, version 0
 	h[2] = seq;
-	h[3] = 0;
+	h[3] = p->tu ? 0x01u : 0u;
 	put_be(h + 4, p->stream_id, 8);
 	put_be(h + 12, avtp_timestamp, 4);
 	h[16] = AAF_FORMAT_INT_32BIT;
@@ -78,7 +78,9 @@ bool aaf_parse(const uint8_t *frame, size_t len, struct aaf_pdu *out)
 		return false;
 	}
 	out->sv = (h[1] & 0x80u) != 0u;
+	out->mr = (h[1] & 0x08u) != 0u;
 	out->tv = (h[1] & 0x01u) != 0u;
+	out->tu = (h[3] & 0x01u) != 0u;
 	out->seq = h[2];
 	out->stream_id = get_be(h + 4, 8);
 	out->avtp_timestamp = (uint32_t)get_be(h + 12, 4);

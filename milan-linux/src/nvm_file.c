@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
@@ -17,8 +18,14 @@
 
 #include "nvm_shape.h"
 
-#define BLOCK_BYTES 65536u              // the flash's erase block, one slot
+#define BLOCK_BYTES NVM_ERASE_BLOCK     // the flash's erase block
 #define QUEUE 64u
+// The journal the store writes: journal_klj3, two slots of whole erase blocks
+// (nvm_shape.h NVM_JOURNAL_OFFSET/SIZE). The all-fabric placement's KLJ2
+// journal (NVM_LEGACY_A, MILAN_FLASH_JOURNAL_SIZE) the store only reads, for
+// its headers, and never writes (nvm_store.c, nvm_legacy_check).
+#define JOURNAL_BYTES NVM_JOURNAL_SIZE
+#define LEGACY_BYTES MILAN_FLASH_JOURNAL_SIZE
 
 uint32_t milan_nvm_entity_id_lo, milan_nvm_entity_id_hi;
 uint32_t milan_nvm_model_id_lo, milan_nvm_model_id_hi;
@@ -30,7 +37,9 @@ struct range {
 
 static struct {
 	int fd;
-	uint8_t image[MILAN_FLASH_JOURNAL_SIZE];
+	bool volatile_only;             // no file: the journal lasts as long as the process
+	uint8_t *image;                 // the KLJ3 journal's RAM image (journal_image)
+	uint8_t *legacy;                // the KLJ2 journal file found at the path, else erased
 	pthread_t worker;
 	pthread_mutex_t mu;
 	pthread_cond_t cv;
@@ -40,19 +49,33 @@ static struct {
 	bool stop;
 	unsigned long write_errors;
 } nf = {.fd = -1, .mu = PTHREAD_MUTEX_INITIALIZER, .cv = PTHREAD_COND_INITIALIZER};
+// zero-initialised, so neither is carried in the program file
+static uint8_t journal_image[JOURNAL_BYTES];
+static uint8_t legacy_image[LEGACY_BYTES];
 
 // The journal offset of a device address range, or -1 outside the journal.
 static long journal_off(uint32_t addr, uint32_t len)
 {
-	if (addr < MILAN_FLASH_JOURNAL_OFFSET || len > MILAN_FLASH_JOURNAL_SIZE ||
-	    addr - MILAN_FLASH_JOURNAL_OFFSET > MILAN_FLASH_JOURNAL_SIZE - len) {
+	if (addr < NVM_JOURNAL_OFFSET || len > JOURNAL_BYTES || addr - NVM_JOURNAL_OFFSET > JOURNAL_BYTES - len) {
 		return -1;
 	}
-	return (long)(addr - MILAN_FLASH_JOURNAL_OFFSET);
+	return (long)(addr - NVM_JOURNAL_OFFSET);
+}
+
+// The legacy journal's offset of a device address range, or -1 outside it.
+static long legacy_off(uint32_t addr, uint32_t len)
+{
+	if (addr < NVM_LEGACY_A || len > LEGACY_BYTES || addr - NVM_LEGACY_A > LEGACY_BYTES - len) {
+		return -1;
+	}
+	return (long)(addr - NVM_LEGACY_A);
 }
 
 static int enqueue(uint32_t off, uint32_t len)
 {
+	if (nf.volatile_only) {
+		return 0;
+	}
 	if (nf.tail - nf.head >= QUEUE) {
 		return -1;
 	}
@@ -66,11 +89,12 @@ static int port_read(void *ctx, uint32_t addr, uint8_t *dst, uint32_t len)
 {
 	(void)ctx;
 	long off = journal_off(addr, len);
-	if (off < 0) {
+	long old = legacy_off(addr, len);
+	if (off < 0 && old < 0) {
 		return -1;
 	}
 	pthread_mutex_lock(&nf.mu);
-	memcpy(dst, nf.image + off, len);
+	memcpy(dst, off >= 0 ? nf.image + off : nf.legacy + old, len);
 	pthread_mutex_unlock(&nf.mu);
 	return 0;
 }
@@ -150,8 +174,39 @@ static void *writer(void *arg)
 	return NULL;
 }
 
+// A file of the KLJ2 journal's size at the path is the earlier image's journal:
+// it is moved aside to <path>.klj2, read back as the legacy range and never
+// written, and the KLJ3 journal starts erased at the path.
+static int take_legacy(const char *path)
+{
+	char aside[4096];
+	if ((size_t)snprintf(aside, sizeof aside, "%s.klj2", path) >= sizeof aside) {
+		return -ENAMETOOLONG;
+	}
+	if (pread(nf.fd, nf.legacy, (size_t)LEGACY_BYTES, 0) != (ssize_t)LEGACY_BYTES) {
+		return -EIO;
+	}
+	close(nf.fd);
+	nf.fd = -1;
+	if (rename(path, aside) != 0) {
+		return -errno;
+	}
+	nf.fd = open(path, O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+	return nf.fd < 0 ? -errno : 0;
+}
+
 int nvm_file_open(const char *path, struct nvm_flash *port)
 {
+	nf.image = journal_image;
+	nf.legacy = legacy_image;
+	memset(nf.legacy, NVM_ERASED, (size_t)LEGACY_BYTES);
+	*port = (struct nvm_flash){port_read, port_program, port_erase, port_busy, port_now_us, NULL};
+	if (path == NULL) {
+		// no media: erased flash that lives as long as the process
+		nf.volatile_only = true;
+		memset(nf.image, NVM_ERASED, (size_t)JOURNAL_BYTES);
+		return 0;
+	}
 	nf.fd = open(path, O_RDWR | O_CREAT | O_CLOEXEC, 0600);
 	if (nf.fd < 0) {
 		return -errno;
@@ -160,27 +215,30 @@ int nvm_file_open(const char *path, struct nvm_flash *port)
 	if (fstat(nf.fd, &st) != 0) {
 		return -errno;
 	}
+	if (st.st_size == (off_t)LEGACY_BYTES) {
+		int rc = take_legacy(path);
+		if (rc != 0) {
+			return rc;
+		}
+		st.st_size = 0;
+	}
 	if (st.st_size == 0) {
 		// a new journal is erased flash
-		memset(nf.image, NVM_ERASED, sizeof nf.image);
-		if (pwrite(nf.fd, nf.image, sizeof nf.image, 0) != (ssize_t)sizeof nf.image || fsync(nf.fd) != 0) {
+		memset(nf.image, NVM_ERASED, (size_t)JOURNAL_BYTES);
+		if (pwrite(nf.fd, nf.image, (size_t)JOURNAL_BYTES, 0) != (ssize_t)JOURNAL_BYTES || fsync(nf.fd) != 0) {
 			return -errno;
 		}
-	} else if (st.st_size != (off_t)sizeof nf.image ||
-		   pread(nf.fd, nf.image, sizeof nf.image, 0) != (ssize_t)sizeof nf.image) {
+	} else if (st.st_size != (off_t)JOURNAL_BYTES ||
+		   pread(nf.fd, nf.image, (size_t)JOURNAL_BYTES, 0) != (ssize_t)JOURNAL_BYTES) {
 		return -EINVAL;
 	}
 	int rc = pthread_create(&nf.worker, NULL, writer, NULL);
-	if (rc != 0) {
-		return -rc;
-	}
-	*port = (struct nvm_flash){port_read, port_program, port_erase, port_busy, port_now_us, NULL};
-	return 0;
+	return rc != 0 ? -rc : 0;
 }
 
 void nvm_file_close(void)
 {
-	if (nf.fd < 0) {
+	if (nf.volatile_only || nf.fd < 0) {
 		return;
 	}
 	pthread_mutex_lock(&nf.mu);

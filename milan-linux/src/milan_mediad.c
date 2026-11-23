@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // milan_mediad.c - the media plane of the PocketBeagle 2 USB-to-Milan bridge:
-// the AAF talker (USB to Milan) and its media clock servo (issues #10, #11).
+// the AAF talker (USB to Milan) and its media clock servo (issues #10, #11),
+// the AAF listener (#12), and the CRF input's receive path (crf_rx.h), which
+// counts STREAM_INPUT 1 and clocks nothing.
 //
 // It takes its streams from the datapath block milan-ctrld publishes, its
 // time from gPTP (gptp_time.h), its frames from the UAC2 gadget's capture PCM,
@@ -26,6 +28,7 @@
 #include "audio_src.h"
 #include "datapath.h"
 #include "gptp_time.h"
+#include "crf_rx.h"
 #include "media.h"
 #include "listener.h"
 #include "talker.h"
@@ -40,7 +43,7 @@ static struct {
 	const char *sim;                // simulated host's ppm, NULL for the gadget
 	const char *sim_wav;            // the simulated host's recording of the listener's stream
 	const char *playback;
-	bool talker, listener;
+	bool talker, listener, crf;
 	int64_t in_flight_ns;
 	int64_t interrupt_ns;
 	unsigned channels;
@@ -58,6 +61,7 @@ static struct {
 	.ctl = "hw:CARD=UAC2Gadget",
 	.talker = true,
 	.listener = true,
+	.crf = true,
 	.in_flight_ns = 500000,
 	.interrupt_ns = 10000000,
 	.dp_name = MILAN_DP_NAME,
@@ -104,7 +108,7 @@ static void usage(FILE *to)
 		"  -D PCM      the gadget's capture PCM (hw:CARD=UAC2Gadget,DEV=0)\n"
 		"  -E PCM      the gadget's playback PCM (hw:CARD=UAC2Gadget,DEV=0)\n"
 		"  -C CTL      its control device, for the two pitches (hw:CARD=UAC2Gadget)\n"
-		"  -r ROLES    talker, listener or both (talker,listener)\n"
+		"  -r ROLES    any of talker, listener (AAF) and crf (talker,listener,crf)\n"
 		"  -R NS       the USB IN requests already filled, for the listener (500000: 4 x 125 us)\n"
 		"  -T NS       no PDU for this long is STREAM_INTERRUPTED (10000000)\n"
 		"  -S PPM      instead of the gadget, a simulated USB host PPM off gPTP (tests)\n"
@@ -134,6 +138,7 @@ static int parse(int argc, char **argv)
 		case 'r':
 			opt.talker = strstr(optarg, "talker") != NULL;
 			opt.listener = strstr(optarg, "listener") != NULL;
+			opt.crf = strstr(optarg, "crf") != NULL;
 			break;
 		case 'R': opt.in_flight_ns = strtoll(optarg, NULL, 0); break;
 		case 'T': opt.interrupt_ns = strtoll(optarg, NULL, 0); break;
@@ -156,19 +161,33 @@ static int parse(int argc, char **argv)
 }
 
 static void report(const struct milan_media_talker *t, const struct milan_media_listener *l,
-		   const struct gptp_time *clk)
+		   const struct milan_media_crf *x, const struct gptp_time *clk)
 {
+	if (opt.crf) {
+		say(LOG_INFO,
+		    "crf %s%s stream %016llx | PDUs %llu seq %llu late %llu early %llu unsupported %llu tu %llu "
+		    "mr toggles %llu | locked %llu unlocked %llu interrupted %llu grid breaks %llu | rate %+.3f ppm",
+		    x->active ? "active" : "idle", x->locked ? ", locked" : "", (unsigned long long)x->stream_id,
+		    (unsigned long long)x->pdus, (unsigned long long)x->seq_mismatch,
+		    (unsigned long long)x->late_timestamp, (unsigned long long)x->early_timestamp,
+		    (unsigned long long)x->unsupported_format, (unsigned long long)x->timestamp_uncertain,
+		    (unsigned long long)x->media_restarts, (unsigned long long)x->media_locked,
+		    (unsigned long long)x->media_unlocked, (unsigned long long)x->stream_interrupted,
+		    (unsigned long long)x->grid_breaks, x->rate_ppb / 1000.0);
+	}
 	if (opt.listener) {
 		say(LOG_INFO,
 		    "listener %s%s stream %016llx | FRAMES_RX %llu SEQ_NUM_MISMATCH %llu LATE %llu EARLY %llu "
-		    "UNSUPPORTED %llu MEDIA_LOCKED %llu MEDIA_UNLOCKED %llu MEDIA_RESET %llu STREAM_INTERRUPTED %llu "
+		    "UNSUPPORTED %llu MEDIA_LOCKED %llu MEDIA_UNLOCKED %llu jumps %llu STREAM_INTERRUPTED %llu tu %llu "
+		    "mr toggles %llu "
 		    "| underruns %llu pitch %u | presentation error %d..%d avg %d ns, least margin %d ns",
 		    l->active ? "active" : "idle", l->locked ? ", locked" : "", (unsigned long long)l->stream_id,
 		    (unsigned long long)l->frames_rx, (unsigned long long)l->seq_mismatch,
 		    (unsigned long long)l->late_timestamp, (unsigned long long)l->early_timestamp,
 		    (unsigned long long)l->unsupported_format, (unsigned long long)l->media_locked,
-		    (unsigned long long)l->media_unlocked, (unsigned long long)l->media_resets,
-		    (unsigned long long)l->stream_interrupted, (unsigned long long)l->underruns, l->pitch,
+		    (unsigned long long)l->media_unlocked, (unsigned long long)l->jumps,
+		    (unsigned long long)l->stream_interrupted, (unsigned long long)l->timestamp_uncertain,
+		    (unsigned long long)l->media_restarts, (unsigned long long)l->underruns, l->pitch,
 		    l->align_min_ns == INT32_MAX ? 0 : l->align_min_ns, l->align_max_ns == INT32_MIN ? 0 : l->align_max_ns,
 		    l->align_avg_ns, l->margin_min_ns == INT32_MAX ? 0 : l->margin_min_ns);
 	}
@@ -304,11 +323,33 @@ int main(int argc, char **argv)
 		say(LOG_INFO, "listener on %s, %u channels, USB IN pipeline %lld ns", opt.ifname, opt.channels,
 		    (long long)lcfg.in_flight_ns);
 	}
+	static struct crf_rx crf;
+	struct crf_rx_cfg ccfg = {
+		.ifname = opt.ifname,
+		.sink = 1,
+		.early_ns = 4 * (int64_t)opt.pto_ns,
+		.interrupt_ns = opt.interrupt_ns,
+		// below the listener: it carries no audio
+		.rt_priority = lcfg.rt_priority > 1 ? lcfg.rt_priority - 1 : lcfg.rt_priority,
+		.cpu = opt.cpu,
+		.clk = &clk,
+		.dp = dp,
+	};
+	if (opt.crf) {
+		rc = crf_rx_start(&crf, &ccfg);
+		if (rc != 0) {
+			say(LOG_ERR, "CRF receive thread: %s", strerror(rc));
+			return 1;
+		}
+		say(LOG_INFO, "CRF input (sink 1) on %s: counted, not clocked from", opt.ifname);
+	}
 
 	struct milan_media_talker t;
 	struct milan_media_listener l;
+	struct milan_media_crf x;
 	memset(&t, 0, sizeof t);
 	memset(&l, 0, sizeof l);
+	memset(&x, 0, sizeof x);
 	for (unsigned tick = 0; !stop_requested; ++tick) {
 		struct timespec ts = {0, 100000000};
 		nanosleep(&ts, NULL);
@@ -321,16 +362,32 @@ int main(int argc, char **argv)
 		if (opt.listener) {
 			listener_report(&ls, &l);
 		}
+		if (opt.crf) {
+			crf_rx_report(&crf, &x);
+		}
+		// an input whose receive socket could not be set up counts nothing, and
+		// reports none of its counters valid; said once, the rest runs on
+		const char *step;
+		int err;
+		if (opt.listener && rxsock_failed(&ls.rx, &step, &err)) {
+			say(LOG_ERR, "listener on %s: %s: %s; STREAM_INPUT 0 is not received, none of its counters valid",
+			    opt.ifname, step, strerror(err));
+		}
+		if (opt.crf && rxsock_failed(&crf.rx, &step, &err)) {
+			say(LOG_ERR, "CRF input on %s: %s: %s; STREAM_INPUT 1 is not received, none of its counters valid",
+			    opt.ifname, step, strerror(err));
+		}
 		milan_media_begin(media);
 		media->gptp_rate_ppb = (int64_t)((clk.model.rate - 1.0) * 1e9);
 		media->gptp_residual_ns = clk.residual_ns;
 		media->gptp_calibrated = clk.calibrated;
 		media->talker = t;
 		media->listener = l;
+		media->crf = x;
 		milan_media_end(media);
 		if (dump_requested) {
 			dump_requested = 0;
-			report(&t, &l, &clk);
+			report(&t, &l, &x, &clk);
 		}
 	}
 	if (opt.talker) {
@@ -341,7 +398,11 @@ int main(int argc, char **argv)
 		listener_stop(&ls);
 		listener_report(&ls, &l);
 	}
-	report(&t, &l, &clk);
+	if (opt.crf) {
+		crf_rx_stop(&crf);
+		crf_rx_report(&crf, &x);
+	}
+	report(&t, &l, &x, &clk);
 	if (src != NULL) {
 		src->close(src);
 	}

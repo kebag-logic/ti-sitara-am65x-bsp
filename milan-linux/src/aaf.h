@@ -5,7 +5,7 @@
 // them: 32-bit signed integer samples, 48 kHz, a timestamp in every PDU.
 //
 //   byte 0      subtype 0x02 (AAF)
-//   byte 1      sv (bit 7), version (6..4), mr (3), reserved, tv (0)
+//   byte 1      sv (bit 7), version (6..4), mr (3), reserved (2..1), tv (0)
 //   byte 2      sequence_num
 //   byte 3      reserved, tu (bit 0)
 //   4..11       stream_id
@@ -38,6 +38,8 @@ struct aaf_params {
 	uint8_t dst[6];
 	uint8_t src[6];
 	uint16_t vlan_tci;              // PCP << 13 | VID; 0 sends untagged
+	bool mr;                        // the media clock restart bit, as it stands (IEEE 1722-2016 4.4.4.3)
+	bool tu;                        // timestamp uncertain (4.4.4.7)
 	unsigned channels;
 	unsigned frames;                // sample frames per PDU (6 for class A at 48 kHz)
 };
@@ -53,7 +55,9 @@ struct aaf_pdu {
 	uint64_t stream_id;
 	uint8_t seq;
 	bool sv;
+	bool mr;
 	bool tv;
+	bool tu;
 	uint32_t avtp_timestamp;
 	uint8_t format;
 	uint8_t nsr;

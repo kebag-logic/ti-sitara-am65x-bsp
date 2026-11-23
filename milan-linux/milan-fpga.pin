@@ -1,13 +1,28 @@
 # The milan-fpga revision whose Mark II control-plane firmware (#665) the
 # PocketBeagle 2 bridge runs. KEY=VALUE, readable by sh and make. Moving the pin
 # is a reviewed change: rerun `make check`, milan-fpga's own firmware gate at
-# the new revision, and regenerate config/entity.conf.
+# the new revision, and regenerate config/ (tools/gen-config.sh).
+#
+# The head of milan-fpga PR #986 (milan-fpga#983, the descriptor-only host
+# profile config/endstation_pb2_bridge.yaml is written for). Move the pin to
+# that PR's merge commit once it lands on dev-soft-core.
 MILAN_FPGA_REPO=https://github.com/kebag-logic/milan-fpga
-MILAN_FPGA_REV=17f62ef64a66562384e8a93b1d6be6f86e51f95c
+MILAN_FPGA_REV=58f7673b8c57a80230e716bc1774ff9cc2f71ddc
 # sha256 of $(MILAN_FPGA_REPO)/archive/$(MILAN_FPGA_REV).tar.gz
-MILAN_FPGA_SHA256=10e99278653b600454c110f29eca9d70e2b98554c7f116c56a188cae731e6cf9
-# the submodules gen-entity-conf.sh needs (the gitlinks at MILAN_FPGA_REV)
+MILAN_FPGA_SHA256=2d948089927a58f351176d3c1b8ef535b6533b007b400adc548ed7a5c806f2ac
+# The TSN stack the firmware's ADP, ACMP, MAAP and wire layer come from (the
+# gitlink third_party/tsn-c-stack at MILAN_FPGA_REV): every build needs it.
+TSN_C_STACK_REPO=https://github.com/kebag-logic/tsn-c-stack
+TSN_C_STACK_REV=715589c1db7cf67e2f3259fd7083ebc7f0923376
+TSN_C_STACK_SHA256=a0662e54f7204c1b3a780010092f1e7077b3949722dda823d262b717c264cb62
+# lwSRP (the gitlink third_party/lwSRP): its public headers only. AECP's bridge
+# (app/ctrl_app_aecp.c) reads SRP's interface state through srp_mbx.h, which
+# includes them; no SRP source is linked until the bridge has SRP (#14).
+LWSRP_REPO=https://github.com/kebag-logic/lwSRP
+LWSRP_REV=08ee86e812a0eb5e1dc6cd61b494d8baf3491348
+LWSRP_SHA256=4c9ad613b3a1742dd20851ee7fe8d81ce8c436df48b521aa807c9f6d1d9383c9
+# the submodules tools/gen-config.sh needs (the gitlinks at MILAN_FPGA_REV)
 PROTOCOL_PROCESSOR_REPO=https://github.com/Mister-M-alt/protocol-processor-control-plane-avb-milan
-PROTOCOL_PROCESSOR_REV=2ad2f845dd583f8310075fa2380cb60a04fd091a
+PROTOCOL_PROCESSOR_REV=801ef2283ec793e35a2590fc6593c90313a64041
 GPTP_PROCESSOR_REPO=https://github.com/Mister-M-alt/FPGA-gPTP
-GPTP_PROCESSOR_REV=5dce647ab5a01a6ecff9a982b22e3a4a1d946d3d
+GPTP_PROCESSOR_REV=1616fc8f062fbf58c35ad31674b5b233207bbdb8

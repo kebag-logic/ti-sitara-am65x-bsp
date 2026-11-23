@@ -1,0 +1,89 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 Kebag-Logic
+# SPDX-License-Identifier: Apache-2.0
+#
+# The PocketBeagle 2 USB-to-Milan bridge's end-station config: milan-fpga's
+# descriptor-only host profile (board.target host, milan-fpga#983). Every file
+# milan-ctrld reads about its entity is GENERATED from this one, through
+# milan-fpga's own generators (tools/gen-config.sh), and never restated:
+#   entity.conf        the ADP fields (adp_entity.py)
+#   aecp_entity_gen.h  the AEM image AECP serves, its CRC and storage sizes
+#                      (aecp_entity.py)
+#   srp_entity_gen.h   the shape header every firmware unit is compiled with
+#                      (srp_entity.py): 1 interface, 1 source, 2 sinks
+#   nvm_shape_gen.h    the saved-state store's shape (nvm_bench.py)
+#
+# The stream inventory (bsp#29):
+#   STREAM_INPUT 0   AAF, 48 kHz, 8 channels, 32-bit: what milan-mediad plays
+#                    to the USB host
+#   STREAM_INPUT 1   CRF, the media clock input an AAF talker requires (Milan
+#                    v1.2 7.2.2). milan-mediad does not clock from it
+#                    (AECP-STATUS.md)
+#   STREAM_OUTPUT 0  AAF, the same format: what milan-mediad sends from the
+#                    USB host
+# No second AAF stream and no CRF output (7.2.3 asks one only of a listener
+# with two AAF inputs). ADP advertises 1 source and 2 sinks.
+
+schema: kebag-logic/milan-endstation-config
+schema_version: "1.3.0"
+
+entity:
+  name: "PocketBeagle 2 bridge"
+  # PINNED, not hash-derived (Milan v1.2 7.2.2, 7.2.3; IEEE 1722.1-2021
+  # 7.2.1): controllers cache the model by this id, so it moves only with a
+  # reviewed change of the model.
+  entity_model_id: hash-derived
+  model_id_pin: "0x001BC50AC1000100"
+  entity_id: mac-derived             # eth0's MAC, expanded, at run time
+  vendor_name: "Kebag Logic"
+  serial_number: ""
+  group_name: ""
+
+board:
+  target: host                       # the descriptor-only host profile
+  gptp_owner: host-phc               # flexptpd steers the CPTS PHC of eth0
+  constraints:
+    link_mbps: 1000                  # the Ethernet Cap's gigabit PHY
+
+platform:
+  # The MAC the image is generated with. milan-ctrld puts eth0's own in the
+  # three mac-derived fields (ENTITY entity_id, AVB_INTERFACE mac_address and
+  # clock_identity) after it verifies the image's CRC, and ADP and AECP use it.
+  mac_address: "02:00:00:00:00:01"
+
+control:
+  placement: split                   # milan-ctrld runs the split control firmware
+
+# flexptpd's dataset at the pin of br2-external/package/flexptp-gptp: the
+# priorities of /etc/avb/flexptpd.conf, the clockClass, clockAccuracy and
+# variance it announces until it computes one (PTP_BEST_CLOCK_CLASS,
+# PTP_WORST_ACCURACY, PTP_VARIANCE_HAS_NOT_BEEN_COMPUTED), its gPTP preset's
+# intervals and its one port (PTP_PORT_ID).
+gptp:
+  priority1: 248
+  priority2: 248
+  clock_class: 248
+  clock_accuracy: 0xFE
+  offset_scaled_log_variance: 0xFFFF
+  domain: 0
+  log_sync_interval: -3
+  log_announce_interval: 0
+  log_pdelay_interval: 0
+  port_number: 1
+
+clocking:
+  sampling_rate_hz: 48000
+  audio_unit_rates_hz: [48000]
+  media_clock_sources: [internal, crf]   # INTERNAL 0, CRF 1
+  default_source: internal
+  crf_sink: true                     # STREAM_INPUT 1
+
+audio_interface:
+  kind: usb_audio                    # the UAC2 gadget (uac2-milan.env)
+  channels: 8
+  word_length_bits: 32
+
+streams:
+  listeners:
+    - { name: "Stream In 0", channels: 8 }
+  talkers:
+    - { name: "Stream Out 0", channels: 8 }
