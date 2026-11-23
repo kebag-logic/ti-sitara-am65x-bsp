@@ -68,6 +68,7 @@ def main() -> int:
     gptp_name = f"flexptpd-rxf-{os.getpid()}"
     ptp = aecp.Flexptpd(gptp_name, eid)
     wire = peer.Wire(a.peer, dut_mac)
+    wire.control_only()
     c = aecp.Controller(wire, dut_mac, eid, (peer.CONTROLLER,))
     ctrld_log = open(os.path.join(a.tmp, "ctrld-rxf.log"), "w")
     ctrld = subprocess.Popen([os.path.join(a.build, "milan-ctrld"), "-i", a.dut, "-e", a.entity, "-g", gptp_name,

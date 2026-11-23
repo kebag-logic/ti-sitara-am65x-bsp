@@ -23,6 +23,7 @@ Usage (as root in the namespace): peer.py --dut veth0 --peer veth1 --ctrld BIN -
 from __future__ import annotations
 
 import argparse
+import ctypes
 import mmap
 import os
 import signal
@@ -138,6 +139,19 @@ class Wire:
                 continue
             with self.lock:
                 self.frames.append((time.monotonic(), data))
+
+    def control_only(self) -> None:
+        """Have the kernel pass only untagged AVTP control frames (subtype 0xF0 and up: ADP, AECP, ACMP, MAAP),
+        so stream data on the link, thousands of PDUs a second, cannot crowd out what the tests wait for."""
+        prog = [(0x28, 0, 0, 12),               # ldh [12]: the EtherType
+                (0x15, 0, 3, AVTP),             # jeq AVTP, or drop
+                (0x30, 0, 0, 14),               # ldb [14]: the subtype
+                (0x35, 0, 1, 0xF0),             # jge 0xF0, or drop
+                (0x06, 0, 0, 0xFFFF),           # ret: keep
+                (0x06, 0, 0, 0)]                # ret: drop
+        self._filter = ctypes.create_string_buffer(b"".join(struct.pack("HBBI", *i) for i in prog))
+        fprog = struct.pack("HL", len(prog), ctypes.addressof(self._filter))
+        self.sock.setsockopt(socket.SOL_SOCKET, 26, fprog)     # SO_ATTACH_FILTER
 
     def send(self, dst: bytes, payload: bytes) -> None:
         self.sock.send(eth(dst, self.src, payload))

@@ -347,6 +347,13 @@ def rebind_at_once(g, a, c, wire, eid: int) -> None:
                                                     controller=p["controller"], talker=peer.TALKER_PEER, listener=eid,
                                                     tuid=p["tuid"], luid=p["luid"], dmac=peer.PEER_STREAM_DMAC + 1,
                                                     seq=p["seq"], vlan=2))
+        sink = ""
+        for _ in range(50):
+            sink = peer.milan_dp(a.dp, a.shm).get("sink1", "")
+            if "listening:1" in sink:
+                break
+            time.sleep(0.02)
+        g.check(f"rebind {n + 1} of 5: settled again", "listening:1" in sink, sink)
 
 
 def main() -> int:
@@ -367,6 +374,7 @@ def main() -> int:
     gptp_name = f"flexptpd-ctr-{os.getpid()}"
     ptp = aecp.Flexptpd(gptp_name, eid)
     wire = peer.Wire(a.peer, dut_mac)
+    wire.control_only()
     c = aecp.Controller(wire, dut_mac, eid, (peer.CONTROLLER,))
     logs = [open(os.path.join(a.tmp, n), "w") for n in ("ctrld-ctr.log", "mediad-ctr.log")]
     ctrld = subprocess.Popen([os.path.join(a.build, "milan-ctrld"), "-i", a.dut, "-e", a.entity, "-g", gptp_name,
