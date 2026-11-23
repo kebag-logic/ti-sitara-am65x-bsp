@@ -7,9 +7,9 @@
 # profile config/endstation_pb2_bridge.yaml is written for). Move the pin to
 # that PR's merge commit once it lands on dev-soft-core.
 MILAN_FPGA_REPO=https://github.com/kebag-logic/milan-fpga
-MILAN_FPGA_REV=66b4def34dcbc0d371ce4eb339d3d0226875befa
+MILAN_FPGA_REV=58f7673b8c57a80230e716bc1774ff9cc2f71ddc
 # sha256 of $(MILAN_FPGA_REPO)/archive/$(MILAN_FPGA_REV).tar.gz
-MILAN_FPGA_SHA256=c5b3b01c19db771bb6e6c379a7510489c5450b8214d9df5499b8d4a4957c0ee2
+MILAN_FPGA_SHA256=2d948089927a58f351176d3c1b8ef535b6533b007b400adc548ed7a5c806f2ac
 # The TSN stack the firmware's ADP, ACMP, MAAP and wire layer come from (the
 # gitlink third_party/tsn-c-stack at MILAN_FPGA_REV): every build needs it.
 TSN_C_STACK_REPO=https://github.com/kebag-logic/tsn-c-stack
