@@ -1,0 +1,10 @@
+branch: pb2-aecp-1
+head: 49b2035605729e74d1fc664fb25304402e758ea4
+tree: 2a5536586e8c3b81a2c40a61810c85367e56eaf9
+base: f405a5754afbe30313116be4662adb9d79567f9e
+commits since base:
+  49b2035605729e74d1fc664fb25304402e758ea4 PB2: a la_avdecc 4.3.x controller enumerates the entity on a veth pair and judges it Milan 1.2 compatible (make check-compat); AECP-STATUS states the counters, the frozen acceptance and what stays open
+  65fc798b135fd66a5eff59e6f3418e9959c031da PB2: the stream counters milan-mediad keeps for GET_COUNTERS (tu, mr, the CRF input's receive path, Milan observation intervals, zeroed at bind); gPTP status live only while flexptpd updates it; a DUT MAC distinct from the image's
+worktree: 0 changed paths
+pushed: no. The published pb2-aecp-1 (fetched read-only from the public URL) is f405a5754afbe30313116be4662adb9d79567f9e, this round's base; pb2-tsn b6d8594c1aaff38b5e9d6b13213d90ef5e4024d4 is an ancestor of the head
+board, bench, remote hosts: not contacted

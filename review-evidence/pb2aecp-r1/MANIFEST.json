@@ -400,5 +400,149 @@
     "original_sha256": "d889356a7b9456359150ea3d87ef1e3494605ca08f9dce54be588607325f1aeb",
     "published_sha256": "d889356a7b9456359150ea3d87ef1e3494605ca08f9dce54be588607325f1aeb",
     "path_redacted": false
+  },
+  {
+    "file": "author-r3/HANDOFF-r3.md",
+    "original_sha256": "8dc1f3303f344c939f4075daf3f78b095865c86fb101f6b3e78c52e4725ccfa2",
+    "published_sha256": "b553fc333beca164886dd2155a762452df8c20bf76258592074af77c90d21d01",
+    "path_redacted": true
+  },
+  {
+    "file": "author-r3/PR-BODY.md",
+    "original_sha256": "1738380f5400851e9ab176e580138f01ac64a296f9783a2f023f936bd50c4542",
+    "published_sha256": "1738380f5400851e9ab176e580138f01ac64a296f9783a2f023f936bd50c4542",
+    "path_redacted": false
+  },
+  {
+    "file": "author-r3/REVIEW-READY.md",
+    "original_sha256": "5cc45e55dc08331d513950f763a473df242389a301c8fef45e0f4a1337a70f2f",
+    "published_sha256": "5cc45e55dc08331d513950f763a473df242389a301c8fef45e0f4a1337a70f2f",
+    "path_redacted": false
+  },
+  {
+    "file": "author-r3/receipts/INDEX.md",
+    "original_sha256": "2d40c64b9c036a58917ffe3b1da0387b5d5d315d3e302693d23526896e06013e",
+    "published_sha256": "4a11781611009cf3ece1b44725263a9780801782e9ca0dd01ed58868a9d240d4",
+    "path_redacted": true
+  },
+  {
+    "file": "author-r3/receipts/aarch64/SHA256SUMS",
+    "original_sha256": "003104f394afb4d4348841a0faaa87ae360462c1de034c77a5eec7911d45ff02",
+    "published_sha256": "003104f394afb4d4348841a0faaa87ae360462c1de034c77a5eec7911d45ff02",
+    "path_redacted": false
+  },
+  {
+    "file": "author-r3/receipts/aarch64/entity.conf",
+    "original_sha256": "e273ff975fc157b2f48939532c203abbd3464f476d1f02edd52e93ee5752556c",
+    "published_sha256": "e273ff975fc157b2f48939532c203abbd3464f476d1f02edd52e93ee5752556c",
+    "path_redacted": false
+  },
+  {
+    "file": "author-r3/receipts/aarch64/milan-bridge.sh",
+    "original_sha256": "6cf38b8dac1ae9946afe0e5524ac1c372747764f26a5602e9e54cb75badbb488",
+    "published_sha256": "83cc00f83f63a1de1f3a02286c0558f1f93f6047936770be6e471e9864f38e4a",
+    "path_redacted": true
+  },
+  {
+    "file": "author-r3/receipts/aarch64/milan-dp",
+    "original_sha256": "0c61cd3e0d4a3f2a6b72187ad31d22c5be4b8419e6a6710e514e6a58584a86f8",
+    "published_sha256": "0c61cd3e0d4a3f2a6b72187ad31d22c5be4b8419e6a6710e514e6a58584a86f8",
+    "path_redacted": false
+  },
+  {
+    "file": "author-r3/receipts/aarch64/milan-gptp-watch",
+    "original_sha256": "8ea48e0503e9a29ba215c21e8e3f00fa2cd9676ec65056f7814b1376428b888c",
+    "published_sha256": "8ea48e0503e9a29ba215c21e8e3f00fa2cd9676ec65056f7814b1376428b888c",
+    "path_redacted": false
+  },
+  {
+    "file": "author-r3/receipts/aarch64/milan-mediad",
+    "original_sha256": "162c8223b2ffc52484381e061e691e1467815294ba502a2637d4d27ac59a8b77",
+    "published_sha256": "162c8223b2ffc52484381e061e691e1467815294ba502a2637d4d27ac59a8b77",
+    "path_redacted": false
+  },
+  {
+    "file": "author-r3/receipts/comment-bsp-29.md",
+    "original_sha256": "7569d0e6df57ae6d02e56f9cb1b75316b527234836cb27a8f05cc296f541f2b5",
+    "published_sha256": "7569d0e6df57ae6d02e56f9cb1b75316b527234836cb27a8f05cc296f541f2b5",
+    "path_redacted": false
+  },
+  {
+    "file": "author-r3/receipts/git-state.txt",
+    "original_sha256": "761c59c576771606ba5b03d403bd29e827261242a36ccb3d989f406619063541",
+    "published_sha256": "761c59c576771606ba5b03d403bd29e827261242a36ccb3d989f406619063541",
+    "path_redacted": false
+  },
+  {
+    "file": "author-r3/receipts/logs/compat-default-options.log",
+    "original_sha256": "3cbf05b1bfc6f76d93084d260f7c5b4c04a0a1e60faf07c39bb51a4037683e55",
+    "published_sha256": "e8b5e0df2a582f5dba0b96396263fbff02883d3dc576c2e13a3627bd92c1bf6d",
+    "path_redacted": true
+  },
+  {
+    "file": "author-r3/receipts/logs/compat-f405a57-negative.log",
+    "original_sha256": "bd1aac92ab08ba2fff5da639a7be5b8110078e9676d5a22e0db935ff912f780b",
+    "published_sha256": "bd1aac92ab08ba2fff5da639a7be5b8110078e9676d5a22e0db935ff912f780b",
+    "path_redacted": false
+  },
+  {
+    "file": "author-r3/receipts/logs/compat-strict-options.log",
+    "original_sha256": "ce5a0a593600c3385792edb3c8d05d84f4909c6d5934d1d065cd0230d910a4c8",
+    "published_sha256": "f416343a35483d56f0140e20df3d845c30b9d1edca1fd8cf6d5da79534ec86ff",
+    "path_redacted": true
+  },
+  {
+    "file": "author-r3/receipts/logs/compat-without-crf-negative.log",
+    "original_sha256": "4e82e72a57f40049a63b2cb6982cf633978adcd88e62efd72ee856162a0d49c9",
+    "published_sha256": "4e82e72a57f40049a63b2cb6982cf633978adcd88e62efd72ee856162a0d49c9",
+    "path_redacted": false
+  },
+  {
+    "file": "author-r3/receipts/logs/cross-build-1.log",
+    "original_sha256": "c10bc8e9d3095d3030034380c75ea1dd16a2570265d95d3bc3915f744c47ef9c",
+    "published_sha256": "77f5beb81c320f5d80b0e64eb290dd8f02e14b1c8efa622b3284943eff6ced52",
+    "path_redacted": true
+  },
+  {
+    "file": "author-r3/receipts/logs/cross-build-2.log",
+    "original_sha256": "da478a0d1601a72105b10cc8c85e0c0ed893d7cacbb0093b11fa89ecde84e64b",
+    "published_sha256": "247787c413f452316286fe04e2ee92690903a548d196f8e8d8a8bec8e357c70d",
+    "path_redacted": true
+  },
+  {
+    "file": "author-r3/receipts/logs/make-check.log",
+    "original_sha256": "be3693e5f4a0e1d2120358f0a0f80cb9b93de2543ff6dfc40fa3e229bff6776c",
+    "published_sha256": "0e666089152f1278c7de02165f813c2a9792ac9743bf5cbaf44d0c3177bb33fd",
+    "path_redacted": true
+  },
+  {
+    "file": "author-r3/receipts/logs/r901-probe-gptp-stale-test.log",
+    "original_sha256": "9fac1a9a3e7089e8351712e4cb182a0902a3823d816d1dcb3c473cde581d5dfa",
+    "published_sha256": "6e283e1e2a79e1ce923f78b0af925c3792690eeb15de77057fbcdbaeff37bd5b",
+    "path_redacted": true
+  },
+  {
+    "file": "author-r3/receipts/logs/r901-probe-identity-mutant-build.log",
+    "original_sha256": "f5a51a322c6bbf2c61588279d01951f4343e7b99f7dfa1f55ed7fdd90165b0fc",
+    "published_sha256": "234621e0fde4f96a07edea947cb4122a50f199a40dc06182295b3109079f4e5e",
+    "path_redacted": true
+  },
+  {
+    "file": "author-r3/receipts/logs/r901-probe-identity-mutant-distinct-test.log",
+    "original_sha256": "47276b4570f58250e16c887f8790a5dba4abcb86085a77e6b9a26e4345d1ce5a",
+    "published_sha256": "c6a2bf862d225181e57ff141a65d99765ec78bf8559aba6c77502c256e8f4842",
+    "path_redacted": true
+  },
+  {
+    "file": "author-r3/receipts/logs/r901-probe-identity-mutant-original-test.log",
+    "original_sha256": "faa37115eb5b02b688fcda59abf863ac67c0ab115ccf4eeb5e6214de3c479194",
+    "published_sha256": "d7be665d144dd11aaee2f535cfd227cac1e8acb9dc48b153561493107e6de628",
+    "path_redacted": true
+  },
+  {
+    "file": "author-r3/receipts/logs/r901-probe-identity-pristine-distinct-test.log",
+    "original_sha256": "0390b57199983e02416a561f769e098a7e50b55c686472cc368b3348b1f1715d",
+    "published_sha256": "98dee390399944174358eb2ed62e12aa3b2c6d21af2bdb0ba17b7fd31da78e01",
+    "path_redacted": true
   }
 ]
