@@ -1,0 +1,4 @@
+cwd: milan-linux
+command: make -j16 MILAN_FPGA=$REVIEWS/pb2aecp-r901-1-packet/scratch/firmware check-config
+tools/gen-config.sh --check $REVIEWS/pb2aecp-r901-1-packet/scratch/firmware
+config/: every generated file is current for endstation_pb2_bridge.yaml

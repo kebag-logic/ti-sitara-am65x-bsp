@@ -1,0 +1,7 @@
+cwd: milan-linux
+command: $REVIEWS/pb2aecp-r901-1-packet/scratch/native/test_media
+servo, host +0 ppm: pitch +1.56 ppm (integral -0.04), level 23.994, worst |error| after 20 s 0.073, peak 29.2, locked
+servo, host +100 ppm: pitch -98.44 ppm (integral -100.04), level 23.994, worst |error| after 20 s 0.079, peak 32.4, locked
+servo, host -100 ppm: pitch +101.56 ppm (integral +99.96), level 23.994, worst |error| after 20 s 0.067, peak 26.8, locked
+servo, host +300 ppm: pitch -298.44 ppm (integral -300.04), level 23.994, worst |error| after 20 s 0.092, peak 40.0, locked
+test_media: PASS (0 failures)

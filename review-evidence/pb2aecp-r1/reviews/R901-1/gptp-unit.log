@@ -1,0 +1,10 @@
+cwd: milan-linux
+command: $REVIEWS/pb2aecp-r901-1-packet/scratch/native/test_gptp
+[PASS] model: within 250 ns of a PHC 36.9 ppm fast, between measurements: worst 122 ns (limit 250), rate +36.896 ppm (PHC +36.900)
+[PASS] model: a 1 ms PHC step is detected: steps 0 -> 1, residual 999976 ns
+[PASS] model: back after the step: worst 144 ns (limit 500) two measurements later
+[PASS] status block: reads back what was written: SLAVE, the bench grandmaster, 203 ns
+[PASS] status block: no grandmaster reads as our own identity: 
+[PASS] status block: an odd seq reads as nothing: 
+[PASS] status block: another layout reads as nothing: 
+test_gptp: PASS (0 failures)

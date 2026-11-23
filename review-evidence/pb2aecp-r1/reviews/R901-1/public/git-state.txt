@@ -1,0 +1,9 @@
+BSP branch: pb2-aecp-1
+BSP head: cce8c9a4143548c80800b2def821431ff45e3698
+BSP base (round 1): 382f1221885a01b732f7d7dc304d76e97f3effb4
+BSP status: 0 changed paths
+milan-fpga branch: pf-linuxprof-1
+milan-fpga head: 677d605f37c3a80654df1dd2cde053b57242845b
+milan-fpga status: 0 changed paths
+Push: not run (either repository)
+Board access: none

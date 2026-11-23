@@ -1,0 +1,13 @@
+gitlink linux ab05a5e6d5f1391c5a6ba6a6a0546a693100d922
+submodule worktree uninitialized, empty; index/tree gitlink verified
+upstream pinned gitlink protocol-processor 801ef2283ec793e35a2590fc6593c90313a64041
+upstream pinned gitlink gptp-processor 1616fc8f062fbf58c35ad31674b5b233207bbdb8
+upstream pinned gitlink third_party/tsn-c-stack 715589c1db7cf67e2f3259fd7083ebc7f0923376
+upstream pinned gitlink third_party/lwSRP 08ee86e812a0eb5e1dc6cd61b494d8baf3491348
+published receipt checksum verified author/receipts/INDEX.md
+published receipt checksum verified author/receipts/aarch64/SHA256SUMS
+published receipt checksum verified author/receipts/aecp-enumeration.log
+published receipt checksum verified author/receipts/cross-build.log
+published receipt checksum verified author/receipts/git-state.txt
+published receipt checksum verified author/receipts/make-check.log
+PASS exact head/tree, index and 259 tracked blob bytes/modes; clean worktree

@@ -1,0 +1,29 @@
+cwd: milan-linux
+command: tests/run-netns.sh $REVIEWS/pb2aecp-r901-1-packet/scratch/native/milan-ctrld $REVIEWS/pb2aecp-r901-1-packet/scratch/native/milan-dp config/entity.conf
+[PASS] ADP: ENTITY_AVAILABLE carrying flexptpd's grandmaster: after 0.37 s
+[PASS] ADP: destination 91:e0:f0:01:00:00, 82-byte frame
+[PASS] ADP: entity_id is the MAC's EUI-64: 020000fffe000001
+[PASS] ADP: control_data_length 56, valid_time 10
+[PASS] ADP: fields as entity.conf
+[PASS] ADP: gPTP domain 0
+[PASS] datapath: entity_id and grandmaster published: 3cc0c6fffe0a0001
+[PASS] MAAP: ANNOUNCE after its PROBEs: 4 PROBEs
+[PASS] MAAP: PROBE spacing within 500 to 600 ms (+/-20 ms host jitter): [501, 532, 512] ms
+[PASS] MAAP: range inside the pool, one address per talker source: 91e0f0002820 x 1
+[PASS] MAAP: sent to 91:e0:f0:00:ff:00
+[PASS] datapath: MAAP range and source 0's address: stream_id:0200000000010000 dest_mac:91e0f0002820 vlan:2 dest_mac_valid:1
+[PASS] MAAP: DEFEND against a conflicting PROBE: after 0 ms
+[PASS] ACMP talker: PROBE_TX_RESPONSE: after 2 ms
+[PASS] ACMP talker: SUCCESS with the stream, MAAP address and VLAN 2: status 0 stream 0200000000010000 dmac 91e0f0002820 vlan 2
+[PASS] ACMP talker: response within 200 ms (Milan Table 5.26)
+[PASS] ACMP talker: TALKER_UNKNOWN_ID for source 9
+[PASS] ACMP listener: BIND_RX_RESPONSE SUCCESS
+[PASS] ACMP listener: PROBE_TX_COMMAND to the bound talker
+[PASS] datapath: sink 0 listening to the talker's stream: stream_id:0200000000020000 dest_mac:91e0f000ab00 vlan:2 listening:1
+[PASS] ACMP listener: UNBIND_RX_RESPONSE SUCCESS
+[PASS] datapath: sink 0 stopped
+[PASS] ADP: AVAILABLE after a global DISCOVER (<= 4 s + 0.5 s): after 3.71 s
+[PASS] ADP: AVAILABLE with the new grandmaster (<= poll + 4 s + 1 s): after 0.49 s
+[PASS] ADP: ENTITY_DEPARTING on SIGTERM: after 0 ms
+[PASS] milan-ctrld exits 0: rc 0
+peer: PASS (0 failed)

@@ -1,0 +1,30 @@
+{
+  "comments": [
+    {
+      "url": "https://github.com/kebag-logic/ti-sitara-am65x-bsp/pull/30#issuecomment-7099385423",
+      "body": "[A10] INDEPENDENT REVIEW STARTED: R901-1\n\nR901 (external reviewer) reconstructs issue #29 / PR #30 at exact head `f405a5754afbe30313116be4662adb9d79567f9e`, tree `16e0c4c9fb07f3b837ab45fa227c66f65912a6c7`, in a cleared context from public scope, requirements, diff and evidence, applying all five lenses with a reviewer-owned ledger. No source edits or merge while this review runs; merge still requires two independent positive reviews and the full completion bar.\n",
+      "user": {
+        "login": "Mister-M-alt",
+        "name": "Mister-M-alt",
+        "email": null,
+        "avatar_url": "https://avatars.githubusercontent.com/u/161579364?v=4",
+        "id": 161579364
+      },
+      "id": 7099385423,
+      "pull_request_review_id": null,
+      "in_reply_to_id": null,
+      "created_at": "2026-11-23T11:17:28Z",
+      "updated_at": "2026-11-23T11:17:28Z",
+      "review": null,
+      "side": null,
+      "line": null,
+      "start_line": null,
+      "path": null,
+      "body_html": "<p dir=\"auto\">[A10] INDEPENDENT REVIEW STARTED: R901-1</p>\n<p dir=\"auto\">R901 (external reviewer) reconstructs issue <a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"6554965401\" data-permission-text=\"Title is private\" data-url=\"https://github.com/kebag-logic/ti-sitara-am65x-bsp/issues/29\" data-hovercard-type=\"issue\" data-hovercard-url=\"/kebag-logic/ti-sitara-am65x-bsp/issues/29/hovercard\" href=\"https://github.com/kebag-logic/ti-sitara-am65x-bsp/issues/29\">#29</a> / PR <a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"6558020329\" data-permission-text=\"Title is private\" data-url=\"https://github.com/kebag-logic/ti-sitara-am65x-bsp/issues/30\" data-hovercard-type=\"pull_request\" data-hovercard-url=\"/kebag-logic/ti-sitara-am65x-bsp/pull/30/hovercard\" href=\"https://github.com/kebag-logic/ti-sitara-am65x-bsp/pull/30\">#30</a> at exact head <code class=\"notranslate\">f405a5754afbe30313116be4662adb9d79567f9e</code>, tree <code class=\"notranslate\">16e0c4c9fb07f3b837ab45fa227c66f65912a6c7</code>, in a cleared context from public scope, requirements, diff and evidence, applying all five lenses with a reviewer-owned ledger. No source edits or merge while this review runs; merge still requires two independent positive reviews and the full completion bar.</p>"
+    }
+  ],
+  "url": "https://github.com/kebag-logic/ti-sitara-am65x-bsp/pull/30",
+  "title": "kebag-logic/ti-sitara-am65x-bsp PR #30 comments",
+  "display_url": "https://github.com/kebag-logic/ti-sitara-am65x-bsp/pull/30",
+  "display_title": "kebag-logic/ti-sitara-am65x-bsp PR #30 comments"
+}
