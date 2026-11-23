@@ -158,7 +158,11 @@ The media block holds each event's raw count: `listener_frames_rx` (PDUs),
 `_timestamp_uncertain` and `_media_restarts`. `milan_stream_input0` holds the
 Milan counters GET_COUNTERS serves (v1.2 5.3.8.10, Table 5.6): most count
 500 ms observation intervals in which the event happened, and all are zeroed
-when the input goes from not bound to bound. It also reports
+each time the input goes from not bound to bound (`milan-dp`'s `binds`: each
+binding milan-ctrld publishes, however fast they come). A PDU stamped too far
+ahead is not played, so a run of them interrupts the playback as a gap does.
+Its counters are valid only once its receive socket is set up; a setup that
+fails is logged with its step, and the input reports none valid. It also reports
 `_align_min/max/avg_ns`, the presentation error, and `_margin_min_ns`, how
 early the PDUs arrive.
 
@@ -314,7 +318,15 @@ end that binds both inputs and sends AAF and CRF streams. Into those it puts a
 lost PDU, tu, an mr toggle, another format, a late backlog, early stamps and
 an interruption, one at a time. It reads each counter's change back over
 GET_COUNTERS, and checks the zeroing at a new binding and the talker's
-STREAM_OUTPUT counters.
+STREAM_OUTPUT counters. Last, with milan-ctrld and milan-mediad held, it queues
+UNBIND_RX and BIND_RX twice on STREAM_INPUT 0 and once on STREAM_INPUT 1, and
+checks that each binding is counted and both inputs read zero at once; then
+GET_COUNTERS sent the moment a BIND_RX response is seen reads zero, five times.
+
+`tests/run-netns-rxfail.sh` starts milan-mediad again for each step of an
+input's receive socket setup, made to fail in one input by `tests/rxfail.c`
+(an LD_PRELOAD library), and checks that the input reports none valid while
+the other counts, that the step is logged, and that nothing is left open.
 
 `make check-compat` enumerates the entity with a controller on la_avdecc 4.3.x
 (`tests/milan-compat/`, which says how to build the library). It passes only

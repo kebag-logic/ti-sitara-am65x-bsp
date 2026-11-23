@@ -82,18 +82,36 @@ within 50 ms of its end. IEEE 1722.1-2021's per-event definitions
 
 | Stream | Who counts it | What it counts |
 | --- | --- | --- |
-| STREAM_INPUT 0, AAF | milan-mediad's listener | FRAMES_RX: intervals with a PDU of the bound stream. SEQ_NUM_MISMATCH: with a non-sequential sequence_num. MEDIA_RESET: with the mr bit toggled (IEEE 1722-2016 4.4.4.3). TIMESTAMP_UNCERTAIN: with tu set (4.4.4.7). UNSUPPORTED_FORMAT: with a PDU not 8 channels, 32-bit, 48 kHz. LATE_TIMESTAMP and EARLY_TIMESTAMP: with a valid (tv) stamp in the past, or more than 4 x PTO ahead. MEDIA_LOCKED, MEDIA_UNLOCKED: the presentation servo's lock. STREAM_INTERRUPTED: no PDU for 10 ms, or a run of jumps to put the stream back on time |
-| STREAM_INPUT 1, CRF | milan-mediad's CRF receive path (`src/crf_rx.c`) | the same header counters for CRF PDUs (IEEE 1722-2016 10.4); UNSUPPORTED_FORMAT for a PDU not in the Milan CRF format (Milan v1.2 Table 7.1); LATE and EARLY on its timestamp; MEDIA_LOCKED once 25 stamps in a row step on the 2 ms grid of the format, MEDIA_UNLOCKED when a step leaves it, mr toggles, or the stream stops (STREAM_INTERRUPTED) |
+| STREAM_INPUT 0, AAF | milan-mediad's listener | FRAMES_RX: intervals with a PDU of the bound stream. SEQ_NUM_MISMATCH: with a non-sequential sequence_num. MEDIA_RESET: with the mr bit toggled (IEEE 1722-2016 4.4.4.3). TIMESTAMP_UNCERTAIN: with tu set (4.4.4.7). UNSUPPORTED_FORMAT: with a PDU not 8 channels, 32-bit, 48 kHz. LATE_TIMESTAMP and EARLY_TIMESTAMP: with a valid (tv) stamp in the past, or more than 4 x PTO ahead. MEDIA_LOCKED, MEDIA_UNLOCKED: the presentation servo's lock. STREAM_INTERRUPTED: no PDU played for 10 ms (none arriving, or only ones too far ahead or of another format), or a run of jumps to put the stream back on time |
+| STREAM_INPUT 1, CRF | milan-mediad's CRF receive path (`src/crf_rx.c`) | the same header counters for CRF PDUs (IEEE 1722-2016 10.4); UNSUPPORTED_FORMAT for a PDU not in the Milan CRF format (Milan v1.2 Table 7.1); LATE and EARLY on its timestamp; MEDIA_LOCKED once 25 stamps in a row step on the 2 ms grid of the format, MEDIA_UNLOCKED when a step leaves it, mr toggles, or the stream stops (STREAM_INTERRUPTED: no Milan PDU processed for 10 ms, none arriving or only ones too far ahead) |
 | STREAM_OUTPUT 0, AAF | milan-mediad's talker | STREAM_START, STREAM_STOP; FRAMES_TX: intervals in which it sent; MEDIA_RESET and TIMESTAMP_UNCERTAIN: intervals in which what it sent had mr toggled or tu set. Its PDUs never toggle mr (its media clock is gPTP's slot grid, and a gPTP step starts a new stream) and never set tu, so both stay 0. The last three are zeroed at each start (Table 5.4) |
 
-A STREAM_INPUT's counters are zeroed when it goes from not bound to bound
-(Milan v1.2 5.3.8.10): milan-ctrld counts those changes per sink in the
-datapath block, and GET_COUNTERS reads zero for a binding milan-mediad has not
-yet zeroed its counters for. MEDIA_LOCKED is always MEDIA_UNLOCKED or one more.
-A media program that is not running (milan-mediad absent, or run without its
-`crf` role) leaves its stream's counters not valid: nothing is reported valid
-that nothing counts. `tests/run-netns-counters.sh` puts each fault into real
-AAF and CRF streams and reads the counters back over AECP.
+A STREAM_INPUT's counters are zeroed each time it goes from not bound to bound
+(Milan v1.2 5.3.8.10), however fast the bindings follow one another.
+milan-ctrld counts those changes per sink in the datapath block where the
+binding is owned: the publication block's BINDING.BOUND, which ACMP writes
+before it answers BIND_RX or UNBIND_RX (the soft fabric sees each edge in the
+write that makes it). So a burst that unbinds and binds again inside one loop
+pass counts each binding, and the count is in the block before the response
+leaves. A binding the saved state restores at boot counts too, on from the
+count the previous milan-ctrld left in the block. GET_COUNTERS compares the
+media block's count with the datapath block's as it answers, so it reads zero
+for a binding milan-mediad has not yet zeroed its counters for, from the
+moment the binding is made. milan-mediad zeroes an input when it sees the count
+move, and drops what its socket still holds from before. MEDIA_LOCKED is
+always MEDIA_UNLOCKED or one more.
+
+Nothing is reported valid that nothing counts. A media program that is not
+running (milan-mediad absent, or run without its `crf` role) leaves its
+stream's counters not valid, and so does an input whose receive socket cannot
+be set up (no such interface, or a socket, filter, bind or receive timeout that
+fails): it marks its counters valid only once the socket is set up. A failed
+setup closes what it opened and is logged once with its step; milan-mediad runs
+on with its other streams, and the input stays not received until milan-mediad
+is restarted. `tests/run-netns-counters.sh` puts each fault into real AAF and
+CRF streams and reads the counters back over AECP, with a burst of bindings
+queued while both daemons are held, and GET_COUNTERS at once after a BIND_RX
+response. `tests/run-netns-rxfail.sh` makes each setup step fail in each input.
 
 CLOCK_DOMAIN LOCKED and UNLOCKED follow flexptpd's lock while its status block
 is live: its update count must be seen to move. 2 s without a move (a stopped
@@ -162,10 +180,10 @@ was left unfixed, so none is listed as unfixable.
 
 | Criterion | State |
 | --- | --- |
-| Pin: milan-fpga moved to dev-soft-core, with `make check` and the firmware gate | **open.** The pin is PR #986's published head, not its merge into dev-soft-core, which has not happened. `make check` passes at it. milan-fpga's firmware gate at the pin was run in part (milan-fpga#983's receipts list which); gate 1b, the shards and the mutation campaigns were not completed |
+| Pin: milan-fpga moved to dev-soft-core, with `make check` and the firmware gate | **open.** The pin is PR #986's published round-2 head, not its merge into dev-soft-core, which has not happened: #986 is still in review, with a fix to its `ctrl_loop.h` in progress. `make check` passes at it. milan-fpga's firmware gate at the pin was run in part (milan-fpga#983's receipts list which); gate 1b, the shards and the mutation campaigns were not completed |
 | Host test: enumeration against the daemon on a veth pair | met: `tests/run-netns-aecp.sh`, and the la_avdecc run above |
-| Board: a controller enumerates the board without errors | **open.** The owner's controller enumerated the earlier build on the board and reported the STREAM_INPUT counters error. This build fixes it on the veth pair, and has not been installed on the board |
-| Install: under the RAUC flow, or a documented manual install | **open.** The Buildroot packages are in the defconfig, but the Buildroot image build has not been run with the published archive. The cross-built binaries and their install list are in the change's receipts |
+| Board: a controller enumerates the board without errors | **open.** The owner's controller enumerated the f405a57 build on the board and reported the STREAM_INPUT counters error. The 49b2035 build is installed on the board: read from a controller, STREAM_INPUT 0 and 1 report all ten counters valid and STREAM_OUTPUT 0 its five. Its enumeration by the owner's controller is not recorded. This build is not installed on the board |
+| Install: under the RAUC flow, or a documented manual install | **partly met.** A manual install is documented in the change's receipts: the cross-built binaries and their list, milan-ctrld, milan-mediad and milan-dp together. The 49b2035 build was installed on the board that way; this build is not. The Buildroot packages are in the defconfig, but the Buildroot image build has not been run with the published archive |
 
 ## Evidence
 
@@ -177,12 +195,17 @@ was left unfixed, so none is listed as unfixable.
   5.4 command set, an unsolicited notification, GET_COUNTERS of every stream as
   the media block marks it, BIND_RX on STREAM_INPUT 0 and 1 and the zeroing at
   bind, the KLJ2-to-KLJ3 journal move, and CLOCK_DOMAIN against a flexptpd that
-  stops, sticks or is replaced; `tests/counters.py` (the counters under faults);
-  the talker, listener and saved-state power-cut suites.
+  stops, sticks or is replaced; `tests/counters.py` (the counters under faults,
+  a burst of bindings, GET_COUNTERS at once after BIND_RX); `tests/rxfail.py`
+  (each receive setup failure, in each input); the talker, listener and
+  saved-state power-cut suites, the last with the bind count a restored
+  binding moves.
 - `make check-compat`: the la_avdecc run above.
 - The aarch64 cross build of all four programs (milan-mediad against the
   target's alsa-lib).
 
-Not done: nothing was installed on a board. The Buildroot image build has not
-been run with the published archive. milan-fpga's own firmware gate at the pin
+Not done: this build was not installed on a board (the 49b2035 build is, by
+the documented manual install), and no enumeration of the board by the owner's
+controller is recorded. The Buildroot image build has not been run with the
+published archive. milan-fpga's own firmware gate at the pin
 was run in part (milan-fpga#983's receipts list which).
