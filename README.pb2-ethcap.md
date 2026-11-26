@@ -153,9 +153,16 @@ installs and registers all three. The delta, and why:
   then wait 1 ms (195 µs needed before the first MDIO access, SNLS484J). The
   straps latch on that edge, and by then the RGMII pads are already no-pull
   inputs. phylib also holds the PHY in reset while `eth0` is down.
-* **No PHY interrupt.** INT/PWDN_N is an open-drain level interrupt, and the
-  DaVinci GPIO controller takes only edge triggers, so phylib polls (about
-  1 s to see a link change). E19 is a plain input, readable with `gpioget`.
+* **PHY interrupt on E19 = GPIO1_13, falling edge.** INT/PWDN_N is the
+  DP83867's power-down input at reset (CFG3 `INT_OE` = 0, SNLS484J): a low
+  level powers the PHY down. The driver sets `INT_OE` once the PHY node has
+  an interrupt, and the pin becomes an open-drain, active-low interrupt
+  output. E19 is therefore only ever an input (mux 7), pulled up on top of the
+  cap's 2k2, so the SoC can never hold the PHY in power-down. The DaVinci GPIO
+  controller takes edges only (`gpio_irq_type()` refuses levels), so the
+  interrupt is `IRQ_TYPE_EDGE_FALLING`, as on the Verdin AM62 with the same PHY
+  and controller. phylib then sees a link change within milliseconds instead
+  of its 1 s poll.
 * **`enet-phy-lane-swap`.** Rev B routes the MDI pairs mirrored (A↔D, B↔C)
   and turns on DP83867 port mirroring with the LED_0 strap. The driver writes
   the same bit again, so a marginal strap read cannot leave the swapped
