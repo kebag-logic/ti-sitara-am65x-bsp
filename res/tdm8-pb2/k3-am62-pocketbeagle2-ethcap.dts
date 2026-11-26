@@ -46,10 +46,17 @@
  * RGMII/MDIO line (rev B handover §2.1: "keep the second balls as inputs with
  * no pull").  The receivers stay on, so gpioget still reads the line back.
  *
- * The PHY interrupt is NOT wired up.  INT/PWDN_N is an open-drain level
- * interrupt and the DaVinci GPIO controller only takes edge triggers, so the
- * PHY is polled (link changes show up within a second).  E19 is parked as a
- * plain input so the line can still be read with gpioget.
+ * The PHY interrupt is wired up: INT/PWDN_N on E19 = GPIO1_13.  At reset the
+ * DP83867 pin is its POWER-DOWN input (CFG3 INT_OE = 0, SNLS484J), and a low
+ * level powers the PHY down; the driver sets INT_OE in config_init once the
+ * PHY node has an interrupt, and from then on the pin is an open-drain,
+ * active-low interrupt output.  So E19 is only ever an input (mux 7, never an
+ * output), pulled up on top of the cap's 2k2: nothing on the SoC side can pull
+ * the line low and power the PHY down.  The DaVinci GPIO controller takes
+ * edge triggers only (gpio_irq_type() refuses levels), so the interrupt is the
+ * falling edge, as on the Verdin AM62 with the same PHY and controller.  The
+ * driver reads ISR (clear on read) on every interrupt, which releases the line.
+ * Link changes reach phylib within milliseconds instead of its 1 s poll.
  *
  * P1.06/P1.08 are MAIN_UART1 RXD/TXD in the stock tree (status "reserved",
  * bootph-pre-ram).  U-Boot still muxes them as UART1 before Linux; Linux then
@@ -129,7 +136,7 @@
 			AM62X_IOPAD(0x01a4, PIN_INPUT, 7) /* (B20)  GPIO1_11  P2.01, was MCASP0_ACLKX */
 			AM62X_IOPAD(0x019c, PIN_INPUT, 7) /* (B18)  GPIO1_9   P2.03, was MCASP0_AXR1 */
 			AM62X_IOPAD(0x0140, PIN_INPUT, 7) /* (AD18) GPIO0_78  P1.06, was RGMII1_TD3 */
-			AM62X_IOPAD(0x01ac, PIN_INPUT, 7) /* (E19)  GPIO1_13  P1.06, PHY INT/PWDN_N (polled) */
+			AM62X_IOPAD(0x01ac, PIN_INPUT_PULLUP, 7) /* (E19)  GPIO1_13  P1.06, PHY INT/PWDN_N (interrupt) */
 		>;
 	};
 
@@ -196,6 +203,10 @@
 		reset-gpios = <&main_gpio1 14 GPIO_ACTIVE_LOW>;
 		reset-assert-us = <100>;
 		reset-deassert-us = <1000>;
+
+		/* INT/PWDN_N on E19 (P1.06), see the header: falling edge */
+		interrupt-parent = <&main_gpio1>;
+		interrupts = <13 IRQ_TYPE_EDGE_FALLING>;
 
 		ti,rx-internal-delay = <DP83867_RGMIIDCTL_1_75_NS>;
 		ti,fifo-depth = <DP83867_PHYCR_FIFO_DEPTH_4_B_NIB>;
